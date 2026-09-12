@@ -1,30 +1,87 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:radd/main.dart';
+import 'package:radd/app/radd_app.dart';
+import 'package:radd/core/localization/generated/app_localizations.dart';
+import 'package:radd/core/theme/app_theme.dart';
+import 'package:radd/shared/widgets/widgets.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  for (final language in ['en', 'ar', 'fr']) {
+    testWidgets('$language resolves direction and typography', (tester) async {
+      await tester.pumpWidget(RaddApp(locale: Locale(language)));
+      await tester.pumpAndSettle();
+      final context = tester.element(find.byType(Scaffold));
+      expect(
+        Directionality.of(context),
+        language == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+      );
+      expect(
+        Theme.of(context).textTheme.bodyMedium!.fontFamily,
+        language == 'ar' ? 'Tajawal' : 'Inter',
+      );
+      expect(find.byType(FloatingActionButton), findsNothing);
+    });
+  }
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  Widget harness(Widget child) => MaterialApp(
+    locale: const Locale('en'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    theme: AppTheme.light(const Locale('en')),
+    home: Scaffold(body: child),
+  );
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+  testWidgets('Password visibility preserves entered text', (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      harness(PasswordInput(label: 'Password', controller: controller)),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), 'sample-password');
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).obscureText,
+      isTrue,
+    );
+    await tester.tap(find.byTooltip('Show password'));
     await tester.pump();
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).obscureText,
+      isFalse,
+    );
+    expect(controller.text, 'sample-password');
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  testWidgets('Loading buttons prevent duplicate actions at 360 dp', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var calls = 0;
+    await tester.pumpWidget(
+      harness(
+        Column(
+          children: [
+            PrimaryButton(
+              label: 'Continue',
+              isLoading: true,
+              onPressed: () => calls++,
+            ),
+            SecondaryButton(
+              label: 'Back',
+              isLoading: true,
+              onPressed: () => calls++,
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byType(FilledButton));
+    await tester.tap(find.byType(OutlinedButton));
+    expect(calls, 0);
+    expect(tester.takeException(), isNull);
   });
 }
