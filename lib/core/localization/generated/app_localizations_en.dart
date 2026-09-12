@@ -23,4 +23,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pageNotFound => 'Page not found';
+
+  @override
+  String get chooseLanguage => 'Choose Your Language';
+
+  @override
+  String get continueLabel => 'Continue';
+
+  @override
+  String get chooseRole => 'Choose Your Role';
+
+  @override
+  String get guardianRole => 'Guardian';
+
+  @override
+  String get volunteerRole => 'Volunteer';
+
+  @override
+  String selectedRole(String role) {
+    return 'Selected role: $role';
+  }
 }

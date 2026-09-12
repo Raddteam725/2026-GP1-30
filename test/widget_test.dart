@@ -9,7 +9,8 @@ void main() {
   for (final language in ['en', 'ar', 'fr']) {
     testWidgets('$language resolves direction and typography', (tester) async {
       await tester.pumpWidget(RaddApp(locale: Locale(language)));
-      await tester.pumpAndSettle();
+      // Splash keeps an indeterminate loading animation running.
+      await tester.pump(const Duration(seconds: 1));
       final context = tester.element(find.byType(Scaffold));
       expect(
         Directionality.of(context),
@@ -20,6 +21,7 @@ void main() {
         language == 'ar' ? 'Tajawal' : 'Inter',
       );
       expect(find.byType(FloatingActionButton), findsNothing);
+      await tester.pumpWidget(const SizedBox());
     });
   }
 

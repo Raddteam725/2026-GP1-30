@@ -23,4 +23,24 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get pageNotFound => 'الصفحة غير موجودة';
+
+  @override
+  String get chooseLanguage => 'اختر لغتك';
+
+  @override
+  String get continueLabel => 'متابعة';
+
+  @override
+  String get chooseRole => 'اختر دورك';
+
+  @override
+  String get guardianRole => 'ولي الأمر';
+
+  @override
+  String get volunteerRole => 'متطوع';
+
+  @override
+  String selectedRole(String role) {
+    return 'الدور المحدد: $role';
+  }
 }

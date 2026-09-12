@@ -127,6 +127,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Page not found'**
   String get pageNotFound;
+
+  /// No description provided for @chooseLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose Your Language'**
+  String get chooseLanguage;
+
+  /// No description provided for @continueLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get continueLabel;
+
+  /// No description provided for @chooseRole.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose Your Role'**
+  String get chooseRole;
+
+  /// No description provided for @guardianRole.
+  ///
+  /// In en, this message translates to:
+  /// **'Guardian'**
+  String get guardianRole;
+
+  /// No description provided for @volunteerRole.
+  ///
+  /// In en, this message translates to:
+  /// **'Volunteer'**
+  String get volunteerRole;
+
+  /// No description provided for @selectedRole.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected role: {role}'**
+  String selectedRole(String role);
 }
 
 class _AppLocalizationsDelegate

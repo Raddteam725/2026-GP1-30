@@ -4,5 +4,18 @@
   "loading": "Loading",
   "showPassword": "Show password",
   "hidePassword": "Hide password",
-  "pageNotFound": "Page not found"
+  "pageNotFound": "Page not found",
+  "chooseLanguage": "Choose Your Language",
+  "continueLabel": "Continue",
+  "chooseRole": "Choose Your Role",
+  "guardianRole": "Guardian",
+  "volunteerRole": "Volunteer",
+  "selectedRole": "Selected role: {role}",
+  "@selectedRole": {
+    "placeholders": {
+      "role": {
+        "type": "String"
+      }
+    }
+  }
 }

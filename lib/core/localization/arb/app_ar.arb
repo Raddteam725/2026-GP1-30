@@ -4,5 +4,18 @@
   "loading": "جارٍ التحميل",
   "showPassword": "إظهار كلمة المرور",
   "hidePassword": "إخفاء كلمة المرور",
-  "pageNotFound": "الصفحة غير موجودة"
+  "pageNotFound": "الصفحة غير موجودة",
+  "chooseLanguage": "اختر لغتك",
+  "continueLabel": "متابعة",
+  "chooseRole": "اختر دورك",
+  "guardianRole": "ولي الأمر",
+  "volunteerRole": "متطوع",
+  "selectedRole": "الدور المحدد: {role}",
+  "@selectedRole": {
+    "placeholders": {
+      "role": {
+        "type": "String"
+      }
+    }
+  }
 }

@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../features/onboarding/presentation/screens/role_selection_screen.dart';
+
+import '../../features/onboarding/presentation/screens/splash_screen.dart';
+import '../../features/onboarding/presentation/screens/language_selection_screen.dart';
 import '../localization/generated/app_localizations.dart';
 import 'app_routes.dart';
 
@@ -8,8 +12,9 @@ abstract final class AppRouter {
       MaterialPageRoute<void>(
         settings: settings,
         builder: (context) => switch (settings.name) {
-          // Blank until the first approved screen is supplied.
-          AppRoutes.root => const Scaffold(body: SizedBox.expand()),
+          AppRoutes.root => const SplashScreen(),
+          AppRoutes.languageSelection => const LanguageSelectionScreen(),
+          AppRoutes.roleSelection => const RoleSelectionScreen(),
           _ => Scaffold(
             body: SafeArea(
               child: Center(
