@@ -1,3 +1,4 @@
+import logging
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -21,6 +22,8 @@ async def limits(request: Request, call_next):
                 return JSONResponse(status_code=413, content={"detail": "request_too_large"})
         request._body = bytes(body)
     response = await call_next(request)
+    route = request.scope.get("route")
+    logging.getLogger("uvicorn.error").info("Radd API: %s %s -> %s", request.method, getattr(route, "path", "/unknown"), response.status_code)
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -30,6 +33,8 @@ async def invalid(request, error):
 
 @app.exception_handler(Exception)
 async def unavailable(request, error):
+    # No PII/tokens in the response; the traceback is server-side only, never returned to the client.
+    logging.getLogger("uvicorn.error").exception("Radd API: unhandled exception")
     return JSONResponse(status_code=503, content={"detail": "service_unavailable"})
 
 def service(token=Depends(identity)):
@@ -82,3 +87,41 @@ def delete_individual(item_id: str, s=Depends(service)):
 @app.get("/v1/individuals/{item_id}/photo")
 def photograph(item_id: str, s=Depends(service)):
     return Response(content=s.photo(item_id), media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+from .case_models import CaseCreate, GuidedReport
+from .cases import CaseService, public_case
+
+def cases_service(s=Depends(service)):
+    return CaseService(s)
+
+@app.get("/v1/cases")
+def cases(s=Depends(cases_service)):
+    return s.list()
+
+@app.post("/v1/cases", status_code=201)
+def report_missing(value: CaseCreate, s=Depends(cases_service)):
+    return s.create(value)
+
+@app.get("/v1/cases/{case_id}")
+def case(case_id: str, s=Depends(cases_service)):
+    return public_case(s.owned(case_id))
+
+@app.put("/v1/cases/{case_id}/guided-report")
+def guided_report(case_id: str, value: GuidedReport, s=Depends(cases_service)):
+    return s.save_report(case_id, value)
+
+@app.post("/v1/cases/{case_id}/verification")
+def verification(case_id: str, s=Depends(cases_service)):
+    return s.verification(case_id)
+
+@app.get("/v1/notifications")
+def notifications(s=Depends(cases_service)):
+    return s.list_notifications()
+
+@app.put("/v1/notifications/{notification_id}/read", status_code=204)
+def read_notification(notification_id: str, s=Depends(cases_service)):
+    s.mark_read(notification_id)
+    return Response(status_code=204)
+
+from .volunteer import router as volunteer_router
+app.include_router(volunteer_router)

@@ -4,6 +4,7 @@ extension _VolunteerCaseViews on _VolunteerWorkspaceState {
   List<Widget> _home() {
     final available = repo.availableFor(account.uid);
     final nearby = repo.cases.where(_isNearby).toList();
+    final mine = repo.myCases(account.uid);
     return [
       Text(dataText(context, account.name), style: const TextStyle(fontSize:22, fontWeight:FontWeight.w700, color:volunteerInk)),
       const SizedBox(height: 16),
@@ -43,7 +44,11 @@ extension _VolunteerCaseViews on _VolunteerWorkspaceState {
         ),
       ),
       if (!account.active) VolunteerInfo(s.vInactiveHint),
-      if (!repo.connected) VolunteerEmpty(s.vNoCases, s.vBackendHint),
+      if (!repo.connected)
+        VolunteerEmpty(
+          s.vNoCases,
+          repo is ApiVolunteerRepository ? s.vLoadFailed : s.vBackendHint,
+        ),
       if (_location != null && _location!.coordinates == null) ...[
         VolunteerInfo(
           _location!.unavailable ? s.vLocationUnavailable : s.vLocationHelp,
@@ -131,6 +136,10 @@ extension _VolunteerCaseViews on _VolunteerWorkspaceState {
         VolunteerEmpty(s.vNoCases, s.vNoCasesHint),
       for (final item in available.take(2)) _compactCase(item),
       const SizedBox(height: 8),
+      if (mine.isNotEmpty) ...[
+        VolunteerHeading('${s.vMyCases} (${numberText(context, mine.length)})'),
+        for (final item in mine.take(2)) _compactCase(item),
+      ],
       VolunteerHeading(s.vQuickActions),
       const SizedBox(height: 12),
       LayoutBuilder(
@@ -234,7 +243,10 @@ extension _VolunteerCaseViews on _VolunteerWorkspaceState {
         ),
       ),
       const SizedBox(height: 20),
-      if (!repo.connected) VolunteerInfo(s.vBackendHint),
+      if (!repo.connected)
+        VolunteerInfo(
+          repo is ApiVolunteerRepository ? s.vLoadFailed : s.vBackendHint,
+        ),
       if (items.isEmpty) VolunteerEmpty(s.vNoCases, s.vNoCasesHint),
       for (final item in items) _caseCard(item),
     ];
@@ -355,10 +367,11 @@ extension _VolunteerCaseViews on _VolunteerWorkspaceState {
                   s.vAgeValue(numberText(context, item.person.age)),
                   color: volunteerNavy,
                 ),
-                VolunteerChip(
-                  item.person.gender == Gender.male ? s.vMale : s.vFemale,
-                  color: volunteerNavy,
-                ),
+                if (item.person.gender != null)
+                  VolunteerChip(
+                    item.person.gender == Gender.male ? s.vMale : s.vFemale,
+                    color: volunteerNavy,
+                  ),
                 VolunteerChip(item.id),
               ],
             ),
@@ -433,11 +446,21 @@ extension _VolunteerCaseViews on _VolunteerWorkspaceState {
       if (item.joinable && item.joinedBy.contains(account.uid))
         VolunteerInfo(s.vSearchJoinedHint),
       if (item.confirmedBy == account.uid &&
-          _report?.matchedPerson?.id == item.person.id &&
-          item.status != CaseStatus.reunited)
+          item.status != CaseStatus.reunited &&
+          (repo is ApiVolunteerRepository ||
+              _report?.matchedPerson?.id == item.person.id))
         VolunteerAction(
           s.vGuardianContact,
-          onPressed: () => _open(VolunteerView.contact),
+          onPressed: () {
+            if (repo is ApiVolunteerRepository) {
+              final reports = repo.foundReports.where(
+                (r) => r.caseId == item.id,
+              );
+              if (reports.isNotEmpty) _resumeReport(reports.first.id);
+            } else {
+              _open(VolunteerView.contact);
+            }
+          },
         ),
     ];
   }
@@ -466,21 +489,32 @@ extension _VolunteerCaseViews on _VolunteerWorkspaceState {
       const SizedBox(height: 24),
       VolunteerHeading(s.vRecentAlerts),
       const SizedBox(height: 16),
-      if (!repo.connected) VolunteerInfo(s.vBackendHint),
+      if (!repo.connected)
+        VolunteerInfo(
+          repo is ApiVolunteerRepository ? s.vLoadFailed : s.vBackendHint,
+        ),
       if (alerts.isEmpty) VolunteerEmpty(s.vNoAlerts, s.vPriorityHint),
-      for (final alert in alerts)
-        if (repo.caseById(alert.caseId) != null) _alertCard(alert),
+      for (final alert in alerts) _alertCard(alert),
       const SizedBox(height: 12),
       VolunteerInfo(s.vPriorityHint),
     ];
   }
 
   Widget _alertCard(VolunteerAlert alert) {
-    final item = repo.caseById(alert.caseId)!;
+    final item = repo.caseById(alert.caseId);
     final priority = alert.kind == AlertKind.priority;
     return VolunteerCard(
       border: priority ? const Color(0xFFF7B500) : volunteerBorder,
-      onTap: () => _details(item),
+      onTap: () async {
+        if (repo is ApiVolunteerRepository) {
+          try {
+            await (repo as ApiVolunteerRepository).markRead(alert);
+          } catch (_) {
+            if (mounted) _message(s.vActionFailed);
+          }
+        }
+        if (item != null && mounted) _details(item);
+      },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -511,7 +545,11 @@ extension _VolunteerCaseViews on _VolunteerWorkspaceState {
                       AlertKind.statusUpdate => s.vStatusAlert,
                     }),
                     const SizedBox(height: 8),
-                    Text('${item.id} · ${dataText(context, item.person.name)}'),
+                    Text(
+                      item == null
+                          ? alert.caseId
+                          : '${item.id} · ${dataText(context, item.person.name)}',
+                    ),
                     const SizedBox(height: 8),
                     if (priority)
                       VolunteerChip(s.vNearby, color: const Color(0xFF996A00)),
@@ -533,7 +571,7 @@ extension _VolunteerCaseViews on _VolunteerWorkspaceState {
           Align(
             alignment: AlignmentDirectional.centerEnd,
             child: TextButton.icon(
-              onPressed: () => _details(item),
+              onPressed: item == null ? null : () => _details(item),
               icon: const Icon(Icons.arrow_forward),
               label: Text(s.vViewCase),
             ),

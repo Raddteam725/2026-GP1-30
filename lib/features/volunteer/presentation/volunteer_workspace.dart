@@ -1,4 +1,10 @@
 import 'dart:async';
+import 'dart:typed_data';
+
+import 'package:url_launcher/url_launcher.dart';
+
+import 'volunteer_capture.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -6,6 +12,7 @@ import 'package:flutter/material.dart';
 import '../../../app/app_locale_scope.dart';
 import '../../../core/localization/generated/app_localizations.dart';
 import '../data/mock_volunteer_repository.dart';
+import '../data/api_volunteer_repository.dart';
 import '../data/volunteer_location.dart';
 import '../data/volunteer_repository.dart';
 import '../domain/volunteer_models.dart';
@@ -50,7 +57,13 @@ class VolunteerWorkspace extends StatefulWidget {
   State<VolunteerWorkspace> createState() => _VolunteerWorkspaceState();
 }
 
-class _VolunteerWorkspaceState extends State<VolunteerWorkspace> {
+class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
+    with WidgetsBindingObserver {
+  Timer? _poll;
+  bool _refreshing = false;
+  bool _aiUnavailable = false;
+  Uint8List? _pendingCapture;
+  String? _captureRequestId;
   final List<VolunteerView> _stack = [VolunteerView.home];
   int _tab = 0, _searchGeneration = 0;
   bool _mine = false,
@@ -68,7 +81,11 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace> {
   double? _similarity;
   VolunteerLocation? _location;
   VolunteerRepository get repo => widget.repository;
-  VolunteerAccount get account => widget.account;
+  VolunteerAccount get account =>
+      (repo is ApiVolunteerRepository
+          ? (repo as ApiVolunteerRepository).account
+          : null) ??
+      widget.account;
   AppLocalizations get s => stringsOf(context);
   VolunteerView get view => _stack.last;
   Coordinates? get location => repo.isPreview
@@ -78,13 +95,54 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace> {
   void initState() {
     super.initState();
     repo.addListener(_refresh);
+    if (repo is ApiVolunteerRepository) {
+      WidgetsBinding.instance.addObserver(this);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadRemote());
+      _poll = Timer.periodic(const Duration(seconds: 20), (_) {
+        if (WidgetsBinding.instance.lifecycleState ==
+            AppLifecycleState.resumed) {
+          _loadRemote();
+        }
+      });
+    }
     if (!repo.isPreview) {
       _location = VolunteerLocation()..addListener(_refresh);
     }
   }
 
+  Future<void> _loadRemote() async {
+    if (!mounted || _refreshing || repo is! ApiVolunteerRepository) return;
+    setState(() => _refreshing = true);
+    try {
+      await (repo as ApiVolunteerRepository).refresh();
+    } catch (_) {
+      // Keep the existing screen with an explicit retry; never populate fixtures.
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _loadRemote();
+  }
+
   void _refresh() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {
+      if (repo is ApiVolunteerRepository) {
+        (repo as ApiVolunteerRepository).proximityLocation = location;
+      }
+      if (repo is ApiVolunteerRepository && _case != null) {
+        _case = repo.caseById(_case!.id);
+        if (_case == null && view == VolunteerView.caseDetails) {
+          _tab = 1;
+          _stack
+            ..clear()
+            ..add(VolunteerView.cases);
+        }
+      }
+    });
   }
 
   void _update(VoidCallback action) {
@@ -93,6 +151,8 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace> {
 
   @override
   void dispose() {
+    _poll?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     ++_searchGeneration;
     repo.removeListener(_refresh);
     _location?.dispose();
@@ -145,8 +205,15 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace> {
   }
 
   void _details(VolunteerCase item) {
-    _case = item;
-    _open(VolunteerView.caseDetails);
+    if (repo is ApiVolunteerRepository) {
+      _run(() async {
+        _case = await (repo as ApiVolunteerRepository).loadCase(item.id);
+        if (mounted) _open(VolunteerView.caseDetails);
+      });
+    } else {
+      _case = item;
+      _open(VolunteerView.caseDetails);
+    }
   }
 
   bool _isNearby(VolunteerCase item) =>
@@ -237,7 +304,9 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace> {
               ? [
                   VolunteerBell(
                     onPressed: () => _open(VolunteerView.notifications),
-                    hasAlerts: repo.alertsFor(account.uid).isNotEmpty,
+                    hasAlerts: repo
+                        .alertsFor(account.uid)
+                        .any((a) => a.readAt == null),
                   ),
                 ]
               : null,
@@ -286,7 +355,11 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace> {
                     ),
                   ),
                 ),
-              if (_busy) const LinearProgressIndicator(minHeight: 2),
+              if (repo is ApiVolunteerRepository &&
+                  (repo as ApiVolunteerRepository).error != null)
+                TextButton(onPressed: _loadRemote, child: Text(s.vLoadFailed)),
+              if (_busy || _refreshing)
+                const LinearProgressIndicator(minHeight: 2),
               Expanded(
                 child: Align(
                   alignment: Alignment.topCenter,

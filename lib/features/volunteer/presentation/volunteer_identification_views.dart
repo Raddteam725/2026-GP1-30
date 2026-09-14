@@ -49,16 +49,42 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
         ),
       ],
     ),
-    if (!repo.connected) ...[
-      const SizedBox(height: 24),
-      VolunteerInfo(s.vUnavailable),
-    ],
+    if (_pendingCapture != null)
+      VolunteerAction(s.vTryAgain, onPressed: _busy ? null : _submitCapture),
+    for (final report in repo.foundReports)
+      VolunteerCard(
+        onTap: () => _resumeReport(report.id),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            VolunteerHeading(report.id),
+            if (report.status != null) StatusChip(report.status!),
+            Text(
+              report.createdAt == null
+                  ? ''
+                  : timeText(context, report.createdAt!),
+            ),
+            Text(s.vContinueReport),
+          ],
+        ),
+      ),
   ];
   Future<void> _openCamera() async {
-    if (!repo.isPreview) {
-      _message(s.vUnavailable);
+    if (repo is ApiVolunteerRepository) {
+      final bytes = await Navigator.of(context).push<Uint8List>(
+        MaterialPageRoute(builder: (_) => const VolunteerCapture()),
+      );
+      if (bytes == null || !mounted) return;
+      _pendingCapture = bytes;
+      _captureRequestId = List.generate(
+        24,
+        (_) =>
+            math.Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
+      ).join();
+      await _submitCapture();
       return;
     }
+    if (!repo.isPreview) return;
     final capture = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -116,9 +142,76 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     });
   }
 
+  Future<void> _submitCapture() => _run(() async {
+    _report = await repo.submitFound(
+      account,
+      photo: _pendingCapture,
+      requestId: _captureRequestId,
+    );
+    _pendingCapture = null;
+    _captureRequestId = null;
+    if (!mounted) return;
+    _candidates = [];
+    _person = null;
+    _similarity = null;
+    _aiUnavailable = false;
+    _open(VolunteerView.finding);
+    unawaited(_loadCandidates(_report!, ++_searchGeneration));
+  });
+  Future<void> _resumeReport(String id) => _run(() async {
+    if (repo is! ApiVolunteerRepository) return;
+    _report = await (repo as ApiVolunteerRepository).loadReport(id);
+    _person = _report!.matchedPerson;
+    _similarity = null;
+    if (!mounted) return;
+    if (_report!.status == CaseStatus.reunited) {
+      _open(VolunteerView.reunited);
+    } else if (_report!.verification != null) {
+      _open(VolunteerView.verified);
+    } else if (_report!.matchedPerson != null) {
+      _open(VolunteerView.contact);
+    } else {
+      _candidates = [];
+      _aiUnavailable = true;
+      _open(VolunteerView.matches);
+    }
+  });
+  Future<void> _openManual() => _run(() async {
+    if (repo is ApiVolunteerRepository) {
+      await (repo as ApiVolunteerRepository).loadProfiles();
+    }
+    if (mounted) _open(VolunteerView.manual);
+  });
+  Widget _foundImage({required double width, required double height}) {
+    final bytes = _report!.photoBytes;
+    if (bytes != null) {
+      return Image.memory(
+        bytes,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+      );
+    }
+    if (repo.isPreview) {
+      return Image.asset(
+        _report!.photo,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+      );
+    }
+    return SizedBox(
+      width: width,
+      height: height,
+      child: const Icon(Icons.person_outline),
+    );
+  }
+
   Future<void> _loadCandidates(FoundReport report, int generation) async {
     try {
-      await Future<void>.delayed(const Duration(milliseconds: 900));
+      if (repo.isPreview) {
+        await Future<void>.delayed(const Duration(milliseconds: 900));
+      }
       final results = await repo.findMatches(report);
       if (!mounted ||
           generation != _searchGeneration ||
@@ -130,7 +223,8 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     } catch (_) {
       if (mounted && generation == _searchGeneration) {
         _replace(VolunteerView.matches);
-        _message(s.vUnavailable);
+        _update(() => _aiUnavailable = true);
+        _message(s.vAiUnavailable);
       }
     }
   }
@@ -158,14 +252,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
                 color: volunteerTeal,
               ),
             ),
-            ClipOval(
-              child: Image.asset(
-                _report!.photo,
-                width: 174,
-                height: 174,
-                fit: BoxFit.cover,
-              ),
-            ),
+            ClipOval(child: _foundImage(width: 174, height: 174)),
           ],
         ),
       ),
@@ -185,7 +272,10 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     ),
   ];
   List<Widget> _matches() => [
-    VolunteerInfo(s.vCandidateHint, title: s.vPotentialMatches),
+    VolunteerInfo(
+      _aiUnavailable ? s.vAiUnavailable : s.vCandidateHint,
+      title: s.vPotentialMatches,
+    ),
     if (_candidates.isEmpty) VolunteerEmpty(s.vNoResults, s.vManualFallback),
     for (final candidate in _candidates)
       VolunteerCard(
@@ -240,7 +330,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     VolunteerAction(
       s.vManualReview,
       icon: Icons.manage_search,
-      onPressed: () => _open(VolunteerView.manual),
+      onPressed: _busy ? null : _openManual,
       secondary: true,
     ),
   ];
@@ -384,7 +474,8 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
 
   List<Widget> _matchDetails() {
     final person = _person!;
-    final info = repo.caseForPerson(person.id)?.information;
+    final info =
+        person.information ?? repo.caseForPerson(person.id)?.information;
     return [
       if (_similarity != null)
         VolunteerCard(
@@ -429,12 +520,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
                           const SizedBox(height: 10),
                           ClipRRect(
                             borderRadius: BorderRadius.circular(12),
-                            child: Image.asset(
-                              _report!.photo,
-                              width: width,
-                              height: 160,
-                              fit: BoxFit.cover,
-                            ),
+                            child: _foundImage(width: width, height: 160),
                           ),
                         ],
                       ),
@@ -506,21 +592,23 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
                 dataText(context, info!.additional!),
                 icon: Icons.info_outline,
               ),
-            const Divider(height: 24),
-            VolunteerDetail(
-              s.vGuardianName,
-              dataText(context, person.guardian.name),
-            ),
-            VolunteerDetail(
-              s.vRelationship,
-              dataText(context, person.guardian.relationship),
-            ),
-            if (person.guardian.phone != null)
+            if (repo.isPreview) ...[
+              const Divider(height: 24),
               VolunteerDetail(
-                s.vRegisteredContact,
-                person.guardian.phone!,
-                ltr: true,
+                s.vGuardianName,
+                dataText(context, person.guardian.name),
               ),
+              VolunteerDetail(
+                s.vRelationship,
+                dataText(context, person.guardian.relationship),
+              ),
+              if (person.guardian.phone != null)
+                VolunteerDetail(
+                  s.vRegisteredContact,
+                  person.guardian.phone!,
+                  ltr: true,
+                ),
+            ],
           ],
         ),
       ),
@@ -598,7 +686,16 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
         icon: Icons.call,
         onPressed: guardian.phone == null
             ? null
-            : () => _message(repo.isPreview ? s.vPreviewCall : s.vUnavailable),
+            : () async {
+                if (repo.isPreview) {
+                  _message(s.vPreviewCall);
+                  return;
+                }
+                final opened = await launchUrl(
+                  Uri(scheme: 'tel', path: guardian.phone),
+                );
+                if (!opened && mounted) _message(s.vActionFailed);
+              },
       ),
       const SizedBox(height: 12),
       VolunteerAction(
@@ -654,24 +751,35 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
       onPressed: _busy ? null : _scanPreview,
     ),
     const SizedBox(height: 24),
-    Text(s.vUnableScan, textAlign: TextAlign.center),
+    Text(
+      repo.isPreview ? s.vUnableScan : s.vQrRequired,
+      textAlign: TextAlign.center,
+    ),
     const SizedBox(height: 12),
     VolunteerAction(
       s.vUseIdentifier,
       icon: Icons.pin_outlined,
       secondary: true,
-      onPressed: () {
-        _identifier.clear();
-        _authenticatedShown = false;
-        _open(VolunteerView.identifier);
-      },
+      onPressed: !repo.isPreview
+          ? null
+          : () {
+              _identifier.clear();
+              _authenticatedShown = false;
+              _open(VolunteerView.identifier);
+            },
     ),
   ];
   Future<void> _scanPreview() async {
-    if (!repo.isPreview) {
-      _message(s.vUnavailable);
+    if (repo is ApiVolunteerRepository) {
+      final payload = await Navigator.of(context).push<String>(
+        MaterialPageRoute(builder: (_) => const VolunteerQrCapture()),
+      );
+      if (payload != null && mounted) {
+        await _verification(VerificationMethod.qr, payload);
+      }
       return;
     }
+    if (!repo.isPreview) return;
     final valid = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -807,11 +915,13 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
       s.vUseIdentifier,
       secondary: true,
       icon: Icons.pin_outlined,
-      onPressed: () {
-        _identifier.clear();
-        _authenticatedShown = false;
-        _replace(VolunteerView.identifier);
-      },
+      onPressed: !repo.isPreview
+          ? null
+          : () {
+              _identifier.clear();
+              _authenticatedShown = false;
+              _replace(VolunteerView.identifier);
+            },
     ),
   ];
   List<Widget> _verified() => [

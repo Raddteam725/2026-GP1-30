@@ -220,7 +220,14 @@ class PersonPhoto extends StatelessWidget {
     child: SizedBox(
       width: size,
       height: height ?? size,
-      child: person.photo != null
+      child: person.photoBytes != null
+          ? Image.memory(
+              person.photoBytes!,
+              fit: BoxFit.cover,
+              semanticLabel: dataText(context, person.name),
+              errorBuilder: (_, _, _) => _fallback(),
+            )
+          : person.photo != null
           ? Image.asset(
               person.photo!,
               fit: BoxFit.cover,

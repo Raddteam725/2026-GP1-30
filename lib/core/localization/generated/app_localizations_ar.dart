@@ -156,7 +156,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get passwordHelp =>
-      'استخدم 8 أحرف على الأقل، تتضمن حرفاً لاتينياً كبيراً وصغيراً ورقماً ورمزاً خاصاً.';
+      'يجب أن تتكون كلمة المرور من 8 أحرف على الأقل، وتشمل حرفًا إنجليزيًا كبيرًا، وحرفًا إنجليزيًا صغيرًا، ورقمًا، ورمزًا خاصًا مثل ! أو @ أو # أو \$.';
 
   @override
   String get confirmRequired => 'يجب تأكيد كلا الخيارين.';
@@ -322,10 +322,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get editProfile => 'تعديل الملف الشخصي';
 
   @override
-  String get emailReadOnly =>
-      'يُدار البريد عبر مصادقة Firebase ولا يمكن تعديله هنا.';
-
-  @override
   String get volunteerUnavailable =>
       'دخول المتطوع غير متاح في هذا الإصدار بعد.';
 
@@ -369,9 +365,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get cases => 'الحالات';
-
-  @override
-  String get comingLater => 'ستتوفر هذه الميزة في مرحلة لاحقة.';
 
   @override
   String get notifications => 'الإشعارات';
@@ -1023,4 +1016,166 @@ class AppLocalizationsAr extends AppLocalizations {
   String vSimilarityValue(String value) {
     return 'التشابه $value٪';
   }
+
+  @override
+  String get reportMissing => 'الإبلاغ عن مفقود';
+
+  @override
+  String get reportConfirm => 'هل تريد الإبلاغ عن فقدان هذا الفرد؟';
+
+  @override
+  String get confirm => 'تأكيد';
+
+  @override
+  String get reportReceived => 'تم استلام البلاغ';
+
+  @override
+  String get searchInProgress => 'البحث جارٍ';
+
+  @override
+  String get matchConfirmed => 'تم تأكيد التطابق';
+
+  @override
+  String get awaitingVerification => 'بانتظار تحقق ولي الأمر';
+
+  @override
+  String get reunited => 'تم لمّ الشمل';
+
+  @override
+  String get unknownCaseStatus => 'الحالة غير متاحة';
+
+  @override
+  String get caseStatus => 'حالة البلاغ';
+
+  @override
+  String get viewStatus => 'عرض الحالة';
+
+  @override
+  String get trackStatus => 'متابعة الحالة';
+
+  @override
+  String get activeCases => 'البلاغات النشطة';
+
+  @override
+  String get noCases => 'لا توجد بلاغات بعد';
+
+  @override
+  String get noCasesHint => 'ستظهر بلاغاتك عن المفقودين هنا.';
+
+  @override
+  String get reportingAssistant => 'مساعد الإبلاغ';
+
+  @override
+  String get sameLocationQuestion =>
+      'هل موقعك الحالي هو نفس المكان الذي شوهد فيه الفرد المفقود آخر مرة؟';
+
+  @override
+  String get yes => 'نعم';
+
+  @override
+  String get no => 'لا';
+
+  @override
+  String get lastSeenDescription => 'أين شوهد الفرد آخر مرة؟';
+
+  @override
+  String get clothingQuestion =>
+      'ما الملابس التي كان يرتديها الفرد عند رؤيته آخر مرة؟';
+
+  @override
+  String get distinctiveQuestion =>
+      'هل كان الفرد يحمل شيئًا مميزًا، مثل حقيبة أو لعبة؟';
+
+  @override
+  String get distinctiveDescription => 'صف الشيء المميز';
+
+  @override
+  String get additionalQuestion =>
+      'هل توجد معلومات إضافية قد تساعد المتطوعين في العثور على الفرد؟';
+
+  @override
+  String get saveReport => 'حفظ تفاصيل البلاغ';
+
+  @override
+  String get reportSaved => 'تم حفظ تفاصيل البلاغ';
+
+  @override
+  String get locationRequired =>
+      'اسمح بالوصول إلى الموقع لاستخدام موقعك الحالي، أو اختر لا وصف مكان آخر مشاهدة.';
+
+  @override
+  String get locationReady => 'تم تحديد موقعك الحالي لهذا البلاغ';
+
+  @override
+  String get useCurrentLocation => 'استخدام موقعي الحالي';
+
+  @override
+  String get noNotifications => 'لا توجد إشعارات بعد';
+
+  @override
+  String get notificationHint => 'ستظهر هنا التحديثات المتعلقة ببلاغاتك.';
+
+  @override
+  String get guardianVerification => 'رمز تحقق ولي الأمر';
+
+  @override
+  String get verificationExplanation =>
+      'اعرض هذا الرمز لمتطوع مخوّل للتحقق من ارتباطك بهذا البلاغ. الرمز لا يحدد هوية الفرد المفقود.';
+
+  @override
+  String get noEligibleCases => 'لا توجد بلاغات بانتظار تحقق ولي الأمر.';
+
+  @override
+  String get verificationExpired =>
+      'انتهت صلاحية الرمز. أنشئ رمزًا جديدًا للمتابعة.';
+
+  @override
+  String get refreshCode => 'إنشاء رمز جديد';
+
+  @override
+  String get showCaseIdentifier => 'عرض معرّف البلاغ';
+
+  @override
+  String get caseIdentifier => 'معرّف البلاغ';
+
+  @override
+  String get caseIdentifierHint =>
+      'شارك هذا المرجع مع أحد أعضاء الفريق المخوّلين. المرجع وحده لا يثبت هويتك.';
+
+  @override
+  String get eventUnavailable =>
+      'الإبلاغ غير متاح مؤقتًا لأن الفعالية الحالية لم تُفعّل. يرجى المحاولة لاحقًا.';
+
+  @override
+  String get guidedDetails => 'تفاصيل البلاغ';
+
+  @override
+  String get lastUpdated => 'آخر تحديث';
+
+  @override
+  String get requiredAnswer => 'يرجى إكمال هذه الإجابة.';
+
+  @override
+  String get activeCase => 'بلاغ نشط';
+
+  @override
+  String get verificationExpires => 'صالح حتى';
+
+  @override
+  String get close => 'إغلاق';
+
+  @override
+  String get vLoadFailed =>
+      'تعذّر تحميل البيانات الحالية. اضغط للمحاولة مجددًا.';
+
+  @override
+  String get vContinueReport => 'متابعة البلاغ';
+
+  @override
+  String get vAiUnavailable =>
+      'المطابقة بالذكاء الاصطناعي غير متاحة. تم حفظ البلاغ ويمكنك المتابعة بالمراجعة اليدوية.';
+
+  @override
+  String get vQrRequired =>
+      'اطلب من ولي الأمر عرض رمز QR الخاص بهذه الحالة من حسابه المسجّل في راد. رقم الحالة وحده لا يثبت الهوية.';
 }

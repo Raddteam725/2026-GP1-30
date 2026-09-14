@@ -377,7 +377,7 @@ abstract class AppLocalizations {
   /// No description provided for @passwordHelp.
   ///
   /// In en, this message translates to:
-  /// **'Use 8+ characters with uppercase, lowercase, a number and a special character.'**
+  /// **'Use at least 8 characters, including an uppercase English letter, a lowercase English letter, a number, and a special character such as !, @, #, or \$.'**
   String get passwordHelp;
 
   /// No description provided for @confirmRequired.
@@ -698,12 +698,6 @@ abstract class AppLocalizations {
   /// **'Edit Profile'**
   String get editProfile;
 
-  /// No description provided for @emailReadOnly.
-  ///
-  /// In en, this message translates to:
-  /// **'Email is managed by Firebase Authentication and cannot be edited here.'**
-  String get emailReadOnly;
-
   /// No description provided for @volunteerUnavailable.
   ///
   /// In en, this message translates to:
@@ -781,12 +775,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cases'**
   String get cases;
-
-  /// No description provided for @comingLater.
-  ///
-  /// In en, this message translates to:
-  /// **'This feature will be available in a later sprint.'**
-  String get comingLater;
 
   /// No description provided for @notifications.
   ///
@@ -2023,6 +2011,306 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{value}% Similarity'**
   String vSimilarityValue(String value);
+
+  /// No description provided for @reportMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Report Missing'**
+  String get reportMissing;
+
+  /// No description provided for @reportConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Report this individual as missing?'**
+  String get reportConfirm;
+
+  /// No description provided for @confirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get confirm;
+
+  /// No description provided for @reportReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Report Received'**
+  String get reportReceived;
+
+  /// No description provided for @searchInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Search in Progress'**
+  String get searchInProgress;
+
+  /// No description provided for @matchConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Match Confirmed'**
+  String get matchConfirmed;
+
+  /// No description provided for @awaitingVerification.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting Guardian Verification'**
+  String get awaitingVerification;
+
+  /// No description provided for @reunited.
+  ///
+  /// In en, this message translates to:
+  /// **'Reunited'**
+  String get reunited;
+
+  /// No description provided for @unknownCaseStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Status unavailable'**
+  String get unknownCaseStatus;
+
+  /// No description provided for @caseStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Case Status'**
+  String get caseStatus;
+
+  /// No description provided for @viewStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'View Status'**
+  String get viewStatus;
+
+  /// No description provided for @trackStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Track Status'**
+  String get trackStatus;
+
+  /// No description provided for @activeCases.
+  ///
+  /// In en, this message translates to:
+  /// **'Active cases'**
+  String get activeCases;
+
+  /// No description provided for @noCases.
+  ///
+  /// In en, this message translates to:
+  /// **'No cases yet'**
+  String get noCases;
+
+  /// No description provided for @noCasesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Your missing-person reports will appear here.'**
+  String get noCasesHint;
+
+  /// No description provided for @reportingAssistant.
+  ///
+  /// In en, this message translates to:
+  /// **'Reporting Assistant'**
+  String get reportingAssistant;
+
+  /// No description provided for @sameLocationQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Is your current location the same as where the missing individual was last seen?'**
+  String get sameLocationQuestion;
+
+  /// No description provided for @yes.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get yes;
+
+  /// No description provided for @no.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get no;
+
+  /// No description provided for @lastSeenDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Where was the individual last seen?'**
+  String get lastSeenDescription;
+
+  /// No description provided for @clothingQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'What clothing was the individual wearing when last seen?'**
+  String get clothingQuestion;
+
+  /// No description provided for @distinctiveQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Was the individual carrying anything distinctive, such as a bag or toy?'**
+  String get distinctiveQuestion;
+
+  /// No description provided for @distinctiveDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Describe the distinctive item'**
+  String get distinctiveDescription;
+
+  /// No description provided for @additionalQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Is there any additional information that could help Volunteers find the individual?'**
+  String get additionalQuestion;
+
+  /// No description provided for @saveReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Save report details'**
+  String get saveReport;
+
+  /// No description provided for @reportSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Report details saved'**
+  String get reportSaved;
+
+  /// No description provided for @locationRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow location access to use your current position, or select No and describe the last-seen location.'**
+  String get locationRequired;
+
+  /// No description provided for @locationReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Current location captured for this report'**
+  String get locationReady;
+
+  /// No description provided for @useCurrentLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Use current location'**
+  String get useCurrentLocation;
+
+  /// No description provided for @noNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'No notifications yet'**
+  String get noNotifications;
+
+  /// No description provided for @notificationHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates about your cases will appear here.'**
+  String get notificationHint;
+
+  /// No description provided for @guardianVerification.
+  ///
+  /// In en, this message translates to:
+  /// **'Guardian Verification QR'**
+  String get guardianVerification;
+
+  /// No description provided for @verificationExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'Show this code to an authorized Volunteer to verify your connection to this case. It does not identify the missing individual.'**
+  String get verificationExplanation;
+
+  /// No description provided for @noEligibleCases.
+  ///
+  /// In en, this message translates to:
+  /// **'No cases are awaiting Guardian verification.'**
+  String get noEligibleCases;
+
+  /// No description provided for @verificationExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'This code has expired. Generate a new code to continue.'**
+  String get verificationExpired;
+
+  /// No description provided for @refreshCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate new code'**
+  String get refreshCode;
+
+  /// No description provided for @showCaseIdentifier.
+  ///
+  /// In en, this message translates to:
+  /// **'Show Case Identifier'**
+  String get showCaseIdentifier;
+
+  /// No description provided for @caseIdentifier.
+  ///
+  /// In en, this message translates to:
+  /// **'Case Identifier'**
+  String get caseIdentifier;
+
+  /// No description provided for @caseIdentifierHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Share this reference with an authorized team member. The reference alone does not verify your identity.'**
+  String get caseIdentifierHint;
+
+  /// No description provided for @eventUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Reporting is temporarily unavailable because the current event has not been activated. Please try again later.'**
+  String get eventUnavailable;
+
+  /// No description provided for @guidedDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Report details'**
+  String get guidedDetails;
+
+  /// No description provided for @lastUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Last updated'**
+  String get lastUpdated;
+
+  /// No description provided for @requiredAnswer.
+  ///
+  /// In en, this message translates to:
+  /// **'Please complete this answer.'**
+  String get requiredAnswer;
+
+  /// No description provided for @activeCase.
+  ///
+  /// In en, this message translates to:
+  /// **'Active case'**
+  String get activeCase;
+
+  /// No description provided for @verificationExpires.
+  ///
+  /// In en, this message translates to:
+  /// **'Valid until'**
+  String get verificationExpires;
+
+  /// No description provided for @close.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get close;
+
+  /// No description provided for @vLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to load current data. Tap to try again.'**
+  String get vLoadFailed;
+
+  /// No description provided for @vContinueReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue report'**
+  String get vContinueReport;
+
+  /// No description provided for @vAiUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'AI matching is unavailable. Your report is saved; continue with manual review.'**
+  String get vAiUnavailable;
+
+  /// No description provided for @vQrRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask the Guardian to display this case’s QR code in their signed-in Radd account. A case identifier alone cannot verify identity.'**
+  String get vQrRequired;
 }
 
 class _AppLocalizationsDelegate
