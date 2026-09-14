@@ -170,3 +170,10 @@ def test_session_rejects_unknown_or_conflicting_role(storage):
     db.data["users/one"] = {"role": "guardian"}
     with pytest.raises(HTTPException):
         service.GuardianService({"uid": "one", "role": "volunteer"}).account_role()
+
+def test_enabled_volunteer_claims_restore_without_guardian_document(storage):
+    account = service.GuardianService({"uid": "volunteer", "role": "volunteer", "enabled": True, "volunteerId": "V-qa"})
+    assert account.account_role() == {"role": "volunteer"}
+    assert storage[0].data == {}
+    with pytest.raises(HTTPException):
+        service.GuardianService({"uid": "volunteer", "role": "volunteer", "enabled": False, "volunteerId": "V-qa"}).account_role()

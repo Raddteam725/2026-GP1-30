@@ -1,5 +1,5 @@
-# Radd Guardian API
-Flutter stays at the repository root. This is the permanent FastAPI business layer.
+# Radd shared API
+Flutter stays at the repository root. This is the shared FastAPI business layer for the Radd team. See ../TEAM_SETUP.md for secure local startup.
 
 ## Local startup
 Use Python 3.11+ in a project-local virtual environment:

@@ -1,3 +1,4 @@
+import logging
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -21,6 +22,8 @@ async def limits(request: Request, call_next):
                 return JSONResponse(status_code=413, content={"detail": "request_too_large"})
         request._body = bytes(body)
     response = await call_next(request)
+    route = request.scope.get("route")
+    logging.getLogger("uvicorn.error").info("Radd API: %s %s -> %s", request.method, getattr(route, "path", "/unknown"), response.status_code)
     response.headers["Cache-Control"] = "no-store"
     return response
 
