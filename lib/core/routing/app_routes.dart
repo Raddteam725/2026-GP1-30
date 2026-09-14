@@ -5,5 +5,6 @@ abstract final class AppRoutes {
   // Reserved entry points; register builders after screen approval.
   static const onboarding = '/onboarding';
   static const auth = '/auth';
+  static const volunteer = '/volunteer';
   static const guardian = '/guardian';
 }

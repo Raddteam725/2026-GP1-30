@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../features/volunteer/presentation/volunteer_entry.dart';
+
 import '../../features/onboarding/presentation/screens/role_selection_screen.dart';
 
 import '../../features/onboarding/presentation/screens/splash_screen.dart';
@@ -12,6 +14,7 @@ abstract final class AppRouter {
       MaterialPageRoute<void>(
         settings: settings,
         builder: (context) => switch (settings.name) {
+          AppRoutes.volunteer => const VolunteerEntry(),
           AppRoutes.root => const SplashScreen(),
           AppRoutes.languageSelection => const LanguageSelectionScreen(),
           AppRoutes.roleSelection => const RoleSelectionScreen(),

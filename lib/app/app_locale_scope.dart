@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Session locale owned by RaddApp; no persistence or external state.
+/// Locale owned by RaddApp; user changes are persisted by the app.
 class AppLocaleScope extends InheritedWidget {
   const AppLocaleScope({
     super.key,

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/routing/app_routes.dart';
+
 import '../../../../core/localization/generated/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_spacing.dart';
@@ -116,6 +118,13 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                                   textAlign: TextAlign.center,
                                   style: text.bodyMedium,
                                 ),
+                              ),
+                            if (_selectedRole == OnboardingRole.volunteer)
+                              FilledButton(
+                                onPressed: () =>
+                                    Navigator.of(context)
+                                        .pushNamed(AppRoutes.volunteer),
+                                child: Text(strings.continueLabel),
                               ),
                             const Spacer(),
                             const Gap(AppSpacing.xl),

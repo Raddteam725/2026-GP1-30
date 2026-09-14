@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_locale_scope.dart';
 
@@ -26,7 +27,11 @@ class _RaddAppState extends State<RaddApp> {
   @override
   Widget build(BuildContext context) => AppLocaleScope(
     locale: _locale,
-    setLocale: (locale) => setState(() => _locale = locale),
+    setLocale: (locale) async {
+      setState(() => _locale = locale);
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setString('radd.language', locale.languageCode);
+    },
     child: MaterialApp(
       debugShowCheckedModeBanner: false,
       locale: _locale,
