@@ -2287,6 +2287,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Close'**
   String get close;
+
+  /// No description provided for @vLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to load current data. Tap to try again.'**
+  String get vLoadFailed;
+
+  /// No description provided for @vContinueReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue report'**
+  String get vContinueReport;
+
+  /// No description provided for @vAiUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'AI matching is unavailable. Your report is saved; continue with manual review.'**
+  String get vAiUnavailable;
+
+  /// No description provided for @vQrRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask the Guardian to display this case’s QR code in their signed-in Radd account. A case identifier alone cannot verify identity.'**
+  String get vQrRequired;
 }
 
 class _AppLocalizationsDelegate

@@ -1163,4 +1163,19 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get close => 'إغلاق';
+
+  @override
+  String get vLoadFailed =>
+      'تعذّر تحميل البيانات الحالية. اضغط للمحاولة مجددًا.';
+
+  @override
+  String get vContinueReport => 'متابعة البلاغ';
+
+  @override
+  String get vAiUnavailable =>
+      'المطابقة بالذكاء الاصطناعي غير متاحة. تم حفظ البلاغ ويمكنك المتابعة بالمراجعة اليدوية.';
+
+  @override
+  String get vQrRequired =>
+      'اطلب من ولي الأمر عرض رمز QR الخاص بهذه الحالة من حسابه المسجّل في راد. رقم الحالة وحده لا يثبت الهوية.';
 }

@@ -2,7 +2,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import '../../../firebase_options.dart';
-import '../domain/volunteer_models.dart';
 
 class VolunteerAuthService {
   Future<FirebaseAuth> _auth() async {
@@ -14,35 +13,13 @@ class VolunteerAuthService {
     return FirebaseAuth.instance;
   }
 
-  Future<VolunteerAccount> signIn(String email, String password) async {
+  Future<void> signIn(String email, String password) async {
     final auth = await _auth();
-    final result = await auth.signInWithEmailAndPassword(
+    await auth.signInWithEmailAndPassword(
       email: email.trim(),
       password: password,
     );
-    try {
-      final user = result.user!;
-      final claims = (await user.getIdTokenResult(true)).claims ?? {};
-      if (claims['role'] != 'volunteer' ||
-          claims['enabled'] != true ||
-          claims['volunteerId'] is! String ||
-          (claims['volunteerId'] as String).isEmpty ||
-          user.displayName == null ||
-          user.displayName!.trim().isEmpty) {
-        throw StateError('volunteer-required');
-      }
-      return VolunteerAccount(
-        uid: user.uid,
-        name: LocalizedData(user.displayName ?? '', user.displayName ?? ''),
-        volunteerId: claims['volunteerId'] as String,
-        active: true,
-        email: user.email,
-        phone: user.phoneNumber,
-      );
-    } catch (_) {
-      await auth.signOut();
-      rethrow;
-    }
+    // Authorization and the admin-owned profile are resolved by FastAPI.
   }
 
   Future<void> resetPassword(String email) async {

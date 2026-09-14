@@ -406,5 +406,9 @@
   "requiredAnswer": "Please complete this answer.",
   "activeCase": "Active case",
   "verificationExpires": "Valid until",
-  "close": "Close"
+  "close": "Close",
+  "vLoadFailed": "Unable to load current data. Tap to try again.",
+  "vContinueReport": "Continue report",
+  "vAiUnavailable": "AI matching is unavailable. Your report is saved; continue with manual review.",
+  "vQrRequired": "Ask the Guardian to display this case’s QR code in their signed-in Radd account. A case identifier alone cannot verify identity."
 }

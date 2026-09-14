@@ -61,8 +61,9 @@ class VolunteerLocation extends ChangeNotifier with WidgetsBindingObserver {
           (p) {
             if (_disposed ||
                 WidgetsBinding.instance.lifecycleState !=
-                    AppLifecycleState.resumed)
+                    AppLifecycleState.resumed) {
               return;
+            }
             // Avoid presenting city-level approximate location as a 500 m priority signal.
             coordinates = p.accuracy <= 100
                 ? Coordinates(p.latitude, p.longitude)

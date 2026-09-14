@@ -54,11 +54,9 @@ class GuardianService:
         self.user = self.db.collection("users").document(self.uid)
 
     def account_role(self):
-        # Match the existing Volunteer team contract; never assign a role from client input.
-        if self.token.get("role") == "volunteer":
-            if self.token.get("enabled") is True and isinstance(self.token.get("volunteerId"), str) and self.token["volunteerId"].strip():
-                return {"role": "volunteer"}
-            raise HTTPException(403, detail="volunteer_disabled")
+        # Volunteer role/status now come from the admin-owned users document.
+        # Inactive Volunteers may restore their session to view their inactive ID;
+        # operational authorization is enforced by VolunteerService.profile().
         doc = self.user.get()
         if not doc.exists:
             raise HTTPException(404, detail="profile_missing")

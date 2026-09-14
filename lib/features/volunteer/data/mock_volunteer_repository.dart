@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../domain/volunteer_models.dart';
 import 'volunteer_repository.dart';
 
@@ -208,7 +210,11 @@ class MockVolunteerRepository extends VolunteerRepository {
     ),
   );
   @override
-  Future<FoundReport> submitFound(VolunteerAccount account) async {
+  Future<FoundReport> submitFound(
+    VolunteerAccount account, {
+    Uint8List? photo,
+    String? requestId,
+  }) async {
     _active(account);
     final report = FoundReport(
       id: 'FR-${1000 + ++_sequence}',

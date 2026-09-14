@@ -1176,4 +1176,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get close => 'Close';
+
+  @override
+  String get vLoadFailed => 'Unable to load current data. Tap to try again.';
+
+  @override
+  String get vContinueReport => 'Continue report';
+
+  @override
+  String get vAiUnavailable =>
+      'AI matching is unavailable. Your report is saved; continue with manual review.';
+
+  @override
+  String get vQrRequired =>
+      'Ask the Guardian to display this case’s QR code in their signed-in Radd account. A case identifier alone cannot verify identity.';
 }

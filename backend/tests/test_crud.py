@@ -110,9 +110,10 @@ def test_session_rejects_unknown_or_conflicting_role(storage):
     with pytest.raises(HTTPException):
         service.GuardianService({"uid": "one", "role": "volunteer"}).account_role()
 
-def test_enabled_volunteer_claims_restore_without_guardian_document(storage):
+def test_volunteer_session_requires_admin_document_not_legacy_enabled_claims(storage):
+    db, _ = storage
     account = service.GuardianService({"uid": "volunteer", "role": "volunteer", "enabled": True, "volunteerId": "V-qa"})
-    assert account.account_role() == {"role": "volunteer"}
-    assert {k: v for k, v in storage[0].data.items() if not k.startswith("events/")} == {}
     with pytest.raises(HTTPException):
-        service.GuardianService({"uid": "volunteer", "role": "volunteer", "enabled": False, "volunteerId": "V-qa"}).account_role()
+        account.account_role()
+    db.data['users/volunteer'] = {'role': 'volunteer', 'active': False}
+    assert account.account_role() == {'role': 'volunteer'}

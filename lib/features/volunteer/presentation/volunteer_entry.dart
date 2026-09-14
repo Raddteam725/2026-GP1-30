@@ -1,12 +1,14 @@
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../app/app_locale_scope.dart';
 import '../../../shared/widgets/password_input.dart';
 import '../data/volunteer_auth_service.dart';
+import '../data/api_volunteer_repository.dart';
 import '../data/volunteer_repository.dart';
 import '../data/mock_volunteer_repository.dart';
 import '../domain/volunteer_models.dart';
@@ -37,6 +39,60 @@ class _VolunteerEntryState extends State<VolunteerEntry> {
     super.dispose();
   }
 
+  @override
+  void initState() {
+    super.initState();
+    if (Firebase.apps.isNotEmpty && FirebaseAuth.instance.currentUser != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        setState(() => _busy = true);
+        try {
+          await _enterAuthenticated();
+        } catch (_) {
+          if (mounted) setState(() => _errorCode = 'backend-unavailable');
+        } finally {
+          if (mounted) setState(() => _busy = false);
+        }
+      });
+    }
+  }
+
+  Future<void> _enterAuthenticated() async {
+    final repository = ApiVolunteerRepository(
+      token: () async => FirebaseAuth.instance.currentUser?.getIdToken(),
+    );
+    try {
+      await repository.loadProfile();
+    } catch (_) {
+      repository.dispose();
+      await _auth.signOut();
+      rethrow;
+    }
+    final account = repository.account!;
+    if (!mounted) {
+      repository.dispose();
+      return;
+    }
+    _password.clear();
+    _repository?.dispose();
+    setState(() {
+      _account = account;
+      _repository = repository;
+    });
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user == null &&
+          mounted &&
+          _account != null &&
+          _repository?.isPreview != true) {
+        _repository?.dispose();
+        setState(() {
+          _account = null;
+          _repository = null;
+        });
+      }
+    });
+  }
+
   Future<void> _submit() async {
     if (!_form.currentState!.validate()) return;
     setState(() {
@@ -52,24 +108,8 @@ class _VolunteerEntryState extends State<VolunteerEntry> {
           );
         }
       } else {
-        final account = await _auth.signIn(_email.text, _password.text);
-        if (!mounted) return;
-        _password.clear();
-        _repository?.dispose();
-        setState(() {
-          _account = account;
-          _repository = UnconnectedVolunteerRepository();
-        });
-        _authSubscription = FirebaseAuth.instance.authStateChanges().listen((
-          user,
-        ) {
-          if (user == null &&
-              mounted &&
-              _account != null &&
-              _repository?.isPreview != true) {
-            setState(() => _account = null);
-          }
-        });
+        await _auth.signIn(_email.text, _password.text);
+        await _enterAuthenticated();
       }
     } catch (error) {
       if (mounted) {
@@ -116,6 +156,7 @@ class _VolunteerEntryState extends State<VolunteerEntry> {
       'user-not-found' ||
       'invalid-login-credentials' => s.vInvalidLogin,
       'network-request-failed' => s.vNetworkError,
+      'backend-unavailable' => s.vLoadFailed,
       'volunteer-required' || 'user-disabled' => s.vAccessDenied,
       _ => s.vUnavailable,
     };
@@ -245,7 +286,9 @@ class _VolunteerEntryState extends State<VolunteerEntry> {
                     color: Color(0xFF747783),
                   ),
                 ),
-                if (kDebugMode) ...[
+                if (kDebugMode &&
+                    (Firebase.apps.isEmpty ||
+                        FirebaseAuth.instance.currentUser == null)) ...[
                   const SizedBox(height: 24),
                   VolunteerAction(
                     s.vPreviewOpen,
