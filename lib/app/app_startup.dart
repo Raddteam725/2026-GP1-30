@@ -53,7 +53,13 @@ Future<AppStartupData> initializeApp() async {
     guardian: GuardianApi(
       token: () => auth.currentUser?.getIdToken() ?? Future.value(null),
     ),
-    locale: Locale(preferences.getString('language') == 'ar' ? 'ar' : 'en'),
+    locale: Locale(
+      (preferences.getString('language') ??
+                  preferences.getString('radd.language')) ==
+              'ar'
+          ? 'ar'
+          : 'en',
+    ),
     saveLocale: (locale) async {
       final saved = await preferences.setString(
         'language',

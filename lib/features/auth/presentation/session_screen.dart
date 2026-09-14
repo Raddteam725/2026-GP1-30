@@ -89,11 +89,8 @@ class _SessionScreenState extends State<SessionScreen> {
         return;
       }
       if (role != 'volunteer') throw const AppFailure('role');
-      // This branch has no Volunteer workspace. Never send this user to Guardian.
-      setState(() {
-        _role = role;
-        _loading = false;
-      });
+      Navigator.of(context)
+          .pushNamedAndRemoveUntil(AppRoutes.volunteer, (_) => false);
     } catch (error) {
       if (!mounted || revision != _revision) return;
       final code = error is AppFailure ? error.code : 'service';

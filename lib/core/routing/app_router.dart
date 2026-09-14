@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../features/volunteer/presentation/volunteer_entry.dart';
+
 import '../../app/app_services.dart';
 import '../../features/auth/presentation/session_screen.dart';
 import '../../features/auth/presentation/auth_screen.dart';
@@ -33,7 +35,8 @@ abstract final class AppRouter {
               ? settings.arguments as String
               : null,
         ),
-        AppRoutes.volunteerLogin => const AuthScreen(volunteer: true),
+        AppRoutes.volunteerLogin ||
+        AppRoutes.volunteer => const VolunteerEntry(),
         AppRoutes.completeProfile => const AuthScreen(
           mode: AuthMode.completeProfile,
         ),

@@ -1,4 +1,5 @@
 abstract final class AppRoutes {
+  static const volunteer = '/volunteer';
   static const root = '/';
   static const languageSelection = '/onboarding/language';
   static const roleSelection = '/onboarding/role';

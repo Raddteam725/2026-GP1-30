@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:radd/features/volunteer/presentation/volunteer_entry.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:radd/app/app_services.dart';
@@ -99,11 +101,7 @@ void main() {
     await launch(t);
     expect(repo.profileReads, 0);
     expect(find.byType(GuardianHomeScreen), findsNothing);
-    await t.tap(find.text('Return to Role Selection'));
-    await t.pumpAndSettle();
-    await t.tap(find.byKey(const ValueKey('volunteer-role')));
-    await t.pumpAndSettle();
-    expect(t.widget<AuthScreen>(find.byType(AuthScreen)).volunteer, isTrue);
+    expect(find.byType(VolunteerEntry), findsOneWidget);
     expect(find.text('Create Account'), findsNothing);
   });
   testWidgets(

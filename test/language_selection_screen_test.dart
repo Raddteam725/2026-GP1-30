@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:radd/features/volunteer/presentation/volunteer_entry.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:radd/app/radd_app.dart';
 import 'package:radd/features/auth/presentation/auth_screen.dart';
@@ -97,18 +98,15 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(volunteer);
         await tester.pumpAndSettle();
-        expect(find.text(strings.volunteerLogin), findsOneWidget);
-        expect(
-          tester.widget<AuthScreen>(find.byType(AuthScreen)).volunteer,
-          isTrue,
-        );
+
+        expect(find.byType(VolunteerEntry), findsOneWidget);
         expect(
           find.textContaining(
             RegExp('Admin|Sign Up|مسؤول|إنشاء حساب', caseSensitive: false),
           ),
           findsNothing,
         );
-        Navigator.of(tester.element(find.byType(AuthScreen))).pop();
+        Navigator.of(tester.element(find.byType(VolunteerEntry))).pop();
         await tester.pumpAndSettle();
         Navigator.of(context).pop();
         await tester.pumpAndSettle();
@@ -145,10 +143,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(volunteer);
       await tester.pumpAndSettle();
-      expect(
-        tester.widget<AuthScreen>(find.byType(AuthScreen)).volunteer,
-        isTrue,
-      );
+      expect(find.byType(VolunteerEntry), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
