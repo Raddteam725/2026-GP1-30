@@ -157,7 +157,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get passwordHelp =>
-      'Use 8+ characters with uppercase, lowercase, a number and a special character.';
+      'Use at least 8 characters, including an uppercase English letter, a lowercase English letter, a number, and a special character such as !, @, #, or \$.';
 
   @override
   String get confirmRequired => 'Both confirmations are required.';
@@ -326,10 +326,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editProfile => 'Edit Profile';
 
   @override
-  String get emailReadOnly =>
-      'Email is managed by Firebase Authentication and cannot be edited here.';
-
-  @override
   String get volunteerUnavailable =>
       'Volunteer access is not available in this build yet.';
 
@@ -373,9 +369,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cases => 'Cases';
-
-  @override
-  String get comingLater => 'This feature will be available in a later sprint.';
 
   @override
   String get notifications => 'Notifications';
@@ -1036,4 +1029,151 @@ class AppLocalizationsEn extends AppLocalizations {
   String vSimilarityValue(String value) {
     return '$value% Similarity';
   }
+
+  @override
+  String get reportMissing => 'Report Missing';
+
+  @override
+  String get reportConfirm => 'Report this individual as missing?';
+
+  @override
+  String get confirm => 'Confirm';
+
+  @override
+  String get reportReceived => 'Report Received';
+
+  @override
+  String get searchInProgress => 'Search in Progress';
+
+  @override
+  String get matchConfirmed => 'Match Confirmed';
+
+  @override
+  String get awaitingVerification => 'Awaiting Guardian Verification';
+
+  @override
+  String get reunited => 'Reunited';
+
+  @override
+  String get unknownCaseStatus => 'Status unavailable';
+
+  @override
+  String get caseStatus => 'Case Status';
+
+  @override
+  String get viewStatus => 'View Status';
+
+  @override
+  String get trackStatus => 'Track Status';
+
+  @override
+  String get activeCases => 'Active cases';
+
+  @override
+  String get noCases => 'No cases yet';
+
+  @override
+  String get noCasesHint => 'Your missing-person reports will appear here.';
+
+  @override
+  String get reportingAssistant => 'Reporting Assistant';
+
+  @override
+  String get sameLocationQuestion =>
+      'Is your current location the same as where the missing individual was last seen?';
+
+  @override
+  String get yes => 'Yes';
+
+  @override
+  String get no => 'No';
+
+  @override
+  String get lastSeenDescription => 'Where was the individual last seen?';
+
+  @override
+  String get clothingQuestion =>
+      'What clothing was the individual wearing when last seen?';
+
+  @override
+  String get distinctiveQuestion =>
+      'Was the individual carrying anything distinctive, such as a bag or toy?';
+
+  @override
+  String get distinctiveDescription => 'Describe the distinctive item';
+
+  @override
+  String get additionalQuestion =>
+      'Is there any additional information that could help Volunteers find the individual?';
+
+  @override
+  String get saveReport => 'Save report details';
+
+  @override
+  String get reportSaved => 'Report details saved';
+
+  @override
+  String get locationRequired =>
+      'Allow location access to use your current position, or select No and describe the last-seen location.';
+
+  @override
+  String get locationReady => 'Current location captured for this report';
+
+  @override
+  String get useCurrentLocation => 'Use current location';
+
+  @override
+  String get noNotifications => 'No notifications yet';
+
+  @override
+  String get notificationHint => 'Updates about your cases will appear here.';
+
+  @override
+  String get guardianVerification => 'Guardian Verification QR';
+
+  @override
+  String get verificationExplanation =>
+      'Show this code to an authorized Volunteer to verify your connection to this case. It does not identify the missing individual.';
+
+  @override
+  String get noEligibleCases => 'No cases are awaiting Guardian verification.';
+
+  @override
+  String get verificationExpired =>
+      'This code has expired. Generate a new code to continue.';
+
+  @override
+  String get refreshCode => 'Generate new code';
+
+  @override
+  String get showCaseIdentifier => 'Show Case Identifier';
+
+  @override
+  String get caseIdentifier => 'Case Identifier';
+
+  @override
+  String get caseIdentifierHint =>
+      'Share this reference with an authorized team member. The reference alone does not verify your identity.';
+
+  @override
+  String get eventUnavailable =>
+      'Reporting is temporarily unavailable because the current event has not been activated. Please try again later.';
+
+  @override
+  String get guidedDetails => 'Report details';
+
+  @override
+  String get lastUpdated => 'Last updated';
+
+  @override
+  String get requiredAnswer => 'Please complete this answer.';
+
+  @override
+  String get activeCase => 'Active case';
+
+  @override
+  String get verificationExpires => 'Valid until';
+
+  @override
+  String get close => 'Close';
 }

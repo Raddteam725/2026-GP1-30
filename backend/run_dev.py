@@ -26,6 +26,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--credentials-dir")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--bootstrap-event", action="store_true")
     args = parser.parse_args()
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     try:
@@ -38,6 +39,11 @@ def main():
     except Exception as error:
         # Do not print credential paths, JSON, tokens, or exception payloads.
         raise SystemExit("Firebase Admin setup failed (" + type(error).__name__ + "). Check the external credential configuration.")
+    if args.bootstrap_event:
+        from app.firebase import database
+        from app.events import bootstrap_development_event
+        bootstrap_development_event(database())
+        print("Current development event is ready.")
     import uvicorn
     uvicorn.run("app.main:app", host="127.0.0.1", port=args.port, access_log=False)
 

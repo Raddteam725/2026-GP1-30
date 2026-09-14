@@ -5,7 +5,14 @@ extension _VolunteerCaseViews on _VolunteerWorkspaceState {
     final available = repo.availableFor(account.uid);
     final nearby = repo.cases.where(_isNearby).toList();
     return [
-      Text(dataText(context, account.name), style: const TextStyle(fontSize:22, fontWeight:FontWeight.w700, color:volunteerInk)),
+      Text(
+        dataText(context, account.name),
+        style: const TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+          color: volunteerInk,
+        ),
+      ),
       const SizedBox(height: 16),
       VolunteerCard(
         child: Row(
@@ -205,7 +212,10 @@ extension _VolunteerCaseViews on _VolunteerWorkspaceState {
               const SizedBox(height: 5),
               StatusChip(item.status),
               const SizedBox(height: 5),
-              Text('${item.id} · ${s.vUpdated}: ${timeText(context,item.updatedAt)}', style: const TextStyle(fontSize:11, color:Color(0xFF747783))),
+              Text(
+                '${item.id} · ${s.vUpdated}: ${timeText(context, item.updatedAt)}',
+                style: const TextStyle(fontSize: 11, color: Color(0xFF747783)),
+              ),
             ],
           ),
         ),

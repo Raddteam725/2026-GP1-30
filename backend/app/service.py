@@ -1,12 +1,12 @@
 import base64
 import binascii
 import io
-import os
 from uuid import uuid4
 from PIL import Image, ImageOps, UnidentifiedImageError
 from fastapi import HTTPException
 from firebase_admin import firestore
 from .firebase import database, bucket
+from .events import active_event
 
 Image.MAX_IMAGE_PIXELS = 20_000_000
 
@@ -27,7 +27,7 @@ def ensure_deletable(data):
 
 def public_individual(doc):
     data = doc.to_dict()
-    return {**{k: data[k] for k in ("full_name", "age", "gender", "relationship")}, "id": doc.id}
+    return {**{k: data[k] for k in ("full_name", "age", "gender", "relationship")}, "id": doc.id, "active_case_id": data.get("active_case_id")}
 
 def normalize_photo(encoded):
     try:
@@ -147,15 +147,14 @@ class GuardianService:
                     raise HTTPException(409, detail="deletion_in_progress")
             else:
                 current_data = {}
+            event = active_event(self.db, tx) if existing is None else None
             data = value.model_dump(exclude={"photo_base64"})
             data.update(guardian_id=self.uid, updated_at=firestore.SERVER_TIMESTAMP)
             if new_path:
                 data["photo_path"] = new_path
             if existing is None:
                 data["created_at"] = firestore.SERVER_TIMESTAMP
-                event = os.getenv("RADD_ACTIVE_EVENT_ID")
-                if event:
-                    data["event_id"] = event
+                data["event_id"] = event.id
             tx.set(ref, data, merge=True)
             return current_data.get("photo_path")
         try:

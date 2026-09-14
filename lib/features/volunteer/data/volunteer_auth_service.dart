@@ -27,7 +27,8 @@ class VolunteerAuthService {
           claims['enabled'] != true ||
           claims['volunteerId'] is! String ||
           (claims['volunteerId'] as String).isEmpty ||
-          user.displayName == null || user.displayName!.trim().isEmpty) {
+          user.displayName == null ||
+          user.displayName!.trim().isEmpty) {
         throw StateError('volunteer-required');
       }
       return VolunteerAccount(
