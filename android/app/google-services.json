@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "380822604910",
+    "project_id": "radd-32eb6",
+    "storage_bucket": "radd-32eb6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:380822604910:android:357fefa9b3f1373985aa7f",
+        "android_client_info": {
+          "package_name": "com.example.radd"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAuDltSg-aJ8BGkPzxggUUxdH6k0TgwgTo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

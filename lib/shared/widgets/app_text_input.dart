@@ -14,10 +14,12 @@ class AppTextInput extends StatelessWidget {
     this.autofillHints,
     this.focusNode,
     this.enabled = true,
+    this.showLabel = true,
     this.obscureText = false,
     this.autocorrect = true,
     this.enableSuggestions = true,
     this.suffixIcon,
+    this.prefixIcon,
     this.maxLines = 1,
     this.textDirection,
   });
@@ -32,10 +34,12 @@ class AppTextInput extends StatelessWidget {
   final Iterable<String>? autofillHints;
   final FocusNode? focusNode;
   final bool enabled;
+  final bool showLabel;
   final bool obscureText;
   final bool autocorrect;
   final bool enableSuggestions;
   final Widget? suffixIcon;
+  final Widget? prefixIcon;
   final int maxLines;
   final TextDirection? textDirection;
   @override
@@ -55,9 +59,11 @@ class AppTextInput extends StatelessWidget {
     maxLines: obscureText ? 1 : maxLines,
     textDirection: textDirection,
     decoration: InputDecoration(
-      labelText: label,
+      labelText: showLabel ? label : null,
       hintText: hint,
+      errorMaxLines: 3,
       suffixIcon: suffixIcon,
+      prefixIcon: prefixIcon,
     ),
   );
 }

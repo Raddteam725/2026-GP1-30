@@ -3,123 +3,73 @@ import 'package:flutter/material.dart';
 import '../../../../app/app_locale_scope.dart';
 import '../../../../core/localization/generated/app_localizations.dart';
 import '../../../../core/routing/app_routes.dart';
-import '../widgets/onboarding_background.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/widgets/primary_button.dart';
+import '../widgets/onboarding_layout.dart';
 import '../widgets/onboarding_selection_card.dart';
 
-import '../../../../core/theme/app_colors.dart';
-import '../../../../shared/widgets/app_spacing.dart';
-import '../../../../shared/widgets/primary_button.dart';
-
-/// Applies the chosen language immediately and continues through AppRouter.
 class LanguageSelectionScreen extends StatelessWidget {
-  const LanguageSelectionScreen({super.key});
-
+  const LanguageSelectionScreen({super.key, this.returnToCaller = false});
+  final bool returnToCaller;
   @override
   Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
     final strings = AppLocalizations.of(context)!;
     final localeState = AppLocaleScope.of(context);
-    final selectedLanguage = Localizations.localeOf(context).languageCode;
-    return Scaffold(
-      body: Directionality(
-        textDirection: Directionality.of(context),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Positioned.fill(
-              child: ExcludeSemantics(
-                child: IgnorePointer(
-                  child: CustomPaint(painter: OnboardingBackground()),
-                ),
-              ),
+    final selected = Localizations.localeOf(context).languageCode;
+    return OnboardingPage(
+      title: strings.chooseLanguage,
+      showBack: returnToCaller,
+      subtitle: strings.languageHint,
+      content: Column(
+        children: [
+          OnboardingSelectionCard(
+            label: 'English',
+            icon: Icons.language,
+            subtitle: selected == 'en'
+                ? strings.currentSelection
+                : strings.englishLanguage,
+            selected: selected == 'en',
+            fontFamily: 'Inter',
+            onTap: () => localeState.setLocale(const Locale('en')),
+          ),
+          const SizedBox(height: OnboardingLayout.cardGap),
+          OnboardingSelectionCard(
+            label: 'العربية',
+            icon: Icons.language,
+            subtitle: selected == 'ar'
+                ? strings.currentSelection
+                : strings.arabicLanguage,
+            selected: selected == 'ar',
+            fontFamily: 'Tajawal',
+            onTap: () => localeState.setLocale(const Locale('ar')),
+          ),
+        ],
+      ),
+      footer: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(
+              minHeight: OnboardingLayout.buttonHeight,
             ),
-            SafeArea(
-              child: CustomScrollView(
-                slivers: [
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 448),
-                        child: Padding(
-                          padding: AppSpacing.pagePadding,
-                          child: Column(
-                            children: [
-                              const Gap(AppSpacing.xl),
-                              const Spacer(),
-                              SizedBox.square(
-                                dimension: 112,
-                                child: Stack(
-                                  children: [
-                                    Image.asset(
-                                      'assets/images/radd_logo.png',
-                                      fit: BoxFit.contain,
-                                      semanticLabel: 'Radd logo',
-                                    ),
-                                    Positioned(
-                                      top: 4,
-                                      right: 0,
-                                      child: ExcludeSemantics(
-                                        child: Container(
-                                          width: 8,
-                                          height: 8,
-                                          decoration: const BoxDecoration(
-                                            color: AppColors.accent,
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Gap(AppSpacing.xl),
-                              Text(
-                                strings.chooseLanguage,
-                                textAlign: TextAlign.center,
-                                style: text.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.primary,
-                                  height: 1.3,
-                                ),
-                              ),
-                              const Gap(AppSpacing.xl),
-                              OnboardingSelectionCard(
-                                label: 'English',
-                                selected: selectedLanguage == 'en',
-                                onTap: () =>
-                                    localeState.setLocale(const Locale('en')),
-                                fontFamily: 'Inter',
-                              ),
-                              const Gap(AppSpacing.md),
-                              OnboardingSelectionCard(
-                                label: 'العربية',
-                                selected: selectedLanguage == 'ar',
-                                onTap: () =>
-                                    localeState.setLocale(const Locale('ar')),
-                                fontFamily: 'Tajawal',
-                              ),
-                              const Gap(AppSpacing.xl),
-                              const Spacer(flex: 3),
-                              // Role selection is registered in the existing routing layer.
-                              PrimaryButton(
-                                label: strings.continueLabel,
-                                onPressed: () =>
-                                    Navigator.of(context)
-                                        .pushNamed(AppRoutes.roleSelection),
-                              ),
-                              const Gap(AppSpacing.xl),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            child: PrimaryButton(
+              label: strings.continueLabel,
+              onPressed: () => returnToCaller
+                  ? Navigator.of(context).pop()
+                  : Navigator.of(context).pushNamed(AppRoutes.roleSelection),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            strings.brandFooter,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontSize: 11,
+              height: 1.5,
+              color: AppColors.text.withValues(alpha: 0.55),
+            ),
+          ),
+        ],
       ),
     );
   }

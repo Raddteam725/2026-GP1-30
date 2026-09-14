@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import 'app/app_startup.dart';
 import 'app/radd_app.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  // Keep this first implementation English; locale switching comes later.
-  runApp(const RaddApp(locale: Locale('en')));
+  runApp(const RaddApp(initialize: initializeApp));
 }

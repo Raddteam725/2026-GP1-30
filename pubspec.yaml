@@ -5,11 +5,16 @@ version: 1.0.0+1
 environment:
   sdk: ^3.13.3
 dependencies:
+  camera: ^0.12.1
+  firebase_auth: ^6.6.1
+  firebase_core: ^4.14.0
   flutter:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
+  http: ^1.6.0
   intl: any
+  shared_preferences: ^2.5.5
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -48,6 +48,7 @@ class _PasswordInputState extends State<PasswordInput> {
       keyboardType: TextInputType.visiblePassword,
       textInputAction: widget.textInputAction,
       autofillHints: widget.autofillHints,
+      prefixIcon: const Icon(Icons.lock_outline),
       suffixIcon: IconButton(
         tooltip: _obscured ? strings.showPassword : strings.hidePassword,
         onPressed: widget.enabled
