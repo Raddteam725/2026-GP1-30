@@ -1,44 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:radd/app/radd_app.dart';
+import 'package:radd/core/localization/generated/app_localizations.dart';
 import 'package:radd/core/routing/app_routes.dart';
 import 'package:radd/core/theme/app_theme.dart';
 import 'package:radd/features/onboarding/presentation/screens/splash_screen.dart';
 import 'package:radd/features/onboarding/presentation/screens/language_selection_screen.dart';
 
 void main() {
-  testWidgets('Root displays the logo then replaces splash after two seconds', (
-    tester,
-  ) async {
-    await tester.pumpWidget(const RaddApp(locale: Locale('en')));
-    await tester.pump(const Duration(milliseconds: 1900));
-    expect(find.byType(SplashScreen), findsOneWidget);
-    expect(
-      ModalRoute.of(tester.element(find.byType(SplashScreen)))!.settings.name,
-      AppRoutes.root,
-    );
-    expect(find.text('Radd'), findsOneWidget);
-    expect(find.text('Bringing People Back Together'), findsOneWidget);
-    expect(find.text('A safer tomorrow for every journey'), findsOneWidget);
-    expect(
-      tester.widget<Image>(find.byType(Image)).image,
-      const AssetImage(SplashScreen.logoAsset),
-    );
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.pumpAndSettle();
-    expect(find.byType(SplashScreen), findsNothing);
-    expect(find.byType(LanguageSelectionScreen), findsOneWidget);
-    final languageContext = tester.element(
-      find.byType(LanguageSelectionScreen),
-    );
-    expect(
-      ModalRoute.of(languageContext)!.settings.name,
-      AppRoutes.languageSelection,
-    );
-    expect(Navigator.of(languageContext).canPop(), isFalse);
-    await tester.pumpWidget(const SizedBox());
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'Root displays the logo then replaces splash after the full 3.8 second sequence',
+    (tester) async {
+      await tester.pumpWidget(const RaddApp(locale: Locale('en')));
+      await tester.pump(const Duration(milliseconds: 3700));
+      expect(find.byType(SplashScreen), findsOneWidget);
+      expect(
+        ModalRoute.of(tester.element(find.byType(SplashScreen)))!.settings.name,
+        AppRoutes.root,
+      );
+      expect(find.text('Radd'), findsOneWidget);
+      expect(find.text('Bringing People Back Together'), findsOneWidget);
+      expect(find.text('A safer tomorrow for every journey'), findsOneWidget);
+      expect(
+        tester.widget<Image>(find.byType(Image)).image,
+        const AssetImage(SplashScreen.logoAsset),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
+      expect(find.byType(SplashScreen), findsNothing);
+      expect(find.byType(LanguageSelectionScreen), findsOneWidget);
+      final languageContext = tester.element(
+        find.byType(LanguageSelectionScreen),
+      );
+      expect(
+        ModalRoute.of(languageContext)!.settings.name,
+        AppRoutes.languageSelection,
+      );
+      expect(Navigator.of(languageContext).canPop(), isFalse);
+      await tester.pumpWidget(const SizedBox());
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   for (final size in [
     const Size(360, 800),
@@ -53,6 +55,8 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: AppTheme.light(const Locale('en')),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: MediaQuery(
             data: MediaQueryData(
               size: size,
@@ -89,10 +93,10 @@ void main() {
         .ancestor(of: find.text('Radd'), matching: find.byType(FadeTransition))
         .first;
     expect(tester.widget<FadeTransition>(fade).opacity.value, 0);
-    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pump(const Duration(milliseconds: 2800));
     expect(tester.widget<FadeTransition>(fade).opacity.value, greaterThan(0));
     expect(tester.widget<FadeTransition>(fade).opacity.value, lessThan(1));
-    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 900));
     expect(tester.widget<FadeTransition>(fade).opacity.value, 1);
     expect(
       tester

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:radd/features/volunteer/presentation/volunteer_entry.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:radd/app/radd_app.dart';
+import 'package:radd/features/auth/presentation/auth_screen.dart';
 import 'package:radd/core/localization/generated/app_localizations.dart';
 import 'package:radd/core/routing/app_routes.dart';
 import 'package:radd/features/onboarding/presentation/screens/language_selection_screen.dart';
@@ -11,7 +13,7 @@ import 'package:radd/features/onboarding/presentation/widgets/onboarding_selecti
 void main() {
   Future<void> openLanguage(WidgetTester tester) async {
     await tester.pumpWidget(const RaddApp(locale: Locale('en')));
-    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(milliseconds: 3800));
     await tester.pumpAndSettle();
   }
 
@@ -81,37 +83,31 @@ void main() {
           tester.widget<OnboardingSelectionCard>(volunteer).selected,
           isFalse,
         );
+        await tester.scrollUntilVisible(guardian, 150);
+        await tester.pumpAndSettle();
         await tester.tap(guardian);
-        await tester.pump();
-        expect(
-          tester.widget<OnboardingSelectionCard>(guardian).selected,
-          isTrue,
-        );
+        await tester.pumpAndSettle();
+        expect(find.byType(AuthScreen), findsOneWidget);
         expect(
           find.text(strings.selectedRole(strings.guardianRole)),
-          findsOneWidget,
+          findsNothing,
         );
+        Navigator.of(tester.element(find.byType(AuthScreen))).pop();
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(volunteer, 150);
+        await tester.pumpAndSettle();
         await tester.tap(volunteer);
-        await tester.pump();
-        expect(
-          tester.widget<OnboardingSelectionCard>(guardian).selected,
-          isFalse,
-        );
-        expect(
-          tester.widget<OnboardingSelectionCard>(volunteer).selected,
-          isTrue,
-        );
-        expect(
-          find.text(strings.selectedRole(strings.volunteerRole)),
-          findsOneWidget,
-        );
-        expect(find.byType(OnboardingSelectionCard), findsNWidgets(2));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(VolunteerEntry), findsOneWidget);
         expect(
           find.textContaining(
             RegExp('Admin|Sign Up|مسؤول|إنشاء حساب', caseSensitive: false),
           ),
           findsNothing,
         );
+        Navigator.of(tester.element(find.byType(VolunteerEntry))).pop();
+        await tester.pumpAndSettle();
         Navigator.of(context).pop();
         await tester.pumpAndSettle();
         context = tester.element(find.byType(LanguageSelectionScreen));
@@ -146,11 +142,8 @@ void main() {
       await tester.scrollUntilVisible(volunteer, 200);
       await tester.pumpAndSettle();
       await tester.tap(volunteer);
-      await tester.pump();
-      expect(
-        tester.widget<OnboardingSelectionCard>(volunteer).selected,
-        isTrue,
-      );
+      await tester.pumpAndSettle();
+      expect(find.byType(VolunteerEntry), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

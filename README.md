@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Radd
 
 Shared foundation for the existing portrait Android Flutter application.
@@ -31,7 +30,6 @@ false. No backend, Firebase, Volunteer or Admin is implemented.
 
 Validation: flutter pub get, flutter gen-l10n, dart format lib test,
 flutter analyze, flutter test.
-=======
 # Raad
 welcome to the club
 hi gus this is tala trying to fix this 

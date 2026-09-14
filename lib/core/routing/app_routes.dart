@@ -1,10 +1,20 @@
 abstract final class AppRoutes {
-  static const root = '/';
-  static const roleSelection = '/onboarding/role';
-  static const languageSelection = '/onboarding/language';
-  // Reserved entry points; register builders after screen approval.
-  static const onboarding = '/onboarding';
-  static const auth = '/auth';
   static const volunteer = '/volunteer';
+  static const root = '/';
+  static const languageSelection = '/onboarding/language';
+  static const roleSelection = '/onboarding/role';
+  static const onboarding = '/onboarding';
+  static const session = '/session';
+  static const volunteerLogin = '/auth/volunteer';
+  static const completeProfile = '/auth/complete-profile';
+  static const auth = '/auth';
+  static const createAccount = '/auth/create';
+  static const forgotPassword = '/auth/reset';
+  static const privacy = '/auth/privacy';
   static const guardian = '/guardian';
+  static const addIndividual = '/guardian/individual/add';
+  static const individual = '/guardian/individual';
+  static const editIndividual = '/guardian/individual/edit';
+  static const camera = '/guardian/camera';
+  static const editGuardianProfile = '/guardian/profile/edit';
 }
