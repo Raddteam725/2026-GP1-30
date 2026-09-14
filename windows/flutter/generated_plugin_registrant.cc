@@ -6,12 +6,18 @@
 
 #include "generated_plugin_registrant.h"
 
+<<<<<<< HEAD
 #include <firebase_auth/firebase_auth_plugin_c_api.h>
 #include <firebase_core/firebase_core_plugin_c_api.h>
 
 void RegisterPlugins(flutter::PluginRegistry* registry) {
   FirebaseAuthPluginCApiRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("FirebaseAuthPluginCApi"));
+=======
+#include <firebase_core/firebase_core_plugin_c_api.h>
+
+void RegisterPlugins(flutter::PluginRegistry* registry) {
+>>>>>>> 393d09975658ae1c19321ebd3e327aa83e30d52f
   FirebaseCorePluginCApiRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("FirebaseCorePluginCApi"));
 }
