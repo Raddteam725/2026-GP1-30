@@ -32,7 +32,7 @@ def photo():
 def test_real_service_crud_scopes_ownership_and_removes_photo(storage):
     first, second = guardian("one"), guardian("two")
     assert first.list() == []
-    value = IndividualInput(full_name="Test Person", age=7, gender="female", relationship="daughter", photo_base64=photo())
+    value = IndividualInput(full_name="Test Person", age=7, gender="female", relationship="child", photo_base64=photo())
     created = first.save(value)
     assert len(first.list()) == 1
     assert second.list() == []
@@ -50,7 +50,7 @@ def test_real_service_crud_scopes_ownership_and_removes_photo(storage):
 
 def test_replacement_removes_old_photo(storage):
     s = guardian("owner")
-    value = IndividualInput(full_name="Person", age=0, gender="male", relationship="son", photo_base64=photo())
+    value = IndividualInput(full_name="Person", age=0, gender="male", relationship="child", photo_base64=photo())
     created = s.save(value)
     old_path = next(iter(storage[1].data))
     s.save(value, created["id"])
@@ -59,7 +59,7 @@ def test_replacement_removes_old_photo(storage):
 
 def test_active_case_restriction_is_enforced_transactionally(storage):
     s = guardian("owner")
-    value = IndividualInput(full_name="Person", age=7, gender="male", relationship="son", photo_base64=photo())
+    value = IndividualInput(full_name="Person", age=7, gender="male", relationship="child", photo_base64=photo())
     created = s.save(value)
     ref = s.get(created["id"]).reference
     storage[0].update(ref, {"active_case_id": "test-active-case"})

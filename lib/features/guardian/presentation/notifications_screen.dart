@@ -23,8 +23,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _data ??= AppServices.of(context).guardian.notifications();
   }
 
-  void _reload() =>
-      setState(() => _data = AppServices.of(context).guardian.notifications());
+  void _reload() => setState(() {
+    _data = AppServices.of(context).guardian.notifications();
+  });
   Future<void> _open(GuardianNotification value) async {
     try {
       await AppServices.of(context).guardian.readNotification(value.id);

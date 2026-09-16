@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app import volunteer_workflow, service
 from app.volunteer_workflow import FoundInput
 from app.cases import CaseService
+from app.case_models import CaseCreate
 from app.main import app
 from app.firebase import identity
 from test_volunteer import db, vol, case
@@ -88,7 +89,7 @@ def test_qr_uses_existing_guardian_challenge_and_handover_survives_restart(db):
     report_id = report['id']
     with pytest.raises(HTTPException): vol().handover_found(report_id)
     assert vol().begin_verification(report_id)['status'] == 'awaiting_guardian_verification'
-    challenge = CaseService(guardian).verification(case_id)
+    challenge = guardian.account_verification()
     assert 'guardian' not in challenge['payload'].split(':')[-1]
     with pytest.raises(HTTPException): vol('two').verify_guardian(report_id, challenge['payload'])
     assert not vol().verify_guardian(report_id, 'RD-FAKE')['verified']
@@ -109,12 +110,43 @@ def test_qr_uses_existing_guardian_challenge_and_handover_survives_restart(db):
     assert vol().handover_found(report_id)['handed_over_at'] == result['handed_over_at']
     assert any(n['status'] == 'reunited' for n in CaseService(guardian).list_notifications())
 
+def test_account_level_qr_scan_for_one_case_never_affects_a_sibling_case(db):
+    # The QR is Guardian-account-level (one QR for the whole account), not
+    # per-case -- so this is the one property that specifically needs proving:
+    # verifying case A must not also verify, or otherwise touch, case B.
+    guardian, person_a = guardian_with_individual('guardian')
+    case_a = CaseService(guardian).create(CaseCreate(individual_id=person_a))['id']
+    _, person_b = guardian_with_individual('guardian')
+    case_b = CaseService(guardian).create(CaseCreate(individual_id=person_b))['id']
+    profiles = {p['case_id']: p['id'] for p in vol().profiles_list()}
+    report_a = submit('one', 'request-aaaaaaaaaaaaaaaa')
+    report_b = submit('one', 'request-bbbbbbbbbbbbbbbb')
+    vol().confirm(report_a['id'], profiles[case_a])
+    vol().confirm(report_b['id'], profiles[case_b])
+    vol().begin_verification(report_a['id'])
+    vol().begin_verification(report_b['id'])
+    qr = guardian.account_verification()
+    assert vol().verify_guardian(report_a['id'], qr['payload'])['verified'] is True
+    # The same (now single-use-consumed) token must not also verify case B.
+    assert vol().verify_guardian(report_b['id'], qr['payload'])['verified'] is False
+    assert db.data['cases/' + case_b]['status'] == 'awaiting_guardian_verification'
+    assert db.data['cases/' + case_b].get('guardian_verification') is None
+    with pytest.raises(HTTPException):
+        vol().handover_found(report_b['id'])
+    # A fresh account-level token still lets the Guardian verify the sibling case.
+    qr2 = guardian.account_verification()
+    assert vol().verify_guardian(report_b['id'], qr2['payload'])['verified'] is True
+    result_b = vol().handover_found(report_b['id'])
+    assert result_b['status'] == 'reunited'
+    # Case A is wholly unaffected by case B's later, separate handover.
+    assert db.data['cases/' + case_a]['status'] == 'awaiting_guardian_verification'
+
 @pytest.mark.parametrize('failure', ['expired', 'wrong_guardian', 'wrong_event', 'consumed'])
 def test_invalid_qr_cannot_authorize_handover(db, failure):
     guardian, case_id, report = matching()
     vol().begin_verification(report['id'])
-    challenge = CaseService(guardian).verification(case_id)
-    row = db.data[f'cases/{case_id}/verification/current']
+    challenge = guardian.account_verification()
+    row = db.data[f'users/{guardian.uid}/verification/current']
     if failure == 'expired': row['expires_at'] = datetime.now(timezone.utc) - timedelta(seconds=1)
     elif failure == 'wrong_guardian': row['guardian_id'] = 'other'
     elif failure == 'wrong_event': row['event_id'] = 'other'
@@ -186,7 +218,7 @@ def test_concurrent_upload_retry_keeps_one_report_and_one_photo(db):
 def test_report_history_remains_readable_after_guardian_deletes_reunited_registration(db):
     guardian, case_id, report = matching()
     vol().begin_verification(report['id'])
-    qr = CaseService(guardian).verification(case_id)
+    qr = guardian.account_verification()
     vol().verify_guardian(report['id'], qr['payload'])
     vol().handover_found(report['id'])
     guardian.delete(guardian.list()[0]['id'])

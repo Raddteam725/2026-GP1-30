@@ -187,7 +187,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activeCaseError =>
-      'This individual cannot be deleted while an active case exists. Resolve or cancel the case first.';
+      'This individual cannot be edited or deleted while an active case exists. Resolve or cancel the case first.';
 
   @override
   String get retry => 'Try Again';
@@ -277,19 +277,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get relationship => 'Relationship to Guardian';
 
   @override
-  String get daughter => 'Daughter';
-
-  @override
-  String get son => 'Son';
+  String get child => 'Child';
 
   @override
   String get parent => 'Parent';
 
   @override
-  String get sibling => 'Sibling';
+  String get other => 'Other';
 
   @override
-  String get other => 'Other person under my care';
+  String get specifyRelationship => 'Specify relationship';
 
   @override
   String get save => 'Save';
@@ -1133,10 +1130,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get verificationExplanation =>
-      'Show this code to an authorized Volunteer to verify your connection to this case. It does not identify the missing individual.';
+      'Show this code to an authorized Volunteer to verify your identity as this account\'s Guardian. It does not identify any missing individual.';
 
   @override
   String get noEligibleCases => 'No cases are awaiting Guardian verification.';
+
+  @override
+  String get casesAwaitingVerification => 'Cases awaiting verification';
 
   @override
   String get verificationExpired =>
@@ -1190,4 +1190,57 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get vQrRequired =>
       'Ask the Guardian to display this case’s QR code in their signed-in Radd account. A case identifier alone cannot verify identity.';
+
+  @override
+  String get resolved => 'Resolved';
+
+  @override
+  String get cancelled => 'Cancelled';
+
+  @override
+  String get transferredToAuthority => 'Transferred to Authority';
+
+  @override
+  String get casesSubtitle => 'Track your missing-person cases';
+
+  @override
+  String get resolveReport => 'Resolve Report';
+
+  @override
+  String get resolveReportConfirm =>
+      'Resolve this report? Only do this if you found the individual independently, outside of Radd.';
+
+  @override
+  String get cancelReport => 'Cancel Report';
+
+  @override
+  String get cancelReportConfirm =>
+      'Cancel this report? Use this only if it was created by mistake.';
+
+  @override
+  String get reunitedOutcome =>
+      'This individual has been reunited with their Guardian.';
+
+  @override
+  String get caseClosedNotice =>
+      'This report is closed and is no longer part of active search and matching.';
+
+  @override
+  String get caseDetails => 'Case Details';
+
+  @override
+  String get activeCaseLockNotice =>
+      'Editing and deletion are unavailable while an active case exists for this individual.';
+
+  @override
+  String get guidedAssistantRequired =>
+      'Please finish the required questions before leaving this screen.';
+
+  @override
+  String get caseClosedActionError =>
+      'This report is closed and can no longer be changed.';
+
+  @override
+  String get reportAlreadySubmitted =>
+      'This report has already been submitted and can no longer be edited.';
 }

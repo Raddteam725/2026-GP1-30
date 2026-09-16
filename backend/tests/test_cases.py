@@ -9,7 +9,7 @@ from pydantic import ValidationError
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app import service
 from app.cases import CaseService, validate_transition
-from app.case_models import CaseCreate, GuidedReport, STAGES
+from app.case_models import CaseCreate, GuidedReport, STAGES, TERMINAL_STATUSES
 from app.models import ProfileCreate, IndividualInput
 from firestore_fake import Database, Bucket
 
@@ -30,7 +30,7 @@ def photo():
 def guardian_with_individual(uid):
     s = service.GuardianService({"uid": uid, "email": uid + "@example.test"})
     s.save_profile(ProfileCreate(full_name="Test Guardian", phone="+966500000001", age_confirmed=True, privacy_accepted=True), create=True)
-    individual = s.save(IndividualInput(full_name="Missing Person", age=7, gender="female", relationship="daughter", photo_base64=photo()))
+    individual = s.save(IndividualInput(full_name="Missing Person", age=7, gender="female", relationship="child", photo_base64=photo()))
     return s, individual["id"]
 
 def test_create_case_sets_active_case_id_and_notifies(storage):
@@ -90,18 +90,18 @@ def test_save_report_persists_guided_answers(storage):
     assert updated["guided_report"]["last_seen_description"] == "Near the market"
     assert updated["guided_report"]["completed"] is True
 
-def test_verification_requires_awaiting_guardian_verification_status(storage):
-    db, _ = storage
+def test_account_verification_issues_a_guardian_scoped_token(storage):
+    # Guardian verification is account-level, not per-case (the Volunteer's own
+    # current case supplies case context) -- issuance never depends on any
+    # particular case existing or being at any particular status.
     s, individual_id = guardian_with_individual("owner")
-    cs = CaseService(s)
-    case_id = cs.create(CaseCreate(individual_id=individual_id))["id"]
-    with pytest.raises(HTTPException) as error:
-        cs.verification(case_id)
-    assert error.value.status_code == 409
-    db.update(cs.cases.document(case_id), {"status": "awaiting_guardian_verification"})
-    result = cs.verification(case_id)
-    assert result["case_id"] == case_id
-    assert result["payload"].startswith(f"radd:guardian-verification:v1:{case_id}:")
+    result = s.account_verification()
+    assert result["payload"].startswith(f"radd:guardian-verification:v1:{s.uid}:")
+    assert "expires_at" in result
+    # Refreshing rotates the token; the previous nonce alone no longer matches.
+    first_nonce = result["payload"].rsplit(":", 1)[-1]
+    second = s.account_verification()
+    assert second["payload"].rsplit(":", 1)[-1] != first_nonce
 
 def test_notifications_are_scoped_and_mark_read_is_idempotent(storage):
     s, individual_id = guardian_with_individual("owner")
@@ -140,6 +140,68 @@ def test_guided_report_completion_requires_the_core_answers():
     with pytest.raises(ValidationError):
         GuidedReport(completed=True, same_location=True, latitude=1, longitude=1, clothing="shirt", carrying_distinctive=True)
     assert GuidedReport(completed=True, same_location=True, latitude=1, longitude=1, clothing="shirt", carrying_distinctive=False)
+
+def test_case_retains_age_group_and_closure_timestamp_for_admin_reporting(storage):
+    s, individual_id = guardian_with_individual("owner")
+    cs = CaseService(s)
+    created = cs.create(CaseCreate(individual_id=individual_id))
+    assert created["age_group"] == "6-12"  # guardian_with_individual registers age 7
+    assert created["closed_at"] is None
+    resolved = cs.resolve(created["id"])
+    assert resolved["closed_at"] is not None
+    assert resolved["age_group"] == "6-12"  # preserved unchanged through closure
+
+def test_create_case_writes_the_shared_general_alert_intent(storage):
+    db, _ = storage
+    s, individual_id = guardian_with_individual("owner")
+    cs = CaseService(s)
+    case_id = cs.create(CaseCreate(individual_id=individual_id))["id"]
+    alerts = [d.to_dict() for d in db.collection("alerts").stream()]
+    assert len(alerts) == 1
+    assert alerts[0]["case_id"] == case_id
+    assert alerts[0]["kind"] == "general"
+    assert alerts[0]["delivered"] is False
+    assert alerts[0]["recipient_volunteer_id"] is None
+
+def test_active_case_blocks_editing_the_individual_and_lifts_on_cancel(storage):
+    s, individual_id = guardian_with_individual("owner")
+    cs = CaseService(s)
+    cs.create(CaseCreate(individual_id=individual_id))
+    edit = IndividualInput(full_name="Renamed", age=8, gender="female", relationship="child")
+    with pytest.raises(HTTPException) as error:
+        s.save(edit, individual_id)
+    assert error.value.status_code == 409
+    case_id = s.get(individual_id).to_dict()["active_case_id"]
+    cs.cancel(case_id)
+    assert s.get(individual_id).to_dict()["active_case_id"] is None
+    assert s.save(edit, individual_id)["full_name"] == "Renamed"
+
+def test_cancel_and_resolve_are_distinct_terminal_outcomes_blocked_once_closed(storage):
+    s, individual_id = guardian_with_individual("owner")
+    cs = CaseService(s)
+    case_id = cs.create(CaseCreate(individual_id=individual_id))["id"]
+    resolved = cs.resolve(case_id)
+    assert resolved["status"] == "resolved"
+    with pytest.raises(HTTPException) as error:
+        cs.cancel(case_id)
+    assert error.value.status_code == 409
+
+    s2, individual_id2 = guardian_with_individual("owner-2")
+    cs2 = CaseService(s2)
+    case_id2 = cs2.create(CaseCreate(individual_id=individual_id2))["id"]
+    cancelled = cs2.cancel(case_id2)
+    assert cancelled["status"] == "cancelled"
+    assert "cancelled" in TERMINAL_STATUSES and "resolved" in TERMINAL_STATUSES
+
+def test_save_report_is_read_only_once_submitted(storage):
+    s, individual_id = guardian_with_individual("owner")
+    cs = CaseService(s)
+    case_id = cs.create(CaseCreate(individual_id=individual_id))["id"]
+    complete = GuidedReport(same_location=True, latitude=1, longitude=1, clothing="shirt", carrying_distinctive=False, completed=True)
+    cs.save_report(case_id, complete)
+    with pytest.raises(HTTPException) as error:
+        cs.save_report(case_id, GuidedReport(clothing="different"))
+    assert error.value.status_code == 409
 
 def test_guided_report_distinctive_description_is_consistent_with_the_flag():
     with pytest.raises(ValidationError):

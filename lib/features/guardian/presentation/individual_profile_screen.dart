@@ -19,14 +19,24 @@ class IndividualProfileScreen extends StatefulWidget {
 }
 
 class _IndividualProfileScreenState extends State<IndividualProfileScreen> {
-  Future<Individual>? _data;
+  Future<(Individual, MissingCase?)>? _data;
   bool _busy = false;
   Object? _error;
   int _revision = 0;
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _data ??= AppServices.of(context).guardian.individual(widget.id);
+    _data ??= _load();
+  }
+
+  Future<(Individual, MissingCase?)> _load() async {
+    final guardian = AppServices.of(context).guardian;
+    final person = await guardian.individual(widget.id);
+    final activeCaseId = person.activeCaseId;
+    final activeCase = activeCaseId == null
+        ? null
+        : await guardian.missingCase(activeCaseId);
+    return (person, activeCase);
   }
 
   Future<void> _delete(Individual person) async {
@@ -59,7 +69,7 @@ class _IndividualProfileScreenState extends State<IndividualProfileScreen> {
     if (mounted) {
       setState(() {
         _revision++;
-        _data = AppServices.of(context).guardian.individual(widget.id);
+        _data = _load();
       });
     }
   }
@@ -69,10 +79,12 @@ class _IndividualProfileScreenState extends State<IndividualProfileScreen> {
     final s = AppLocalizations.of(context)!;
     return PopScope(
       canPop: !_busy,
-      child: FutureBuilder<Individual>(
+      child: FutureBuilder<(Individual, MissingCase?)>(
         future: _data,
         builder: (context, state) {
-          final p = state.data;
+          final p = state.data?.$1;
+          final activeCase = state.data?.$2;
+          final locked = activeCase != null;
           return FeaturePage(
             title: s.individualProfile,
             bottomNavigationBar: GuardianNavigation(
@@ -80,7 +92,7 @@ class _IndividualProfileScreenState extends State<IndividualProfileScreen> {
               enabled: !_busy,
             ),
             actions: [
-              if (p != null)
+              if (p != null && !locked)
                 TextButton(
                   onPressed: _busy ? null : () => _edit(p),
                   child: Text(s.edit),
@@ -90,11 +102,9 @@ class _IndividualProfileScreenState extends State<IndividualProfileScreen> {
               if (state.hasError)
                 ErrorNotice(
                   message: failureMessage(state.error!, s),
-                  onRetry: () => setState(
-                    () =>
-                        _data = AppServices.of(context).guardian
-                            .individual(widget.id),
-                  ),
+                  onRetry: () => setState(() {
+                    _data = _load();
+                  }),
                 )
               else if (p == null)
                 const Center(child: CircularProgressIndicator())
@@ -142,29 +152,42 @@ class _IndividualProfileScreenState extends State<IndividualProfileScreen> {
                       const Divider(height: 24),
                       _row(s.gender, genderLabel(p.gender, s)),
                       const Divider(height: 24),
-                      _row(
-                        s.relationship,
-                        relationshipLabel(p.relationship, s),
-                      ),
+                      _row(s.relationship, relationshipDisplay(p, s)),
                     ],
                   ),
                 ),
                 const SizedBox(height: 32),
                 ReportMissingAction(
                   individual: p,
+                  activeCase: activeCase,
                   onChanged: () => setState(() {
                     _revision++;
-                    _data = AppServices.of(context).guardian
-                        .individual(widget.id);
+                    _data = _load();
                   }),
                 ),
+                if (locked) ...[
+                  const SizedBox(height: 16),
+                  GuardianPanel(
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.lock_outline,
+                          size: 20,
+                          color: Color(0xFF718096),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text(s.activeCaseLockNotice)),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.error,
                     side: const BorderSide(color: AppColors.error),
                   ),
-                  onPressed: _busy ? null : () => _delete(p),
+                  onPressed: _busy || locked ? null : () => _delete(p),
                   icon: const Icon(Icons.delete_outline),
                   label: Text(s.deleteIndividual),
                 ),

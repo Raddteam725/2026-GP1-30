@@ -6,6 +6,17 @@ import 'package:http/http.dart' as http;
 
 import 'guardian_repository.dart';
 
+/// Maps a backend error `detail` string to the specific AppFailure code the
+/// UI should render. Anything not listed here falls back to the generic
+/// HTTP-status-based mapping in `_request`.
+const _detailFailures = {
+  'event_unavailable': 'eventUnavailable',
+  'multiple_active_events': 'eventUnavailable',
+  'active_case': 'activeCase',
+  'case_closed': 'caseClosed',
+  'report_already_submitted': 'reportAlreadySubmitted',
+};
+
 class GuardianApi implements GuardianRepository {
   GuardianApi({required this.token, http.Client? client, String? baseUrl})
     : _client = client ?? http.Client(),
@@ -40,10 +51,15 @@ class GuardianApi implements GuardianRepository {
           await _client.send(request),
         );
         if (response.statusCode >= 400) {
-          final detail = jsonDecode(response.body);
-          if (detail is Map && detail['detail'] == 'event_unavailable') {
-            throw const AppFailure('eventUnavailable');
+          Object? decoded;
+          try {
+            decoded = jsonDecode(response.body);
+          } on FormatException {
+            // Fall through to the generic status-code mapping below.
           }
+          final detail = decoded is Map ? decoded['detail'] : null;
+          final known = _detailFailures[detail];
+          if (known != null) throw AppFailure(known);
           throw AppFailure(switch (response.statusCode) {
             401 => 'unauthorized',
             403 => 'role',
@@ -176,13 +192,16 @@ class GuardianApi implements GuardianRepository {
   }
 
   @override
-  Future<GuardianVerification> verification(String id) async =>
+  Future<GuardianVerification> accountVerification() async =>
       GuardianVerification.fromJson(
-        _json(
-          await _request(
-            'POST',
-            '/cases/${Uri.encodeComponent(id)}/verification',
-          ),
-        ),
+        _json(await _request('POST', '/guardian/verification')),
       );
+  @override
+  Future<MissingCase> cancelCase(String id) async => MissingCase.fromJson(
+    _json(await _request('POST', '/cases/${Uri.encodeComponent(id)}/cancel')),
+  );
+  @override
+  Future<MissingCase> resolveCase(String id) async => MissingCase.fromJson(
+    _json(await _request('POST', '/cases/${Uri.encodeComponent(id)}/resolve')),
+  );
 }

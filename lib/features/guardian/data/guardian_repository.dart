@@ -20,17 +20,19 @@ class GuardianProfile {
 class Individual {
   const Individual({
     this.activeCaseId,
+    this.relationshipOther,
     required this.id,
     required this.fullName,
     required this.age,
     required this.gender,
     required this.relationship,
   });
-  final String? activeCaseId;
+  final String? activeCaseId, relationshipOther;
   final String id, fullName, gender, relationship;
   final int age;
   factory Individual.fromJson(Map<String, dynamic> j) => Individual(
     activeCaseId: j['active_case_id'] as String?,
+    relationshipOther: j['relationship_other'] as String?,
     id: j['id'] as String,
     fullName: j['full_name'] as String,
     age: j['age'] as int,
@@ -45,14 +47,19 @@ class IndividualInput {
     required this.age,
     required this.gender,
     required this.relationship,
+    this.relationshipOther,
   });
   final String fullName, gender, relationship;
+  final String? relationshipOther;
   final int age;
   Map<String, dynamic> toJson() => {
     'full_name': fullName.trim(),
     'age': age,
     'gender': gender,
     'relationship': relationship,
+    'relationship_other': relationship == 'other'
+        ? relationshipOther?.trim()
+        : null,
   };
 }
 
@@ -83,5 +90,9 @@ abstract class GuardianRepository {
   Future<MissingCase> saveGuidedReport(String id, Map<String, dynamic> report);
   Future<List<GuardianNotification>> notifications();
   Future<void> readNotification(String id);
-  Future<GuardianVerification> verification(String id);
+
+  /// Account-level: one Guardian QR, not one per case.
+  Future<GuardianVerification> accountVerification();
+  Future<MissingCase> cancelCase(String id);
+  Future<MissingCase> resolveCase(String id);
 }

@@ -16,8 +16,9 @@ class MissingCase {
   final DateTime? createdAt, updatedAt;
   final Map<String, dynamic> stages;
   final Map<String, dynamic>? report;
-  bool get active => status != 'reunited';
+  bool get active => !terminalStatuses.contains(status);
   bool get verificationEligible => status == 'awaiting_guardian_verification';
+  bool get reportSubmitted => report?['completed'] == true;
   factory MissingCase.fromJson(Map<String, dynamic> j) => MissingCase(
     id: j['id'] as String,
     individualId: j['individual_id'] as String,
@@ -39,6 +40,14 @@ const caseStages = [
   'awaiting_guardian_verification',
   'reunited',
 ];
+// Reachable from any active case (never sequential); 'reunited' is both the
+// last ordered stage above and a terminal outcome on its own.
+const terminalStatuses = {
+  'reunited',
+  'resolved',
+  'cancelled',
+  'transferred_to_authority',
+};
 
 class GuardianNotification {
   const GuardianNotification({
@@ -61,17 +70,14 @@ class GuardianNotification {
       );
 }
 
+/// Account-level: one Guardian verification QR, not one per case. The case
+/// context is supplied by whichever case the Volunteer is currently on.
 class GuardianVerification {
-  const GuardianVerification({
-    required this.caseId,
-    required this.payload,
-    required this.expiresAt,
-  });
-  final String caseId, payload;
+  const GuardianVerification({required this.payload, required this.expiresAt});
+  final String payload;
   final DateTime expiresAt;
   factory GuardianVerification.fromJson(Map<String, dynamic> j) =>
       GuardianVerification(
-        caseId: j['case_id'] as String,
         payload: j['payload'] as String,
         expiresAt: DateTime.parse(j['expires_at'] as String),
       );

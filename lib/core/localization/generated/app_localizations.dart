@@ -431,7 +431,7 @@ abstract class AppLocalizations {
   /// No description provided for @activeCaseError.
   ///
   /// In en, this message translates to:
-  /// **'This individual cannot be deleted while an active case exists. Resolve or cancel the case first.'**
+  /// **'This individual cannot be edited or deleted while an active case exists. Resolve or cancel the case first.'**
   String get activeCaseError;
 
   /// No description provided for @retry.
@@ -602,17 +602,11 @@ abstract class AppLocalizations {
   /// **'Relationship to Guardian'**
   String get relationship;
 
-  /// No description provided for @daughter.
+  /// No description provided for @child.
   ///
   /// In en, this message translates to:
-  /// **'Daughter'**
-  String get daughter;
-
-  /// No description provided for @son.
-  ///
-  /// In en, this message translates to:
-  /// **'Son'**
-  String get son;
+  /// **'Child'**
+  String get child;
 
   /// No description provided for @parent.
   ///
@@ -620,17 +614,17 @@ abstract class AppLocalizations {
   /// **'Parent'**
   String get parent;
 
-  /// No description provided for @sibling.
-  ///
-  /// In en, this message translates to:
-  /// **'Sibling'**
-  String get sibling;
-
   /// No description provided for @other.
   ///
   /// In en, this message translates to:
-  /// **'Other person under my care'**
+  /// **'Other'**
   String get other;
+
+  /// No description provided for @specifyRelationship.
+  ///
+  /// In en, this message translates to:
+  /// **'Specify relationship'**
+  String get specifyRelationship;
 
   /// No description provided for @save.
   ///
@@ -2207,7 +2201,7 @@ abstract class AppLocalizations {
   /// No description provided for @verificationExplanation.
   ///
   /// In en, this message translates to:
-  /// **'Show this code to an authorized Volunteer to verify your connection to this case. It does not identify the missing individual.'**
+  /// **'Show this code to an authorized Volunteer to verify your identity as this account\'s Guardian. It does not identify any missing individual.'**
   String get verificationExplanation;
 
   /// No description provided for @noEligibleCases.
@@ -2215,6 +2209,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No cases are awaiting Guardian verification.'**
   String get noEligibleCases;
+
+  /// No description provided for @casesAwaitingVerification.
+  ///
+  /// In en, this message translates to:
+  /// **'Cases awaiting verification'**
+  String get casesAwaitingVerification;
 
   /// No description provided for @verificationExpired.
   ///
@@ -2311,6 +2311,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Ask the Guardian to display this case’s QR code in their signed-in Radd account. A case identifier alone cannot verify identity.'**
   String get vQrRequired;
+
+  /// No description provided for @resolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolved'**
+  String get resolved;
+
+  /// No description provided for @cancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get cancelled;
+
+  /// No description provided for @transferredToAuthority.
+  ///
+  /// In en, this message translates to:
+  /// **'Transferred to Authority'**
+  String get transferredToAuthority;
+
+  /// No description provided for @casesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Track your missing-person cases'**
+  String get casesSubtitle;
+
+  /// No description provided for @resolveReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolve Report'**
+  String get resolveReport;
+
+  /// No description provided for @resolveReportConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolve this report? Only do this if you found the individual independently, outside of Radd.'**
+  String get resolveReportConfirm;
+
+  /// No description provided for @cancelReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel Report'**
+  String get cancelReport;
+
+  /// No description provided for @cancelReportConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this report? Use this only if it was created by mistake.'**
+  String get cancelReportConfirm;
+
+  /// No description provided for @reunitedOutcome.
+  ///
+  /// In en, this message translates to:
+  /// **'This individual has been reunited with their Guardian.'**
+  String get reunitedOutcome;
+
+  /// No description provided for @caseClosedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'This report is closed and is no longer part of active search and matching.'**
+  String get caseClosedNotice;
+
+  /// No description provided for @caseDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Case Details'**
+  String get caseDetails;
+
+  /// No description provided for @activeCaseLockNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Editing and deletion are unavailable while an active case exists for this individual.'**
+  String get activeCaseLockNotice;
+
+  /// No description provided for @guidedAssistantRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please finish the required questions before leaving this screen.'**
+  String get guidedAssistantRequired;
+
+  /// No description provided for @caseClosedActionError.
+  ///
+  /// In en, this message translates to:
+  /// **'This report is closed and can no longer be changed.'**
+  String get caseClosedActionError;
+
+  /// No description provided for @reportAlreadySubmitted.
+  ///
+  /// In en, this message translates to:
+  /// **'This report has already been submitted and can no longer be edited.'**
+  String get reportAlreadySubmitted;
 }
 
 class _AppLocalizationsDelegate

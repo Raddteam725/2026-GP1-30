@@ -16,6 +16,9 @@ String caseStatusLabel(String status, AppLocalizations s) => switch (status) {
   'match_confirmed' => s.matchConfirmed,
   'awaiting_guardian_verification' => s.awaitingVerification,
   'reunited' => s.reunited,
+  'resolved' => s.resolved,
+  'cancelled' => s.cancelled,
+  'transferred_to_authority' => s.transferredToAuthority,
   _ => s.unknownCaseStatus,
 };
 String caseDate(BuildContext context, DateTime? date) => date == null
@@ -24,10 +27,46 @@ String caseDate(BuildContext context, DateTime? date) => date == null
           .add_jm()
           .format(date.toLocal());
 
+class StatusChip extends StatelessWidget {
+  const StatusChip({super.key, required this.status});
+  final String status;
+  @override
+  Widget build(BuildContext context) {
+    final s = AppLocalizations.of(context)!;
+    final terminal = terminalStatuses.contains(status) && status != 'reunited';
+    final color = status == 'reunited'
+        ? AppColors.secondary
+        : terminal
+        ? const Color(0xFF718096)
+        : AppColors.secondary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        caseStatusLabel(status, s),
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
 class CaseCard extends StatelessWidget {
-  const CaseCard({super.key, required this.value, required this.onTap});
+  const CaseCard({
+    super.key,
+    required this.value,
+    required this.onTap,
+    this.actionLabel,
+  });
   final MissingCase value;
   final VoidCallback onTap;
+  final String? actionLabel;
   @override
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
@@ -60,20 +99,19 @@ class CaseCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          Text(
-            caseStatusLabel(value.status, s),
-            style: const TextStyle(
-              color: AppColors.secondary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
+          StatusChip(status: value.status),
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
           Text(
             '${s.lastUpdated}: ${caseDate(context, value.updatedAt)}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
-          OutlinedButton(onPressed: onTap, child: Text(s.viewStatus)),
+          OutlinedButton(
+            onPressed: onTap,
+            child: Text(actionLabel ?? s.viewStatus),
+          ),
         ],
       ),
     );
@@ -85,8 +123,10 @@ class ReportMissingAction extends StatefulWidget {
     super.key,
     required this.individual,
     required this.onChanged,
+    this.activeCase,
   });
   final Individual individual;
+  final MissingCase? activeCase;
   final VoidCallback onChanged;
   @override
   State<ReportMissingAction> createState() => _ReportMissingActionState();
@@ -126,21 +166,67 @@ class _ReportMissingActionState extends State<ReportMissingAction> {
   @override
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
-    final active = widget.individual.activeCaseId;
+    final activeId = widget.individual.activeCaseId;
+    final active = widget.activeCase;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (active != null)
-          OutlinedButton(
-            onPressed: () async {
+        if (activeId != null)
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () async {
               await Navigator.of(context)
-                  .pushNamed(AppRoutes.caseStatus, arguments: active);
+                  .pushNamed(AppRoutes.caseStatus, arguments: activeId);
               if (mounted) widget.onChanged();
             },
-            child: Text('${s.activeCase} · $active'),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.secondary.withValues(alpha: .1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      active == null
+                          ? s.activeCase
+                          : caseStatusLabel(active.status, s),
+                      style: const TextStyle(
+                        color: AppColors.secondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      activeId,
+                      textDirection: TextDirection.ltr,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.arrow_forward_ios,
+                    size: 14,
+                    color: AppColors.secondary,
+                  ),
+                ],
+              ),
+            ),
           )
         else
           FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: _busy ? null : _report,
             icon: _busy
                 ? const SizedBox.square(

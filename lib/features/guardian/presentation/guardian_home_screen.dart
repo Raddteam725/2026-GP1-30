@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import 'guardian_components.dart';
 import '../data/guardian_repository.dart';
 import 'individual_widgets.dart';
+import 'case_widgets.dart';
 
 class GuardianHomeScreen extends StatefulWidget {
   const GuardianHomeScreen({super.key, this.initialTab = 0});
@@ -19,7 +20,7 @@ class GuardianHomeScreen extends StatefulWidget {
 class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
   late int _tab = widget.initialTab;
   int _revision = 0;
-  Future<(GuardianProfile, List<Individual>, bool)>? _data;
+  Future<(GuardianProfile, List<Individual>, bool, List<MissingCase>)>? _data;
   bool _loggingOut = false;
   Object? _logoutError;
   @override
@@ -28,18 +29,21 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
     _data ??= _load();
   }
 
-  Future<(GuardianProfile, List<Individual>, bool)> _load() async {
+  Future<(GuardianProfile, List<Individual>, bool, List<MissingCase>)>
+  _load() async {
     final repo = AppServices.of(context).guardian;
     final values = await Future.wait<Object>([
       repo.profile(),
       repo.individuals(),
       repo.notifications(),
+      repo.cases(),
     ]);
     final notifications = values[2] as List<GuardianNotification>;
     return (
       values[0] as GuardianProfile,
       values[1] as List<Individual>,
       notifications.any((n) => !n.read),
+      values[3] as List<MissingCase>,
     );
   }
 
@@ -84,11 +88,18 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
-    return FutureBuilder<(GuardianProfile, List<Individual>, bool)>(
+    return FutureBuilder<
+      (GuardianProfile, List<Individual>, bool, List<MissingCase>)
+    >(
       future: _data,
       builder: (context, state) {
         final profile = state.data?.$1, people = state.data?.$2 ?? [];
         final hasUnread = state.data?.$3 ?? false;
+        final cases = state.data?.$4 ?? const <MissingCase>[];
+        final activeCases = cases.where((c) => c.active).toList();
+        final caseByIndividual = {
+          for (final c in activeCases) c.individualId: c,
+        };
         return FeaturePage(
           title: _tab == 0
               ? s.home
@@ -107,7 +118,9 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
             else if (state.hasError) ...[
               ErrorNotice(
                 message: failureMessage(state.error!, s),
-                onRetry: () => setState(() => _data = _load()),
+                onRetry: () => setState(() {
+                  _data = _load();
+                }),
               ),
               // A profile fetch failure must never leave the Guardian stuck
               // on this screen with no way back to the sign-in flow.
@@ -402,10 +415,36 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
                 IndividualCard(
                   individual: person,
                   revision: _revision,
+                  activeCase: caseByIndividual[person.id],
                   onTap: () =>
                       _open(AppRoutes.individual, arguments: person.id),
+                  onChanged: () => setState(() {
+                    _revision++;
+                    _data = _load();
+                  }),
                 ),
                 const SizedBox(height: 16),
+              ],
+              if (_tab == 0 && activeCases.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Text(
+                  s.activeCases,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                for (final value in activeCases) ...[
+                  CaseCard(
+                    value: value,
+                    actionLabel: s.trackStatus,
+                    onTap: () =>
+                        _open(AppRoutes.caseStatus, arguments: value.id),
+                  ),
+                  const SizedBox(height: 16),
+                ],
               ],
             ],
           ],

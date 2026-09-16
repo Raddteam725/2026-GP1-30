@@ -66,6 +66,29 @@ void main() {
     await t.pumpAndSettle();
   }
 
+  // Scrolls a lazily-built list until `text` is realized, without tapping it
+  // -- for assertions on long FeaturePage screens where the target sits below
+  // the fold and a plain find.text would see nothing yet (not "not present").
+  Future<void> scrollToText(
+    WidgetTester t,
+    String text, {
+    double delta = 200,
+  }) async {
+    final base = find.text(text);
+    if (base.evaluate().isEmpty) {
+      await t.scrollUntilVisible(
+        base,
+        delta,
+        scrollable: find
+            .byWidgetPredicate(
+              (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
+            )
+            .first,
+      );
+      await t.pumpAndSettle();
+    }
+  }
+
   test('Password policy rejects each missing requirement', () {
     for (final password in [
       'Short1!',
@@ -157,6 +180,30 @@ void main() {
       expect(FormValidation.name('   ', s), isNotNull);
     },
   );
+  testWidgets(
+    'Other relationship requires a custom description before saving',
+    (t) async {
+      await start(t);
+      auth.active = true;
+      await route(t, AppRoutes.addIndividual);
+      final fields = find.byType(TextFormField);
+      await t.enterText(fields.at(0), 'Test Person');
+      await t.enterText(fields.at(1), '9');
+      await tapText(t, 'Female');
+      expect(find.text('Specify relationship'), findsNothing);
+      await t.tap(find.byType(DropdownButtonFormField<String>));
+      await t.pumpAndSettle();
+      await t.tap(find.text('Other').last);
+      await t.pumpAndSettle();
+      // Selecting Other immediately reveals the required custom-text field.
+      expect(find.text('Specify relationship'), findsWidgets);
+      await t.enterText(find.byType(TextFormField).at(2), 'Family friend');
+      await tapText(t, 'Save');
+      // The relationship is now satisfied; only the still-missing photo blocks saving.
+      expect(find.text('Take a photo before saving.'), findsOneWidget);
+      expect(repo.records, isEmpty);
+    },
+  );
   testWidgets('Logout clears protected history and keeps locale', (t) async {
     await start(t, locale: 'ar');
     auth.active = true;
@@ -185,7 +232,7 @@ void main() {
         fullName: 'Test Person',
         age: 7,
         gender: 'female',
-        relationship: 'daughter',
+        relationship: 'child',
       ),
     );
     await route(t, AppRoutes.guardian);
@@ -238,6 +285,7 @@ void main() {
       }
       await tapText(t, 'QR Code');
       expect(find.byType(GuardianQrScreen), findsOneWidget);
+      await scrollToText(t, 'No cases are awaiting Guardian verification.');
       expect(
         find.text('No cases are awaiting Guardian verification.'),
         findsOneWidget,
@@ -265,7 +313,7 @@ void main() {
         fullName: 'Test Person',
         age: 7,
         gender: 'female',
-        relationship: 'daughter',
+        relationship: 'child',
       ),
     );
     await route(t, AppRoutes.guardian);
@@ -281,9 +329,158 @@ void main() {
     await tapText(t, 'Confirm');
     await t.pumpAndSettle();
     expect(repo.caseRecords, hasLength(1));
+    expect(find.byType(GuidedReportScreen), findsOneWidget);
     Navigator.pop(t.element(find.byType(GuidedReportScreen)));
     await t.pumpAndSettle();
-    expect(find.textContaining('Active case'), findsOneWidget);
+    expect(find.text('Report Received'), findsWidgets);
+    expect(find.textContaining('RD-TEST'), findsWidgets);
+  });
+  testWidgets(
+    'Guided Assistant is required and refuses the back button until submitted',
+    (t) async {
+      await start(t);
+      auth.active = true;
+      repo.records.add(
+        const Individual(
+          id: 'test-id',
+          fullName: 'Test Person',
+          age: 7,
+          gender: 'female',
+          relationship: 'child',
+        ),
+      );
+      await route(t, AppRoutes.guardian);
+      await tapText(t, 'Test Person');
+      await tapText(t, 'Report Missing');
+      await tapText(t, 'Confirm');
+      await t.pumpAndSettle();
+      expect(find.byType(GuidedReportScreen), findsOneWidget);
+      await t.pageBack();
+      await t.pumpAndSettle();
+      expect(find.byType(GuidedReportScreen), findsOneWidget);
+      expect(
+        find.text(
+          'Please finish the required questions before leaving this screen.',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+  testWidgets('Refresh on the Cases list never passes a Future to setState', (
+    t,
+  ) async {
+    await start(t);
+    auth.active = true;
+    await route(t, AppRoutes.cases);
+    expect(find.byType(CasesScreen), findsOneWidget);
+    await t.tap(find.byIcon(Icons.refresh));
+    await t.pumpAndSettle();
+    expect(t.takeException(), isNull);
+  });
+  testWidgets('Refresh on Notifications never passes a Future to setState', (
+    t,
+  ) async {
+    await start(t);
+    auth.active = true;
+    await route(t, AppRoutes.notifications);
+    expect(find.byType(NotificationsScreen), findsOneWidget);
+    await t.tap(find.byIcon(Icons.refresh));
+    await t.pumpAndSettle();
+    expect(t.takeException(), isNull);
+  });
+  testWidgets('Refresh on Case Status never passes a Future to setState', (
+    t,
+  ) async {
+    await start(t);
+    auth.active = true;
+    repo.records.add(
+      const Individual(
+        id: 'test-id',
+        fullName: 'Test Person',
+        age: 7,
+        gender: 'female',
+        relationship: 'child',
+      ),
+    );
+    final case1 = await repo.reportMissing('test-id');
+    await route(t, AppRoutes.caseStatus, arguments: case1.id);
+    expect(find.byType(CaseStatusScreen), findsOneWidget);
+    await t.tap(find.byIcon(Icons.refresh));
+    await t.pumpAndSettle();
+    expect(t.takeException(), isNull);
+  });
+  testWidgets('Refresh on the QR screen never passes a Future to setState', (
+    t,
+  ) async {
+    await start(t);
+    auth.active = true;
+    await route(t, AppRoutes.qrCode);
+    expect(find.byType(GuardianQrScreen), findsOneWidget);
+    await t.tap(find.byIcon(Icons.refresh));
+    await t.pumpAndSettle();
+    expect(t.takeException(), isNull);
+  });
+  testWidgets('Active case locks the individual profile until resolved', (
+    t,
+  ) async {
+    await start(t);
+    auth.active = true;
+    repo.records.add(
+      const Individual(
+        id: 'test-id',
+        fullName: 'Test Person',
+        age: 7,
+        gender: 'female',
+        relationship: 'child',
+      ),
+    );
+    await route(t, AppRoutes.guardian);
+    await tapText(t, 'Test Person');
+    expect(find.text('Edit'), findsOneWidget);
+    await tapText(t, 'Report Missing');
+    await tapText(t, 'Confirm');
+    await t.pumpAndSettle();
+    Navigator.pop(t.element(find.byType(GuidedReportScreen)));
+    await t.pumpAndSettle();
+    // Locked: no Edit action; Delete disabled; explicit notice shown.
+    // (find.text alone can't prove absence on a lazily-built list -- scroll
+    // to a known-present anchor first so the whole section is realized.)
+    await scrollToText(t, 'Delete Individual');
+    expect(find.text('Edit'), findsNothing);
+    expect(find.text('Report Missing'), findsNothing);
+    expect(
+      find.text(
+        'Editing and deletion are unavailable while an active case exists for this individual.',
+      ),
+      findsOneWidget,
+    );
+    final deleteButton = t.widget<OutlinedButton>(
+      find.ancestor(
+        of: find.text('Delete Individual'),
+        matching: find.byType(OutlinedButton),
+      ),
+    );
+    expect(deleteButton.onPressed, isNull);
+    expect(find.text('Report Received'), findsWidgets);
+    await tapText(t, 'RD-TEST1');
+    await t.pumpAndSettle();
+    expect(find.byType(CaseStatusScreen), findsOneWidget);
+    await scrollToText(t, 'Cancel Report');
+    expect(find.text('Resolve Report'), findsWidgets);
+    expect(find.text('Cancel Report'), findsWidgets);
+    await tapText(t, 'Resolve Report');
+    await tapText(t, 'Resolve Report');
+    await t.pumpAndSettle();
+    await scrollToText(t, 'Resolved', delta: -200);
+    expect(find.text('Resolved'), findsWidgets);
+    expect(find.text('Resolve Report'), findsNothing);
+    expect(find.text('Cancel Report'), findsNothing);
+    Navigator.pop(t.element(find.byType(CaseStatusScreen)));
+    await t.pumpAndSettle();
+    // Unlocked again: profile management resumes on the terminal case.
+    expect(find.text('Edit'), findsOneWidget);
+    await scrollToText(t, 'Report Missing');
+    expect(find.text('Report Missing'), findsWidgets);
   });
   for (final locale in ['en', 'ar']) {
     testWidgets(

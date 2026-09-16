@@ -56,6 +56,10 @@ Future<void> showCaseIdentifier(BuildContext context, String id) async {
   );
 }
 
+/// Account-level QR: this Guardian account has exactly one verification code,
+/// independent of any particular case. The list of cases currently awaiting
+/// verification below is informational only -- it never selects or scopes
+/// the code above, and the code still displays even with zero cases.
 class GuardianQrScreen extends StatefulWidget {
   const GuardianQrScreen({super.key, this.embedded = false});
   final bool embedded;
@@ -64,54 +68,39 @@ class GuardianQrScreen extends StatefulWidget {
 }
 
 class _GuardianQrScreenState extends State<GuardianQrScreen> {
-  Future<List<MissingCase>>? _data;
-  String? _selected;
+  Future<List<MissingCase>>? _cases;
   GuardianVerification? _code;
-  Object? _error;
+  Object? _codeError;
   bool _busy = false;
   Timer? _expiry;
   int _request = 0;
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _data ??= _load();
+    _cases ??= _loadCases();
+    if (_code == null && _codeError == null && !_busy) _generate();
   }
 
-  Future<List<MissingCase>> _load() async {
-    final values = (await AppServices.of(
-      context,
-    ).guardian.cases()).where((c) => c.verificationEligible).toList();
-    if (mounted) {
-      _selected = values.any((c) => c.id == _selected)
-          ? _selected
-          : values.firstOrNull?.id;
-    }
-    return values;
-  }
+  Future<List<MissingCase>> _loadCases() async => (await AppServices.of(
+    context,
+  ).guardian.cases()).where((c) => c.verificationEligible).toList();
 
   void _reload() {
-    _request++;
-    _expiry?.cancel();
     setState(() {
-      _code = null;
-      _busy = false;
-      _error = null;
-      _data = _load();
+      _cases = _loadCases();
     });
+    _generate();
   }
 
   Future<void> _generate() async {
-    final id = _selected;
-    if (id == null || _busy) return;
     final request = ++_request;
     _expiry?.cancel();
     setState(() {
       _busy = true;
-      _code = null;
-      _error = null;
+      _codeError = null;
     });
     try {
-      final code = await AppServices.of(context).guardian.verification(id);
+      final code = await AppServices.of(context).guardian.accountVerification();
       if (!mounted || request != _request) return;
       setState(() => _code = code);
       final remaining = code.expiresAt.difference(DateTime.now());
@@ -119,7 +108,7 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
         if (mounted) setState(() => _code = null);
       });
     } catch (e) {
-      if (mounted && request == _request) setState(() => _error = e);
+      if (mounted && request == _request) setState(() => _codeError = e);
     } finally {
       if (mounted && request == _request) setState(() => _busy = false);
     }
@@ -134,119 +123,114 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
   @override
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
-    return FutureBuilder<List<MissingCase>>(
-      future: _data,
-      builder: (context, state) => FeaturePage(
-        title: s.qrCode,
-        subtitle: s.verificationExplanation,
-        actions: [
-          IconButton(
-            onPressed: _reload,
-            tooltip: s.retry,
-            icon: const Icon(Icons.refresh),
+    return FeaturePage(
+      title: s.qrCode,
+      subtitle: s.verificationExplanation,
+      actions: [
+        IconButton(
+          onPressed: _reload,
+          tooltip: s.retry,
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+      bottomNavigationBar: widget.embedded
+          ? null
+          : const GuardianNavigation(selected: 2),
+      children: [
+        Text(
+          s.guardianVerification,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 16),
+        if (_code case final code?) ...[
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 280),
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: QrImageView(
+                  data: code.payload,
+                  backgroundColor: Colors.white,
+                  padding: const EdgeInsets.all(16),
+                ),
+              ),
+            ),
           ),
-        ],
-        bottomNavigationBar: widget.embedded
-            ? null
-            : const GuardianNavigation(selected: 2),
-        children: [
-          if (state.hasError)
-            ErrorNotice(
-              message: failureMessage(state.error!, s),
-              onRetry: _reload,
-            )
-          else if (!state.hasData)
-            const Center(child: CircularProgressIndicator())
-          else if (state.data!.isEmpty)
-            GuardianPanel(child: Text(s.noEligibleCases))
-          else ...[
-            DropdownButtonFormField<String>(
-              initialValue: _selected,
-              isExpanded: true,
-              decoration: InputDecoration(labelText: s.activeCase),
-              items: [
-                for (final c in state.data!)
-                  DropdownMenuItem(
-                    value: c.id,
-                    child: Text(
-                      '${c.name} · ${c.id}',
-                      overflow: TextOverflow.ellipsis,
+          const SizedBox(height: 8),
+          Text(
+            '${s.verificationExpires}: ${caseDate(context, code.expiresAt)}',
+            textAlign: TextAlign.center,
+          ),
+        ] else if (_busy)
+          const Center(child: CircularProgressIndicator())
+        else if (_codeError != null)
+          ErrorNotice(
+            message: failureMessage(_codeError!, s),
+            onRetry: _generate,
+          ),
+        const SizedBox(height: 16),
+        Center(
+          child: TextButton(
+            onPressed: _busy ? null : _generate,
+            child: Text(s.refreshCode),
+          ),
+        ),
+        const SizedBox(height: 32),
+        const Divider(),
+        const SizedBox(height: 16),
+        Text(
+          s.casesAwaitingVerification,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        FutureBuilder<List<MissingCase>>(
+          future: _cases,
+          builder: (context, state) {
+            if (state.hasError) {
+              return ErrorNotice(
+                message: failureMessage(state.error!, s),
+                onRetry: _reload,
+              );
+            }
+            if (!state.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (state.data!.isEmpty) {
+              return GuardianPanel(child: Text(s.noEligibleCases));
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final value in state.data!) ...[
+                  GuardianPanel(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          value.name,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        Text('${s.age}: ${value.age}'),
+                        Text(value.id, textDirection: TextDirection.ltr),
+                        const SizedBox(height: 4),
+                        Text(caseStatusLabel(value.status, s)),
+                        const SizedBox(height: 8),
+                        OutlinedButton(
+                          onPressed: () =>
+                              showCaseIdentifier(context, value.id),
+                          child: Text(s.showCaseIdentifier),
+                        ),
+                      ],
                     ),
                   ),
+                  const SizedBox(height: 12),
+                ],
               ],
-              onChanged: _busy
-                  ? null
-                  : (id) {
-                      _expiry?.cancel();
-                      setState(() {
-                        _selected = id;
-                        _code = null;
-                        _error = null;
-                      });
-                    },
-            ),
-            const SizedBox(height: 24),
-            for (final value in state.data!.where((c) => c.id == _selected))
-              GuardianPanel(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      value.name,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    Text('${s.age}: ${value.age}'),
-                    Text(value.id, textDirection: TextDirection.ltr),
-                    const SizedBox(height: 8),
-                    Text(caseStatusLabel(value.status, s)),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 24),
-            Text(
-              s.guardianVerification,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
-            if (_code case final code?) ...[
-              Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 280),
-                  child: AspectRatio(
-                    aspectRatio: 1,
-                    child: QrImageView(
-                      data: code.payload,
-                      backgroundColor: Colors.white,
-                      padding: const EdgeInsets.all(16),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${s.verificationExpires}: ${caseDate(context, code.expiresAt)}',
-                textAlign: TextAlign.center,
-              ),
-            ],
-            if (_error != null)
-              ErrorNotice(message: failureMessage(_error!, s)),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: _busy ? null : _generate,
-              child: Text(s.refreshCode),
-            ),
-            if (_busy) const Center(child: CircularProgressIndicator()),
-            const SizedBox(height: 24),
-            Text(s.verificationExplanation, textAlign: TextAlign.center),
-            const SizedBox(height: 24),
-            OutlinedButton(
-              onPressed: () => showCaseIdentifier(context, _selected!),
-              child: Text(s.showCaseIdentifier),
-            ),
-          ],
-        ],
-      ),
+            );
+          },
+        ),
+      ],
     );
   }
 }

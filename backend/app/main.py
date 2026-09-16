@@ -34,7 +34,7 @@ async def invalid(request, error):
 @app.exception_handler(Exception)
 async def unavailable(request, error):
     # No PII/tokens in the response; the traceback is server-side only, never returned to the client.
-    logging.getLogger("uvicorn.error").exception("Radd API: unhandled exception")
+    logging.getLogger("uvicorn.error").error("Radd API: unhandled exception", exc_info=error)
     return JSONResponse(status_code=503, content={"detail": "service_unavailable"})
 
 def service(token=Depends(identity)):
@@ -55,6 +55,10 @@ def profile(s=Depends(service)):
 @app.put("/v1/guardian")
 def create_profile(value: ProfileCreate, s=Depends(service)):
     return s.save_profile(value, create=True)
+
+@app.post("/v1/guardian/verification")
+def account_verification(s=Depends(service)):
+    return s.account_verification()
 
 @app.patch("/v1/guardian")
 def update_profile(value: ProfileUpdate, s=Depends(service)):
@@ -110,9 +114,13 @@ def case(case_id: str, s=Depends(cases_service)):
 def guided_report(case_id: str, value: GuidedReport, s=Depends(cases_service)):
     return s.save_report(case_id, value)
 
-@app.post("/v1/cases/{case_id}/verification")
-def verification(case_id: str, s=Depends(cases_service)):
-    return s.verification(case_id)
+@app.post("/v1/cases/{case_id}/cancel")
+def cancel_case(case_id: str, s=Depends(cases_service)):
+    return s.cancel(case_id)
+
+@app.post("/v1/cases/{case_id}/resolve")
+def resolve_case(case_id: str, s=Depends(cases_service)):
+    return s.resolve(case_id)
 
 @app.get("/v1/notifications")
 def notifications(s=Depends(cases_service)):

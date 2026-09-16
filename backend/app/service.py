@@ -1,6 +1,9 @@
 import base64
 import binascii
+import hashlib
 import io
+import secrets
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from PIL import Image, ImageOps, UnidentifiedImageError
 from fastapi import HTTPException
@@ -20,14 +23,18 @@ def owned_registration(data, uid):
     return data
 
 def ensure_deletable(data):
-    # Future case transitions must update this field in the same transaction
-    # and refuse to attach a case to a deleting registration.
+    # Also used to guard edits: an active case's reference profile/photo must not
+    # change under it, so this rejects both delete and edit while active_case_id
+    # is set. Case creation/cancellation must update this field in the same
+    # transaction as the case's own status change.
     if data.get("active_case_id"):
         raise HTTPException(409, detail="active_case")
 
 def public_individual(doc):
     data = doc.to_dict()
-    return {**{k: data[k] for k in ("full_name", "age", "gender", "relationship")}, "id": doc.id, "active_case_id": data.get("active_case_id")}
+    return {**{k: data[k] for k in ("full_name", "age", "gender", "relationship")},
+        "relationship_other": data.get("relationship_other"),
+        "id": doc.id, "active_case_id": data.get("active_case_id")}
 
 def normalize_photo(encoded):
     try:
@@ -74,6 +81,25 @@ class GuardianService:
         if not data.get("full_name") or not data.get("phone"):
             raise HTTPException(404, detail="profile_incomplete")
         return {"full_name": data["full_name"], "phone": data["phone"], "email": self.token.get("email", ""), "role": "guardian"}
+
+    def account_verification(self):
+        # One Guardian-account-level QR, not one per case: the Volunteer's own
+        # current case supplies case context (see VolunteerWorkflow.verify_guardian).
+        # Opaque, short-lived, single-use bearer challenge. No password/Admin-key/
+        # unnecessary PII in the payload -- only this account's UID and a random nonce.
+        self.profile()
+        event = active_event(self.db)
+        nonce = secrets.token_urlsafe(32)
+        digest = hashlib.sha256(nonce.encode()).hexdigest()
+        expires = datetime.now(timezone.utc) + timedelta(minutes=5)
+        ref = self.user.collection("verification").document("current")
+        @firestore.transactional
+        def issue(tx):
+            tx.set(ref, {"token_hash": digest, "guardian_id": self.uid,
+                "event_id": event.id, "expires_at": expires, "consumed_at": None})
+        issue(self.db.transaction())
+        return {"payload": "radd:guardian-verification:v1:" + self.uid + ":" + nonce,
+            "expires_at": expires}
 
     def save_profile(self, value, create=False):
         if self.token.get("role") not in (None, "guardian"):
@@ -129,6 +155,11 @@ class GuardianService:
         existing = self.get(item_id) if item_id else None
         if existing is None and not value.photo_base64:
             raise HTTPException(422, detail="photo_required")
+        if existing is not None:
+            # The reference profile/photo an active case already distributed to the
+            # search workflow must not change under it. Checked again inside the
+            # transaction below against a concurrent case creation.
+            ensure_deletable(existing.to_dict())
         ref = collection.document(item_id) if item_id else collection.document()
         new_path = None
         if value.photo_base64:
@@ -143,6 +174,7 @@ class GuardianService:
                 current_data = owned_registration(current.to_dict(), self.uid)
                 if current_data.get("deleting"):
                     raise HTTPException(409, detail="deletion_in_progress")
+                ensure_deletable(current_data)
             else:
                 current_data = {}
             event = active_event(self.db, tx) if existing is None else None

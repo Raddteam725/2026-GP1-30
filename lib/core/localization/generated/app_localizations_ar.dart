@@ -185,7 +185,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get activeCaseError =>
-      'لا يمكن حذف الفرد أثناء وجود حالة نشطة. يجب حل الحالة أو إلغاؤها أولاً.';
+      'لا يمكن تعديل الفرد أو حذفه أثناء وجود حالة نشطة. يجب حل الحالة أو إلغاؤها أولاً.';
 
   @override
   String get retry => 'إعادة المحاولة';
@@ -274,19 +274,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get relationship => 'صلة القرابة بولي الأمر';
 
   @override
-  String get daughter => 'ابنة';
-
-  @override
-  String get son => 'ابن';
+  String get child => 'ابن/ابنة';
 
   @override
   String get parent => 'أحد الوالدين';
 
   @override
-  String get sibling => 'أخ أو أخت';
+  String get other => 'أخرى';
 
   @override
-  String get other => 'شخص آخر تحت رعايتي';
+  String get specifyRelationship => 'حدد صلة القرابة';
 
   @override
   String get save => 'حفظ';
@@ -1120,10 +1117,13 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get verificationExplanation =>
-      'اعرض هذا الرمز لمتطوع مخوّل للتحقق من ارتباطك بهذا البلاغ. الرمز لا يحدد هوية الفرد المفقود.';
+      'اعرض هذا الرمز لمتطوع مخوّل للتحقق من هويتك بصفتك ولي أمر هذا الحساب. الرمز لا يحدد هوية أي فرد مفقود.';
 
   @override
   String get noEligibleCases => 'لا توجد بلاغات بانتظار تحقق ولي الأمر.';
+
+  @override
+  String get casesAwaitingVerification => 'بلاغات بانتظار التحقق';
 
   @override
   String get verificationExpired =>
@@ -1178,4 +1178,55 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get vQrRequired =>
       'اطلب من ولي الأمر عرض رمز QR الخاص بهذه الحالة من حسابه المسجّل في راد. رقم الحالة وحده لا يثبت الهوية.';
+
+  @override
+  String get resolved => 'تم الحل';
+
+  @override
+  String get cancelled => 'ملغى';
+
+  @override
+  String get transferredToAuthority => 'محوّل إلى السلطات المعنية';
+
+  @override
+  String get casesSubtitle => 'تابع بلاغاتك عن الأفراد المفقودين';
+
+  @override
+  String get resolveReport => 'حل البلاغ';
+
+  @override
+  String get resolveReportConfirm =>
+      'هل تريد حل هذا البلاغ؟ استخدم هذا فقط إذا وجدت الفرد بنفسك خارج راد.';
+
+  @override
+  String get cancelReport => 'إلغاء البلاغ';
+
+  @override
+  String get cancelReportConfirm =>
+      'هل تريد إلغاء هذا البلاغ؟ استخدم هذا فقط إذا تم إنشاؤه بالخطأ.';
+
+  @override
+  String get reunitedOutcome => 'تم جمع شمل هذا الفرد مع ولي أمره.';
+
+  @override
+  String get caseClosedNotice =>
+      'هذا البلاغ مغلق ولم يعد جزءًا من عمليات البحث والمطابقة النشطة.';
+
+  @override
+  String get caseDetails => 'تفاصيل الحالة';
+
+  @override
+  String get activeCaseLockNotice =>
+      'التعديل والحذف غير متاحين أثناء وجود حالة نشطة لهذا الفرد.';
+
+  @override
+  String get guidedAssistantRequired =>
+      'يرجى إكمال الأسئلة المطلوبة قبل مغادرة هذه الشاشة.';
+
+  @override
+  String get caseClosedActionError => 'هذا البلاغ مغلق ولا يمكن تغييره.';
+
+  @override
+  String get reportAlreadySubmitted =>
+      'لقد تم تقديم هذا البلاغ مسبقًا ولا يمكن تعديله.';
 }

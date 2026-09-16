@@ -152,8 +152,15 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
       s.distinctiveDescription,
       s.additionalQuestion,
     ];
+    final required = !_busy && (_value == null || !_value!.reportSubmitted);
     return PopScope(
-      canPop: !_busy,
+      canPop: !required,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(s.guidedAssistantRequired)));
+        }
+      },
       child: FutureBuilder<MissingCase>(
         future: _data,
         builder: (context, state) {
@@ -165,7 +172,9 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
               if (state.hasError)
                 ErrorNotice(
                   message: failureMessage(state.error!, s),
-                  onRetry: () => setState(() => _data = _load()),
+                  onRetry: () => setState(() {
+                    _data = _load();
+                  }),
                 )
               else if (value == null)
                 const Center(child: CircularProgressIndicator())

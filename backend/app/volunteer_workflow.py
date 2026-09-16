@@ -249,22 +249,31 @@ class VolunteerWorkflow:
         return self.public_found(self.found_owned(report_id))
 
     def verify_guardian(self, report_id, payload):
+        # The QR is Guardian-account-level, not per-case: the payload names WHICH
+        # guardian, and this Volunteer's own current case (confirmed_case) supplies
+        # the case context. A scan only proves "this account", so the association
+        # to the case is re-checked here (case.guardian_id must equal the scanned
+        # guardian_id) before the challenge is even looked up.
         @firestore.transactional
         def verify(tx):
             case = self.confirmed_case(report_id, tx)
             cd = case.to_dict()
             if cd['status'] != 'awaiting_guardian_verification':
                 raise HTTPException(409, detail='invalid_transition')
-            challenge = case.reference.collection('verification').document('current').get(transaction=tx)
-            data = challenge.to_dict() or {}
-            prefix = f'radd:guardian-verification:v1:{case.id}:'
-            nonce = payload[len(prefix):] if payload.startswith(prefix) else ''
-            digest = hashlib.sha256(nonce.encode()).hexdigest()
+            prefix = 'radd:guardian-verification:v1:'
+            rest = payload[len(prefix):] if payload.startswith(prefix) else ''
+            guardian_id, _, nonce = rest.partition(':')
+            associated = bool(guardian_id and '/' not in guardian_id and guardian_id == cd['guardian_id'])
+            digest = hashlib.sha256(nonce.encode()).hexdigest() if nonce else ''
             receipt = cd.get('guardian_verification') or {}
             # Same-device lost-response retry is idempotent, not a new consumption.
             if receipt.get('volunteer_uid') == self.uid and receipt.get('token_hash') == digest and nonce:
                 return True
-            valid = bool(nonce and data.get('token_hash') and secrets.compare_digest(digest, data['token_hash'])
+            challenge = None
+            if associated and nonce:
+                challenge = self.db.collection('users').document(guardian_id).collection('verification').document('current').get(transaction=tx)
+            data = challenge.to_dict() if challenge else {}
+            valid = bool(associated and nonce and data.get('token_hash') and secrets.compare_digest(digest, data['token_hash'])
                 and data.get('guardian_id') == cd['guardian_id'] and data.get('event_id') == cd['event_id']
                 and data.get('consumed_at') is None and isinstance(data.get('expires_at'), datetime)
                 and data['expires_at'] > datetime.now(timezone.utc))
