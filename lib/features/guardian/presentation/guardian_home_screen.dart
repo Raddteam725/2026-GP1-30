@@ -19,7 +19,7 @@ class GuardianHomeScreen extends StatefulWidget {
 class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
   late int _tab = widget.initialTab;
   int _revision = 0;
-  Future<(GuardianProfile, List<Individual>)>? _data;
+  Future<(GuardianProfile, List<Individual>, bool)>? _data;
   bool _loggingOut = false;
   Object? _logoutError;
   @override
@@ -28,13 +28,19 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
     _data ??= _load();
   }
 
-  Future<(GuardianProfile, List<Individual>)> _load() async {
+  Future<(GuardianProfile, List<Individual>, bool)> _load() async {
     final repo = AppServices.of(context).guardian;
     final values = await Future.wait<Object>([
       repo.profile(),
       repo.individuals(),
+      repo.notifications(),
     ]);
-    return (values[0] as GuardianProfile, values[1] as List<Individual>);
+    final notifications = values[2] as List<GuardianNotification>;
+    return (
+      values[0] as GuardianProfile,
+      values[1] as List<Individual>,
+      notifications.any((n) => !n.read),
+    );
   }
 
   Future<void> _open(String route, {Object? arguments}) async {
@@ -78,10 +84,11 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
-    return FutureBuilder<(GuardianProfile, List<Individual>)>(
+    return FutureBuilder<(GuardianProfile, List<Individual>, bool)>(
       future: _data,
       builder: (context, state) {
         final profile = state.data?.$1, people = state.data?.$2 ?? [];
+        final hasUnread = state.data?.$3 ?? false;
         return FeaturePage(
           title: _tab == 0
               ? s.home
@@ -97,12 +104,31 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
           children: [
             if (state.connectionState != ConnectionState.done)
               const Center(child: CircularProgressIndicator())
-            else if (state.hasError)
+            else if (state.hasError) ...[
               ErrorNotice(
                 message: failureMessage(state.error!, s),
                 onRetry: () => setState(() => _data = _load()),
-              )
-            else if (_tab == 4 && profile != null) ...[
+              ),
+              // A profile fetch failure must never leave the Guardian stuck
+              // on this screen with no way back to the sign-in flow.
+              const SizedBox(height: 16),
+              if (_logoutError != null)
+                ErrorNotice(message: failureMessage(_logoutError!, s)),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.error,
+                  side: const BorderSide(color: AppColors.error),
+                ),
+                onPressed: _loggingOut ? null : _logout,
+                icon: _loggingOut
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.logout),
+                label: Text(s.logout),
+              ),
+            ] else if (_tab == 4 && profile != null) ...[
               Row(
                 children: [
                   Expanded(
@@ -243,26 +269,24 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
                         children: [
                           IconButton(
                             tooltip: s.notifications,
-                            onPressed: () => ScaffoldMessenger.of(context)
-                                .showSnackBar(
-                                  SnackBar(content: Text(s.comingLater)),
-                                ),
+                            onPressed: () => _open(AppRoutes.notifications),
                             icon: const Icon(
                               Icons.notifications_none,
                               color: AppColors.primary,
                             ),
                           ),
-                          const Positioned(
-                            right: 12,
-                            top: 10,
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: AppColors.accent,
-                                shape: BoxShape.circle,
+                          if (hasUnread)
+                            const Positioned(
+                              right: 12,
+                              top: 10,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: AppColors.accent,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: SizedBox.square(dimension: 6),
                               ),
-                              child: SizedBox.square(dimension: 6),
                             ),
-                          ),
                         ],
                       ),
                     ),

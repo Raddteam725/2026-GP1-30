@@ -7,6 +7,7 @@ import '../../../shared/widgets/feature_page.dart';
 import '../data/guardian_repository.dart';
 import 'individual_widgets.dart';
 import 'guardian_components.dart';
+import 'case_widgets.dart';
 import '../../../core/theme/app_colors.dart';
 
 class IndividualProfileScreen extends StatefulWidget {
@@ -149,6 +150,15 @@ class _IndividualProfileScreenState extends State<IndividualProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
+                ReportMissingAction(
+                  individual: p,
+                  onChanged: () => setState(() {
+                    _revision++;
+                    _data = AppServices.of(context).guardian
+                        .individual(widget.id);
+                  }),
+                ),
+                const SizedBox(height: 24),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.error,

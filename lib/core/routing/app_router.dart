@@ -12,6 +12,10 @@ import '../../features/guardian/presentation/individual_form_screen.dart';
 import '../../features/guardian/presentation/individual_profile_screen.dart';
 import '../../features/guardian/presentation/edit_guardian_profile_screen.dart';
 import '../../features/guardian/presentation/camera_screen.dart';
+import '../../features/guardian/presentation/notifications_screen.dart';
+import '../../features/guardian/presentation/cases_screen.dart';
+import '../../features/guardian/presentation/guided_report_screen.dart';
+import '../../features/guardian/presentation/guardian_qr_screen.dart';
 import '../../features/onboarding/presentation/screens/role_selection_screen.dart';
 import '../../features/onboarding/presentation/screens/splash_screen.dart';
 import '../../features/onboarding/presentation/screens/language_selection_screen.dart';
@@ -62,6 +66,13 @@ abstract final class AppRouter {
             profile: settings.arguments as GuardianProfile,
           ),
         AppRoutes.camera => const CameraScreen(),
+        AppRoutes.notifications => const NotificationsScreen(),
+        AppRoutes.cases => const CasesScreen(),
+        AppRoutes.qrCode => const GuardianQrScreen(),
+        AppRoutes.caseStatus when settings.arguments is String =>
+          CaseStatusScreen(id: settings.arguments as String),
+        AppRoutes.guidedReport when settings.arguments is String =>
+          GuidedReportScreen(id: settings.arguments as String),
         _ => Scaffold(
           body: SafeArea(
             child: Center(

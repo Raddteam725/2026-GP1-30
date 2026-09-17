@@ -11,6 +11,10 @@ import 'package:radd/features/auth/presentation/form_validation.dart';
 import 'package:radd/features/guardian/data/guardian_repository.dart';
 import 'package:radd/features/guardian/presentation/guardian_home_screen.dart';
 import 'package:radd/features/guardian/presentation/individual_form_screen.dart';
+import 'package:radd/features/guardian/presentation/cases_screen.dart';
+import 'package:radd/features/guardian/presentation/guardian_qr_screen.dart';
+import 'package:radd/features/guardian/presentation/notifications_screen.dart';
+import 'package:radd/features/guardian/presentation/guided_report_screen.dart';
 import 'package:radd/features/onboarding/presentation/screens/language_selection_screen.dart';
 
 void main() {
@@ -218,7 +222,7 @@ void main() {
   });
 
   testWidgets(
-    'Five Guardian tabs remain visible and future tabs do not fabricate screens',
+    'Five Guardian tabs remain visible and QR/Cases open real screens',
     (t) async {
       await start(t);
       auth.active = true;
@@ -233,14 +237,54 @@ void main() {
         expect(find.text(label), findsOneWidget);
       }
       await tapText(t, 'QR Code');
-      expect(find.byType(GuardianHomeScreen), findsOneWidget);
+      expect(find.byType(GuardianQrScreen), findsOneWidget);
+      expect(
+        find.text('No cases are awaiting Guardian verification.'),
+        findsOneWidget,
+      );
+      Navigator.pop(t.element(find.byType(GuardianQrScreen)));
+      await t.pumpAndSettle();
+      await tapText(t, 'Cases');
+      expect(find.byType(CasesScreen), findsOneWidget);
+      expect(find.text('No cases yet'), findsOneWidget);
       expect(
         find.text('This feature will be available in a later sprint.'),
-        findsOneWidget,
+        findsNothing,
       );
       expect(repo.records, isEmpty);
     },
   );
+  testWidgets('Notification bell opens real notifications, not a placeholder', (
+    t,
+  ) async {
+    await start(t);
+    auth.active = true;
+    repo.records.add(
+      const Individual(
+        id: 'test-id',
+        fullName: 'Test Person',
+        age: 7,
+        gender: 'female',
+        relationship: 'daughter',
+      ),
+    );
+    await route(t, AppRoutes.guardian);
+    expect(find.text('No notifications yet'), findsNothing);
+    await t.tap(find.byIcon(Icons.notifications_none));
+    await t.pumpAndSettle();
+    expect(find.byType(NotificationsScreen), findsOneWidget);
+    expect(find.text('No notifications yet'), findsOneWidget);
+    Navigator.pop(t.element(find.byType(NotificationsScreen)));
+    await t.pumpAndSettle();
+    await tapText(t, 'Test Person');
+    await tapText(t, 'Report Missing');
+    await tapText(t, 'Confirm');
+    await t.pumpAndSettle();
+    expect(repo.caseRecords, hasLength(1));
+    Navigator.pop(t.element(find.byType(GuidedReportScreen)));
+    await t.pumpAndSettle();
+    expect(find.textContaining('Active case'), findsOneWidget);
+  });
   for (final locale in ['en', 'ar']) {
     testWidgets(
       'Guardian forms scroll without overflow at large text in $locale',

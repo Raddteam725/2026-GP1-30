@@ -40,6 +40,10 @@ class GuardianApi implements GuardianRepository {
           await _client.send(request),
         );
         if (response.statusCode >= 400) {
+          final detail = jsonDecode(response.body);
+          if (detail is Map && detail['detail'] == 'event_unavailable') {
+            throw const AppFailure('eventUnavailable');
+          }
           throw AppFailure(switch (response.statusCode) {
             401 => 'unauthorized',
             403 => 'role',
@@ -127,4 +131,58 @@ class GuardianApi implements GuardianRepository {
   @override
   Future<Uint8List> photo(String id) async =>
       (await _request('GET', '${_path(id)}/photo')).bodyBytes;
+
+  @override
+  Future<List<MissingCase>> cases() async =>
+      (jsonDecode((await _request('GET', '/cases')).body) as List)
+          .map((e) => MissingCase.fromJson(e as Map<String, dynamic>))
+          .toList();
+  @override
+  Future<MissingCase> missingCase(String id) async => MissingCase.fromJson(
+    _json(await _request('GET', '/cases/${Uri.encodeComponent(id)}')),
+  );
+  @override
+  Future<MissingCase> reportMissing(String individualId) async =>
+      MissingCase.fromJson(
+        _json(
+          await _request(
+            'POST',
+            '/cases',
+            body: {'individual_id': individualId},
+          ),
+        ),
+      );
+  @override
+  Future<MissingCase> saveGuidedReport(
+    String id,
+    Map<String, dynamic> report,
+  ) async => MissingCase.fromJson(
+    _json(
+      await _request(
+        'PUT',
+        '/cases/${Uri.encodeComponent(id)}/guided-report',
+        body: report,
+      ),
+    ),
+  );
+  @override
+  Future<List<GuardianNotification>> notifications() async =>
+      (jsonDecode((await _request('GET', '/notifications')).body) as List)
+          .map((e) => GuardianNotification.fromJson(e as Map<String, dynamic>))
+          .toList();
+  @override
+  Future<void> readNotification(String id) async {
+    await _request('PUT', '/notifications/${Uri.encodeComponent(id)}/read');
+  }
+
+  @override
+  Future<GuardianVerification> verification(String id) async =>
+      GuardianVerification.fromJson(
+        _json(
+          await _request(
+            'POST',
+            '/cases/${Uri.encodeComponent(id)}/verification',
+          ),
+        ),
+      );
 }

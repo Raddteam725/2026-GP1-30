@@ -45,13 +45,17 @@ class GuardianNavigation extends StatelessWidget {
                       selected: selected == i,
                       button: true,
                       child: InkWell(
-                        onTap: !enabled
+                        onTap: !enabled || i == selected
                             ? null
                             : () {
-                                if (i == 2 || i == 3) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text(s.comingLater)),
-                                  );
+                                if (i == 2) {
+                                  Navigator.of(context)
+                                      .pushNamed(AppRoutes.qrCode);
+                                  return;
+                                }
+                                if (i == 3) {
+                                  Navigator.of(context)
+                                      .pushNamed(AppRoutes.cases);
                                   return;
                                 }
                                 if (onSelected != null) {

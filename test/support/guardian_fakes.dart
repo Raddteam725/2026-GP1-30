@@ -47,6 +47,9 @@ class TestRepository implements GuardianRepository {
     phone: '+966500000001',
   );
   final List<Individual> records = [];
+  final List<MissingCase> caseRecords = [];
+  final List<GuardianNotification> notificationRecords = [];
+  int _caseCounter = 0;
   @override
   Future<GuardianProfile> profile() async => person;
   @override
@@ -70,8 +73,10 @@ class TestRepository implements GuardianRepository {
     String? id,
     Uint8List? photo,
   }) async {
+    final existing = id == null ? null : records.singleWhere((i) => i.id == id);
     final p = Individual(
       id: id ?? 'test-id',
+      activeCaseId: existing?.activeCaseId,
       fullName: input.fullName,
       age: input.age,
       gender: input.gender,
@@ -84,7 +89,115 @@ class TestRepository implements GuardianRepository {
 
   @override
   Future<void> deleteIndividual(String id) async {
+    final p = records.singleWhere((i) => i.id == id);
+    if (p.activeCaseId != null) throw const AppFailure('conflict');
     records.removeWhere((i) => i.id == id);
+  }
+
+  @override
+  Future<List<MissingCase>> cases() async => List.of(caseRecords);
+  @override
+  Future<MissingCase> missingCase(String id) async =>
+      caseRecords.singleWhere((c) => c.id == id);
+  @override
+  Future<MissingCase> reportMissing(String individualId) async {
+    final p = records.singleWhere((i) => i.id == individualId);
+    if (p.activeCaseId != null) {
+      return caseRecords.singleWhere((c) => c.id == p.activeCaseId);
+    }
+    final now = DateTime.now().toUtc();
+    final value = MissingCase(
+      id: 'RD-TEST${++_caseCounter}',
+      individualId: individualId,
+      name: p.fullName,
+      age: p.age,
+      status: 'report_received',
+      eventId: 'test-event',
+      createdAt: now,
+      updatedAt: now,
+      stages: {'report_received': now.toIso8601String()},
+    );
+    caseRecords.add(value);
+    records
+      ..removeWhere((i) => i.id == individualId)
+      ..add(
+        Individual(
+          id: p.id,
+          activeCaseId: value.id,
+          fullName: p.fullName,
+          age: p.age,
+          gender: p.gender,
+          relationship: p.relationship,
+        ),
+      );
+    notificationRecords.add(
+      GuardianNotification(
+        id: '${value.id}-report_received',
+        caseId: value.id,
+        status: value.status,
+        read: false,
+        createdAt: now,
+      ),
+    );
+    return value;
+  }
+
+  @override
+  Future<MissingCase> saveGuidedReport(
+    String id,
+    Map<String, dynamic> report,
+  ) async {
+    final current = caseRecords.singleWhere((c) => c.id == id);
+    if (current.status == 'reunited') throw const AppFailure('conflict');
+    final updated = MissingCase(
+      id: current.id,
+      individualId: current.individualId,
+      name: current.name,
+      age: current.age,
+      status: current.status,
+      eventId: current.eventId,
+      createdAt: current.createdAt,
+      updatedAt: DateTime.now().toUtc(),
+      stages: current.stages,
+      report: report,
+    );
+    caseRecords
+      ..removeWhere((c) => c.id == id)
+      ..add(updated);
+    return updated;
+  }
+
+  @override
+  Future<List<GuardianNotification>> notifications() async =>
+      List.of(notificationRecords);
+  @override
+  Future<void> readNotification(String id) async {
+    final n = notificationRecords.singleWhere((n) => n.id == id);
+    if (n.read) return;
+    notificationRecords
+      ..removeWhere((existing) => existing.id == id)
+      ..add(
+        GuardianNotification(
+          id: n.id,
+          caseId: n.caseId,
+          status: n.status,
+          read: true,
+          createdAt: n.createdAt,
+        ),
+      );
+  }
+
+  @override
+  Future<GuardianVerification> verification(String id) async {
+    final current = caseRecords.singleWhere((c) => c.id == id);
+    if (current.status != 'awaiting_guardian_verification') {
+      throw const AppFailure('conflict');
+    }
+    return GuardianVerification(
+      caseId: id,
+      payload: 'radd:guardian-verification:v1:$id:test-nonce',
+      expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 5)),
+    );
   }
 
   @override

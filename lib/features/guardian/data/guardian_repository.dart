@@ -1,3 +1,6 @@
+import 'case_models.dart';
+export 'case_models.dart';
+
 import 'dart:typed_data';
 
 class GuardianProfile {
@@ -16,15 +19,18 @@ class GuardianProfile {
 
 class Individual {
   const Individual({
+    this.activeCaseId,
     required this.id,
     required this.fullName,
     required this.age,
     required this.gender,
     required this.relationship,
   });
+  final String? activeCaseId;
   final String id, fullName, gender, relationship;
   final int age;
   factory Individual.fromJson(Map<String, dynamic> j) => Individual(
+    activeCaseId: j['active_case_id'] as String?,
     id: j['id'] as String,
     fullName: j['full_name'] as String,
     age: j['age'] as int,
@@ -70,4 +76,12 @@ abstract class GuardianRepository {
   });
   Future<void> deleteIndividual(String id);
   Future<Uint8List> photo(String id);
+
+  Future<List<MissingCase>> cases();
+  Future<MissingCase> missingCase(String id);
+  Future<MissingCase> reportMissing(String individualId);
+  Future<MissingCase> saveGuidedReport(String id, Map<String, dynamic> report);
+  Future<List<GuardianNotification>> notifications();
+  Future<void> readNotification(String id);
+  Future<GuardianVerification> verification(String id);
 }
