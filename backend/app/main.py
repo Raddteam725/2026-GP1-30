@@ -3,7 +3,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from .firebase import identity
-from .models import ProfileCreate, ProfileUpdate, IndividualInput
+from .models import ProfileCreate, ProfileUpdate, IndividualInput, FcmRegistration, FcmUnregister
 from .service import GuardianService
 
 app = FastAPI(title="Radd Guardian API", version="0.1.0")
@@ -59,6 +59,20 @@ def create_profile(value: ProfileCreate, s=Depends(service)):
 @app.post("/v1/guardian/verification")
 def account_verification(s=Depends(service)):
     return s.account_verification()
+
+@app.put("/v1/guardian/fcm-registrations")
+def register_fcm_token(value: FcmRegistration, s=Depends(service)):
+    # Idempotent upsert, scoped to the authenticated Guardian's own
+    # subcollection -- no other Guardian's registrations are reachable
+    # through this or any other endpoint.
+    return s.register_fcm_token(value.token, value.locale)
+
+@app.post("/v1/guardian/fcm-registrations/unregister")
+def unregister_fcm_token(value: FcmUnregister, s=Depends(service)):
+    # Called at logout so this installation stops being able to receive the
+    # signing-out Guardian's pushes. Idempotent -- deleting an already-absent
+    # registration is a no-op, so a retried/duplicate call is always safe.
+    return s.unregister_fcm_token(value.token)
 
 @app.patch("/v1/guardian")
 def update_profile(value: ProfileUpdate, s=Depends(service)):

@@ -21,6 +21,7 @@ class Individual {
   const Individual({
     this.activeCaseId,
     this.relationshipOther,
+    this.photoExpired = false,
     required this.id,
     required this.fullName,
     required this.age,
@@ -30,9 +31,15 @@ class Individual {
   final String? activeCaseId, relationshipOther;
   final String id, fullName, gender, relationship;
   final int age;
+
+  /// Server-computed, from the photo's own capture time -- never derived
+  /// from this device's clock. When true, Report Missing is unavailable
+  /// (the backend enforces this independently; this only drives the UI).
+  final bool photoExpired;
   factory Individual.fromJson(Map<String, dynamic> j) => Individual(
     activeCaseId: j['active_case_id'] as String?,
     relationshipOther: j['relationship_other'] as String?,
+    photoExpired: j['photo_expired'] as bool? ?? false,
     id: j['id'] as String,
     fullName: j['full_name'] as String,
     age: j['age'] as int,
@@ -95,4 +102,18 @@ abstract class GuardianRepository {
   Future<GuardianVerification> accountVerification();
   Future<MissingCase> cancelCase(String id);
   Future<MissingCase> resolveCase(String id);
+
+  /// Registers (or refreshes) this installation's FCM registration for the
+  /// authenticated Guardian. Idempotent -- safe to call again with the same
+  /// token, and safe to call once per installation for a different one.
+  /// [locale] is this installation's own current in-app language ('en'/'ar'
+  /// -- see Localizations.localeOf), used only to pick which of two fixed,
+  /// pre-translated strings the visible push notification is sent in.
+  Future<void> registerFcmToken(String token, String locale);
+
+  /// Removes this installation's FCM registration -- called at logout so it
+  /// stops being able to receive the signing-out Guardian's pushes. Scoped
+  /// to the caller's own registrations only; idempotent (a repeat call, or
+  /// one for an already-removed token, succeeds as a no-op).
+  Future<void> unregisterFcmToken(String token);
 }

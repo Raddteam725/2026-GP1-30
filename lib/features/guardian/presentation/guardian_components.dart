@@ -48,14 +48,20 @@ class GuardianNavigation extends StatelessWidget {
                         onTap: !enabled || i == selected
                             ? null
                             : () {
-                                if (i == 2) {
-                                  Navigator.of(context)
-                                      .pushNamed(AppRoutes.qrCode);
-                                  return;
-                                }
-                                if (i == 3) {
-                                  Navigator.of(context)
-                                      .pushNamed(AppRoutes.cases);
+                                if (i == 2 || i == 3) {
+                                  final route = i == 2
+                                      ? AppRoutes.qrCode
+                                      : AppRoutes.cases;
+                                  // QR and Cases are pushed on top of Home.
+                                  // Moving between those two tabs swaps the
+                                  // current one instead of stacking screens,
+                                  // so Back always returns to Home.
+                                  if (selected == 2 || selected == 3) {
+                                    Navigator.of(context)
+                                        .pushReplacementNamed(route);
+                                  } else {
+                                    Navigator.of(context).pushNamed(route);
+                                  }
                                   return;
                                 }
                                 if (onSelected != null) {
@@ -152,6 +158,29 @@ class GuardianPanel extends StatelessWidget {
       borderRadius: BorderRadius.circular(20),
       clipBehavior: Clip.antiAlias,
       child: Padding(padding: padding, child: child),
+    ),
+  );
+}
+
+/// Small uppercase section heading ("PROGRESS TIMELINE", "CASE DETAILS").
+class SectionLabel extends StatelessWidget {
+  const SectionLabel(
+    this.label, {
+    super.key,
+    this.color = const Color(0xFF718096),
+    this.fontSize = 12,
+  });
+  final String label;
+  final Color color;
+  final double fontSize;
+  @override
+  Widget build(BuildContext context) => Text(
+    label.toUpperCase(),
+    style: TextStyle(
+      fontSize: fontSize,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 1.2,
+      color: color,
     ),
   );
 }

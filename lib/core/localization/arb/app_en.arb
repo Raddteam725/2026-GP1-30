@@ -22,7 +22,7 @@
   "currentSelection": "Current selection",
   "englishLanguage": "English language",
   "arabicLanguage": "Arabic language",
-  "brandFooter": "Radd • Bringing People Back Together",
+  "brandFooter": "Radd · Bringing People Back Together",
   "joinRadd": "Join Radd",
   "roleHint": "Choose how you would like to continue",
   "guardianDescription": "Register individuals under your care and manage their safety during the event.",
@@ -372,7 +372,7 @@
   "caseStatus": "Case Status",
   "viewStatus": "View Status",
   "trackStatus": "Track Status",
-  "activeCases": "Active cases",
+  "activeCases": "Active Cases",
   "noCases": "No cases yet",
   "noCasesHint": "Your missing-person reports will appear here.",
   "reportingAssistant": "Reporting Assistant",
@@ -404,7 +404,7 @@
   "guidedDetails": "Report details",
   "lastUpdated": "Last updated",
   "requiredAnswer": "Please complete this answer.",
-  "activeCase": "Active case",
+  "activeCase": "Active Case",
   "verificationExpires": "Valid until",
   "close": "Close",
   "vLoadFailed": "Unable to load current data. Tap to try again.",
@@ -425,5 +425,84 @@
   "activeCaseLockNotice": "Editing and deletion are unavailable while an active case exists for this individual.",
   "guidedAssistantRequired": "Please finish the required questions before leaving this screen.",
   "caseClosedActionError": "This report is closed and can no longer be changed.",
-  "reportAlreadySubmitted": "This report has already been submitted and can no longer be edited."
+  "reportAlreadySubmitted": "This report has already been submitted and can no longer be edited.",
+  "photoExpiredError": "This photo has expired and can no longer be used. Take a new photo to continue.",
+  "photoExpiredNotice": "This photo has expired and is no longer usable. Take a new photo before reporting this individual missing.",
+  "updatePhotoRequired": "Update Photo",
+  "caseId": "Case ID",
+  "updatedLabel": "Updated",
+  "ageYears": "{value} yrs",
+  "@ageYears": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "caseHistory": "Case History",
+  "noActiveCasesHint": "No active cases right now.",
+  "progressTimeline": "Progress Timeline",
+  "stageLabel": "Stage {number}",
+  "@stageLabel": {
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "stageStatus": "Stage {number}: {status}",
+  "@stageStatus": {
+    "placeholders": {
+      "number": {
+        "type": "String"
+      },
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "activeLabel": "Active",
+  "completedLabel": "Completed",
+  "statusUpdatesAutomatically": "Status updates automatically",
+  "reportReceivedDescription": "Your report has been received and active Volunteers have been notified.",
+  "searchInProgressDescription": "Volunteers are actively searching for the individual.",
+  "matchConfirmedDescription": "A Volunteer has confirmed a match and will proceed to Guardian verification.",
+  "awaitingVerificationDescription": "Show your Guardian Verification QR to the Volunteer to confirm your identity.",
+  "reunitedDescription": "The individual has been safely reunited with you.",
+  "outcomeLabel": "Outcome",
+  "lastSeenLocationLabel": "Last-seen location",
+  "currentLocationConfirmed": "Current location confirmed",
+  "clothingLabel": "Clothing",
+  "distinctiveLabel": "Distinctive item",
+  "additionalLabel": "Additional information",
+  "none": "None",
+  "detailsPending": "Report details have not been completed yet.",
+  "reportedByGuardian": "Reported by Guardian",
+  "todayJustNow": "Today • Just now",
+  "assistantIntro": "Your missing-person report for {name} has been submitted. I'll ask a few quick questions to help Volunteers with the search.",
+  "@assistantIntro": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "locationHint": "Used to coordinate nearby Volunteers.",
+  "answersAutoSave": "Answers save automatically to active case",
+  "typeAnswer": "Type your answer…",
+  "send": "Send",
+  "qrSubtitle": "Show this code to the Volunteer for Guardian verification",
+  "qrVerifiesAccount": "This QR code verifies that your authenticated Guardian account is associated with this case.",
+  "qrVerifiesAccountNoCase": "This QR code verifies your authenticated Guardian account. It does not identify any missing individual.",
+  "selectActiveCase": "Select Active Case",
+  "scanInstruction": "Ask the Volunteer to scan this QR code using Radd.",
+  "cannotDisplayQr": "Can't display the QR code?",
+  "caseIdentifierInstruction": "Show this identifier to the Volunteer for alternative verification.",
+  "caseIdentifierUsage": "Used to locate and verify the active case when the QR code cannot be displayed or scanned.",
+  "activeCaseIdentifier": "Active case identifier",
+  "noActiveCaseQrNote": "You have no active cases right now. Your Guardian QR remains valid for verification.",
+  "qrRefreshing": "Generating a new code…",
+  "resetSentTitle": "Check your email",
+  "backToLogin": "Back to Log In",
+  "resendReset": "Send again"
 }

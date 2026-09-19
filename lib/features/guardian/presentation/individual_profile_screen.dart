@@ -160,6 +160,7 @@ class _IndividualProfileScreenState extends State<IndividualProfileScreen> {
                 ReportMissingAction(
                   individual: p,
                   activeCase: activeCase,
+                  variant: ReportMissingVariant.profile,
                   onChanged: () => setState(() {
                     _revision++;
                     _data = _load();

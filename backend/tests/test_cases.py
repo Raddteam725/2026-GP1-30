@@ -7,7 +7,7 @@ from PIL import Image
 from fastapi import HTTPException
 from pydantic import ValidationError
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app import service
+from app import service, push
 from app.cases import CaseService, validate_transition
 from app.case_models import CaseCreate, GuidedReport, STAGES, TERMINAL_STATUSES
 from app.models import ProfileCreate, IndividualInput
@@ -20,6 +20,12 @@ def storage(monkeypatch):
     monkeypatch.setattr(service, "database", lambda: db)
     monkeypatch.setattr(service, "bucket", lambda: bucket)
     monkeypatch.setattr(service.firestore, "transactional", lambda f: f)
+    # cases.create()/_terminate() fire a best-effort push via app.push, which
+    # does its own `from .firebase import database` -- a separate binding
+    # from service.database, so it needs its own patch or it would otherwise
+    # try to reach real Firebase (harmless since notify_guardian swallows the
+    # failure, but real network calls have no place in an isolated unit test).
+    monkeypatch.setattr(push, "database", lambda: db)
     return db, bucket
 
 def photo():

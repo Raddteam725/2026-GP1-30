@@ -244,3 +244,63 @@ def test_admin_provision_command_uses_auth_identity_and_refuses_guardian_overwri
     with pytest.raises(ValueError):
         provision(db, SimpleNamespace(uid='guardian', email='g@example.test'), 'No overwrite', '+966500000001', 'VOL-002')
     assert db.data['users/guardian'] == before
+
+# --- Case Identifier: the case-specific alternative to the Guardian QR -----
+
+def test_case_identifier_alternative_verification_is_case_specific_and_recorded(db):
+    _, case_id, report = matching()
+    report_id = report['id']
+    vol().begin_verification(report_id)
+    # A different (e.g. sibling) case's identifier is rejected: nothing is
+    # recorded on this case and handover stays blocked.
+    assert vol().verify_guardian_identifier(report_id, 'RD-OTHER')['verified'] is False
+    assert db.data['cases/' + case_id].get('guardian_verification') is None
+    with pytest.raises(HTTPException): vol().handover_found(report_id)
+    # The identifier exactly as the Guardian's app displays it ("#RD-…", any case).
+    result = vol().verify_guardian_identifier(report_id, '#' + case_id.lower())
+    assert result['verified'] is True
+    assert result['report']['verification']['method'] == 'case_identifier'
+    assert 'token_hash' not in str(result)
+    assert vol().verify_guardian_identifier(report_id, case_id)['verified'] is True  # lost-response retry
+    handed = vol().handover_found(report_id)
+    assert handed['status'] == 'reunited'
+    # The handover record keeps saying HOW the Guardian was verified.
+    assert db.data['cases/' + case_id]['guardian_verification']['method'] == 'case_identifier'
+    assert db.data['cases/' + case_id]['handed_over_by'] == 'one'
+
+def test_case_identifier_verification_requires_the_awaiting_stage_and_the_confirming_volunteer(db):
+    _, case_id, report = matching()
+    with pytest.raises(HTTPException): vol().verify_guardian_identifier(report['id'], case_id)  # still match_confirmed
+    vol().begin_verification(report['id'])
+    with pytest.raises(HTTPException): vol('two').verify_guardian_identifier(report['id'], case_id)
+    app.dependency_overrides[identity] = lambda: {'uid': 'one'}
+    with TestClient(app) as client:
+        assert client.post(f"/v1/volunteer/found-reports/{report['id']}/verify-identifier", json={'case_id': case_id, 'uid': 'x'}).status_code == 422
+        response = client.post(f"/v1/volunteer/found-reports/{report['id']}/verify-identifier", json={'case_id': case_id})
+        assert response.status_code == 200 and response.json()['verified'] is True
+    app.dependency_overrides.clear()
+
+# --- Guardian is notified of every Volunteer-driven status change ---------
+
+def test_volunteer_driven_stages_write_guardian_notifications_and_push(db, monkeypatch):
+    from app import push
+    sent = []
+    monkeypatch.setattr(push, 'notify_guardian', lambda uid, **kw: sent.append((uid, kw['status'])))
+    monkeypatch.setattr(volunteer_workflow, 'notify_guardian', lambda uid, **kw: sent.append((uid, kw['status'])))
+    from app import volunteer as volunteer_module
+    monkeypatch.setattr(volunteer_module, 'notify_guardian', lambda uid, **kw: sent.append((uid, kw['status'])))
+    guardian, case_id = case()
+    vol().start_search(case_id)
+    vol('two').start_search(case_id)  # A second join changes nothing the Guardian sees.
+    profile = vol().profiles_list()[0]
+    report = submit()
+    vol().confirm(report['id'], profile['id'])
+    vol().begin_verification(report['id'])
+    vol().begin_verification(report['id'])  # idempotent: no duplicate record/push
+    qr = guardian.account_verification()
+    vol().verify_guardian(report['id'], qr['payload'])
+    vol().handover_found(report['id'])
+    statuses = [n['status'] for n in CaseService(guardian).list_notifications()]
+    assert sorted(statuses) == sorted(['report_received', 'search_in_progress', 'match_confirmed', 'awaiting_guardian_verification', 'reunited'])
+    assert all(uid == guardian.uid for uid, _ in sent)
+    assert [status for _, status in sent] == ['search_in_progress', 'match_confirmed', 'awaiting_guardian_verification', 'reunited']

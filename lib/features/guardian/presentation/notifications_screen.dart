@@ -4,6 +4,7 @@ import '../../../app/app_services.dart';
 import '../../../core/localization/generated/app_localizations.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../shared/widgets/feature_page.dart';
+import '../data/guardian_push_service.dart';
 import '../data/guardian_repository.dart';
 import 'case_widgets.dart';
 import 'guardian_components.dart';
@@ -18,14 +19,33 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<List<GuardianNotification>>? _data;
   Object? _error;
   @override
+  void initState() {
+    super.initState();
+    // A foreground push is only ever a hint that server state may have
+    // changed -- this always re-fetches from the authenticated backend
+    // rather than trusting anything from the push payload itself.
+    GuardianPushRefresh.instance.addListener(_reload);
+  }
+
+  @override
+  void dispose() {
+    GuardianPushRefresh.instance.removeListener(_reload);
+    super.dispose();
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _data ??= AppServices.of(context).guardian.notifications();
   }
 
-  void _reload() => setState(() {
-    _data = AppServices.of(context).guardian.notifications();
-  });
+  void _reload() {
+    if (!mounted) return;
+    setState(() {
+      _data = AppServices.of(context).guardian.notifications();
+    });
+  }
+
   Future<void> _open(GuardianNotification value) async {
     try {
       await AppServices.of(context).guardian.readNotification(value.id);

@@ -34,8 +34,11 @@ class TestAuth implements AuthService {
     events.add(false);
   }
 
+  final List<String> resetRequests = [];
   @override
-  Future<void> resetPassword(String email) async {}
+  Future<void> resetPassword(String email) async {
+    resetRequests.add(email);
+  }
 }
 
 class TestRepository implements GuardianRepository {
@@ -238,6 +241,34 @@ class TestRepository implements GuardianRepository {
   Future<MissingCase> cancelCase(String id) => _terminate(id, 'cancelled');
   @override
   Future<MissingCase> resolveCase(String id) => _terminate(id, 'resolved');
+
+  final List<String> registeredFcmTokens = [];
+  final List<String> unregisteredFcmTokens = [];
+  String? lastRegisteredLocale;
+  // Lets tests simulate a temporary failure (e.g. offline) without any real
+  // network involved -- both flip back to false after throwing once, since a
+  // real failure is transient, not a permanent condition.
+  bool failNextFcmRegister = false;
+  bool failNextFcmUnregister = false;
+  @override
+  Future<void> registerFcmToken(String token, String locale) async {
+    if (failNextFcmRegister) {
+      failNextFcmRegister = false;
+      throw const AppFailure('network');
+    }
+    lastRegisteredLocale = locale;
+    if (!registeredFcmTokens.contains(token)) registeredFcmTokens.add(token);
+  }
+
+  @override
+  Future<void> unregisterFcmToken(String token) async {
+    if (failNextFcmUnregister) {
+      failNextFcmUnregister = false;
+      throw const AppFailure('network');
+    }
+    unregisteredFcmTokens.add(token);
+    registeredFcmTokens.remove(token);
+  }
 
   @override
   Future<Uint8List> photo(String id) async => Uint8List.fromList([

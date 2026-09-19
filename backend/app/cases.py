@@ -5,8 +5,9 @@ from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 from .case_models import STAGES, TERMINAL_STATUSES, age_group
 from .events import active_event
-from .service import owned_registration
+from .service import owned_registration, photo_expired
 from .alerts import general_alert
+from .push import notify_guardian
 
 def public_case(doc):
     data = doc.to_dict()
@@ -40,6 +41,7 @@ class CaseService:
     def create(self, value):
         person = self.guardian.user.collection("individuals").document(value.individual_id)
         ref = self.cases.document("RD-" + secrets.token_hex(6).upper())
+        created_new = False
         @firestore.transactional
         def create(tx):
             person_doc = person.get(transaction=tx)
@@ -55,8 +57,15 @@ class CaseService:
                 raise HTTPException(409, detail="deletion_in_progress")
             if active:
                 return active.id  # Idempotent retry after a lost response.
+            # A report only becomes possible with a current photo -- this is
+            # the authoritative, server-side gate; the Flutter UI's own
+            # "needs a new photo" prompt is a convenience, not the enforcement.
+            if not data.get("photo_path") or photo_expired(data):
+                raise HTTPException(409, detail="photo_expired")
             if collision.exists:
                 raise HTTPException(409, detail="identifier_conflict")
+            nonlocal created_new
+            created_new = True
             now = firestore.SERVER_TIMESTAMP
             tx.set(ref, {"guardian_id": self.uid, "individual_id": value.individual_id,
                 "individual_path": person.path, "individual_name": data["full_name"],
@@ -73,7 +82,17 @@ class CaseService:
                 "event_id": event_id, "case_id": ref.id, "kind": "case_created", "status": STAGES[0],
                 "created_at": now, "read_at": None})
             return ref.id
-        return public_case(self.owned(create(self.db.transaction())))
+        result = public_case(self.owned(create(self.db.transaction())))
+        if created_new:
+            # Push is an ADDITIONAL channel alongside the notification doc
+            # already written above -- never a replacement for it, and never
+            # allowed to affect this already-committed business operation.
+            try:
+                notify_guardian(self.uid, kind="case_created", status=result["status"],
+                    case_id=result["id"], event_id=result["event_id"])
+            except Exception:
+                pass
+        return result
 
     def save_report(self, case_id, value):
         @firestore.transactional
@@ -110,7 +129,13 @@ class CaseService:
                 "event_id": data["event_id"], "case_id": case_id, "kind": "status_changed",
                 "status": outcome, "created_at": firestore.SERVER_TIMESTAMP, "read_at": None})
         terminate(self.db.transaction())
-        return public_case(self.owned(case_id))
+        result = public_case(self.owned(case_id))
+        try:
+            notify_guardian(self.uid, kind="status_changed", status=outcome,
+                case_id=case_id, event_id=result["event_id"])
+        except Exception:
+            pass
+        return result
 
     def cancel(self, case_id):
         """Guardian reports a mistaken case; never confuse with a Volunteer-confirmed reunification."""

@@ -191,7 +191,7 @@ abstract class AppLocalizations {
   /// No description provided for @brandFooter.
   ///
   /// In en, this message translates to:
-  /// **'Radd • Bringing People Back Together'**
+  /// **'Radd · Bringing People Back Together'**
   String get brandFooter;
 
   /// No description provided for @joinRadd.
@@ -2081,7 +2081,7 @@ abstract class AppLocalizations {
   /// No description provided for @activeCases.
   ///
   /// In en, this message translates to:
-  /// **'Active cases'**
+  /// **'Active Cases'**
   String get activeCases;
 
   /// No description provided for @noCases.
@@ -2273,7 +2273,7 @@ abstract class AppLocalizations {
   /// No description provided for @activeCase.
   ///
   /// In en, this message translates to:
-  /// **'Active case'**
+  /// **'Active Case'**
   String get activeCase;
 
   /// No description provided for @verificationExpires.
@@ -2401,6 +2401,294 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This report has already been submitted and can no longer be edited.'**
   String get reportAlreadySubmitted;
+
+  /// No description provided for @photoExpiredError.
+  ///
+  /// In en, this message translates to:
+  /// **'This photo has expired and can no longer be used. Take a new photo to continue.'**
+  String get photoExpiredError;
+
+  /// No description provided for @photoExpiredNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'This photo has expired and is no longer usable. Take a new photo before reporting this individual missing.'**
+  String get photoExpiredNotice;
+
+  /// No description provided for @updatePhotoRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Update Photo'**
+  String get updatePhotoRequired;
+
+  /// No description provided for @caseId.
+  ///
+  /// In en, this message translates to:
+  /// **'Case ID'**
+  String get caseId;
+
+  /// No description provided for @updatedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated'**
+  String get updatedLabel;
+
+  /// No description provided for @ageYears.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} yrs'**
+  String ageYears(String value);
+
+  /// No description provided for @caseHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Case History'**
+  String get caseHistory;
+
+  /// No description provided for @noActiveCasesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'No active cases right now.'**
+  String get noActiveCasesHint;
+
+  /// No description provided for @progressTimeline.
+  ///
+  /// In en, this message translates to:
+  /// **'Progress Timeline'**
+  String get progressTimeline;
+
+  /// No description provided for @stageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Stage {number}'**
+  String stageLabel(String number);
+
+  /// No description provided for @stageStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Stage {number}: {status}'**
+  String stageStatus(String number, String status);
+
+  /// No description provided for @activeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get activeLabel;
+
+  /// No description provided for @completedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get completedLabel;
+
+  /// No description provided for @statusUpdatesAutomatically.
+  ///
+  /// In en, this message translates to:
+  /// **'Status updates automatically'**
+  String get statusUpdatesAutomatically;
+
+  /// No description provided for @reportReceivedDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Your report has been received and active Volunteers have been notified.'**
+  String get reportReceivedDescription;
+
+  /// No description provided for @searchInProgressDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Volunteers are actively searching for the individual.'**
+  String get searchInProgressDescription;
+
+  /// No description provided for @matchConfirmedDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'A Volunteer has confirmed a match and will proceed to Guardian verification.'**
+  String get matchConfirmedDescription;
+
+  /// No description provided for @awaitingVerificationDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Show your Guardian Verification QR to the Volunteer to confirm your identity.'**
+  String get awaitingVerificationDescription;
+
+  /// No description provided for @reunitedDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'The individual has been safely reunited with you.'**
+  String get reunitedDescription;
+
+  /// No description provided for @outcomeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Outcome'**
+  String get outcomeLabel;
+
+  /// No description provided for @lastSeenLocationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Last-seen location'**
+  String get lastSeenLocationLabel;
+
+  /// No description provided for @currentLocationConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Current location confirmed'**
+  String get currentLocationConfirmed;
+
+  /// No description provided for @clothingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Clothing'**
+  String get clothingLabel;
+
+  /// No description provided for @distinctiveLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Distinctive item'**
+  String get distinctiveLabel;
+
+  /// No description provided for @additionalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Additional information'**
+  String get additionalLabel;
+
+  /// No description provided for @none.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get none;
+
+  /// No description provided for @detailsPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Report details have not been completed yet.'**
+  String get detailsPending;
+
+  /// No description provided for @reportedByGuardian.
+  ///
+  /// In en, this message translates to:
+  /// **'Reported by Guardian'**
+  String get reportedByGuardian;
+
+  /// No description provided for @todayJustNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Today • Just now'**
+  String get todayJustNow;
+
+  /// No description provided for @assistantIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Your missing-person report for {name} has been submitted. I\'ll ask a few quick questions to help Volunteers with the search.'**
+  String assistantIntro(String name);
+
+  /// No description provided for @locationHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Used to coordinate nearby Volunteers.'**
+  String get locationHint;
+
+  /// No description provided for @answersAutoSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Answers save automatically to active case'**
+  String get answersAutoSave;
+
+  /// No description provided for @typeAnswer.
+  ///
+  /// In en, this message translates to:
+  /// **'Type your answer…'**
+  String get typeAnswer;
+
+  /// No description provided for @send.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get send;
+
+  /// No description provided for @qrSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Show this code to the Volunteer for Guardian verification'**
+  String get qrSubtitle;
+
+  /// No description provided for @qrVerifiesAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'This QR code verifies that your authenticated Guardian account is associated with this case.'**
+  String get qrVerifiesAccount;
+
+  /// No description provided for @qrVerifiesAccountNoCase.
+  ///
+  /// In en, this message translates to:
+  /// **'This QR code verifies your authenticated Guardian account. It does not identify any missing individual.'**
+  String get qrVerifiesAccountNoCase;
+
+  /// No description provided for @selectActiveCase.
+  ///
+  /// In en, this message translates to:
+  /// **'Select Active Case'**
+  String get selectActiveCase;
+
+  /// No description provided for @scanInstruction.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask the Volunteer to scan this QR code using Radd.'**
+  String get scanInstruction;
+
+  /// No description provided for @cannotDisplayQr.
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t display the QR code?'**
+  String get cannotDisplayQr;
+
+  /// No description provided for @caseIdentifierInstruction.
+  ///
+  /// In en, this message translates to:
+  /// **'Show this identifier to the Volunteer for alternative verification.'**
+  String get caseIdentifierInstruction;
+
+  /// No description provided for @caseIdentifierUsage.
+  ///
+  /// In en, this message translates to:
+  /// **'Used to locate and verify the active case when the QR code cannot be displayed or scanned.'**
+  String get caseIdentifierUsage;
+
+  /// No description provided for @activeCaseIdentifier.
+  ///
+  /// In en, this message translates to:
+  /// **'Active case identifier'**
+  String get activeCaseIdentifier;
+
+  /// No description provided for @noActiveCaseQrNote.
+  ///
+  /// In en, this message translates to:
+  /// **'You have no active cases right now. Your Guardian QR remains valid for verification.'**
+  String get noActiveCaseQrNote;
+
+  /// No description provided for @qrRefreshing.
+  ///
+  /// In en, this message translates to:
+  /// **'Generating a new code…'**
+  String get qrRefreshing;
+
+  /// No description provided for @resetSentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your email'**
+  String get resetSentTitle;
+
+  /// No description provided for @backToLogin.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to Log In'**
+  String get backToLogin;
+
+  /// No description provided for @resendReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Send again'**
+  String get resendReset;
 }
 
 class _AppLocalizationsDelegate

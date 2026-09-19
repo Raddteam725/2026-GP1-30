@@ -21,40 +21,137 @@ String caseStatusLabel(String status, AppLocalizations s) => switch (status) {
   'transferred_to_authority' => s.transferredToAuthority,
   _ => s.unknownCaseStatus,
 };
+
+/// What the Guardian is told at each stage of the reunification path -- the
+/// wording under the emphasized (current) step of the progress timeline.
+String caseStageDescription(String status, AppLocalizations s) =>
+    switch (status) {
+      'report_received' => s.reportReceivedDescription,
+      'search_in_progress' => s.searchInProgressDescription,
+      'match_confirmed' => s.matchConfirmedDescription,
+      'awaiting_guardian_verification' => s.awaitingVerificationDescription,
+      'reunited' => s.reunitedDescription,
+      _ => s.caseClosedNotice,
+    };
+
 String caseDate(BuildContext context, DateTime? date) => date == null
     ? '—'
     : DateFormat.yMMMd(Localizations.localeOf(context).languageCode)
           .add_jm()
           .format(date.toLocal());
 
+/// Case identifiers are always presented with a leading '#', as in the
+/// approved design ("#RD-…"); the raw id is what the backend actually uses.
+String caseDisplayId(String id) => '#$id';
+
+/// The identifier for use INSIDE mixed-direction rich text (Arabic label +
+/// Latin id): Unicode isolates keep "#RD-…" reading left-to-right as a unit
+/// without affecting the surrounding paragraph. Widgets that show the id on
+/// its own use `textDirection: TextDirection.ltr` instead.
+String caseDisplayIdIsolated(String id) => '\u2066${caseDisplayId(id)}\u2069';
+
+/// 1-based position on the five-stage reunification path, or null for a
+/// terminal outcome that is not itself a stage (resolved/cancelled/...).
+int? caseStageNumber(String status) {
+  final index = caseStages.indexOf(status);
+  return index < 0 ? null : index + 1;
+}
+
+const mutedText = Color(0xFF718096);
+const _amberBackground = Color(0xFFFFF4D6);
+const _amberText = Color(0xFF9A6700);
+const _greyBackground = Color(0xFFEDF2F7);
+
+/// Amber for every in-progress stage, teal for a reunification, grey for the
+/// other terminal outcomes -- the one status vocabulary used on every screen.
 class StatusChip extends StatelessWidget {
-  const StatusChip({super.key, required this.status});
+  const StatusChip({
+    super.key,
+    required this.status,
+    this.withStageNumber = false,
+  });
   final String status;
+  final bool withStageNumber;
   @override
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
-    final terminal = terminalStatuses.contains(status) && status != 'reunited';
-    final color = status == 'reunited'
-        ? AppColors.secondary
-        : terminal
-        ? const Color(0xFF718096)
-        : AppColors.secondary;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: .1),
-        borderRadius: BorderRadius.circular(8),
+    final (background, foreground) = switch (status) {
+      'reunited' => (
+        AppColors.secondary.withValues(alpha: .12),
+        AppColors.secondary,
       ),
-      child: Text(
-        caseStatusLabel(status, s),
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
+      _ when terminalStatuses.contains(status) => (_greyBackground, mutedText),
+      _ => (_amberBackground, _amberText),
+    };
+    final stage = caseStageNumber(status);
+    final label = withStageNumber && stage != null
+        ? s.stageStatus('$stage', caseStatusLabel(status, s))
+        : caseStatusLabel(status, s);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: foreground == mutedText ? mutedText : AppColors.accent,
+              shape: BoxShape.circle,
+            ),
+            child: const SizedBox.square(dimension: 7),
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: foreground,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+/// Small navy-on-light identifier chip ("#RD-…"), as on Case Status.
+class CaseIdChip extends StatelessWidget {
+  const CaseIdChip({super.key, required this.id});
+  final String id;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(
+      color: _greyBackground,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Text(
+      caseDisplayId(id),
+      textDirection: TextDirection.ltr,
+      style: const TextStyle(
+        color: AppColors.primary,
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        letterSpacing: .3,
+      ),
+    ),
+  );
+}
+
+enum CaseCardStyle {
+  /// Home "Active Cases": amber outline, "Track Status" action.
+  home,
+
+  /// Cases list: teal accent bar on the leading edge, "View Status" action.
+  list,
 }
 
 class CaseCard extends StatelessWidget {
@@ -63,59 +160,214 @@ class CaseCard extends StatelessWidget {
     required this.value,
     required this.onTap,
     this.actionLabel,
+    this.style = CaseCardStyle.list,
   });
   final MissingCase value;
   final VoidCallback onTap;
   final String? actionLabel;
+  final CaseCardStyle style;
   @override
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
-    return GuardianPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              IndividualPhoto(id: value.individualId),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      value.name,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text('${s.age}: ${value.age}'),
-                    Text(value.id, textDirection: TextDirection.ltr),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          StatusChip(status: value.status),
-          const SizedBox(height: 12),
-          const Divider(height: 1),
-          const SizedBox(height: 12),
-          Text(
-            '${s.lastUpdated}: ${caseDate(context, value.updatedAt)}',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton(
-            onPressed: onTap,
-            child: Text(actionLabel ?? s.viewStatus),
+    final home = style == CaseCardStyle.home;
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: home && value.active
+              ? AppColors.accent.withValues(alpha: .7)
+              : AppColors.border.withValues(alpha: .7),
+          width: home && value.active ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: .025),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          // IntrinsicHeight: the accent bar stretches to the content's height
+          // even though the card sits in a list with unbounded height.
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (!home)
+                  Container(
+                    width: 5,
+                    color: value.active
+                        ? AppColors.secondary
+                        : AppColors.border,
+                  ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            IndividualPhoto(id: value.individualId, size: 56),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    value.name,
+                                    style: const TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    s.ageYears('${value.age}'),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: mutedText,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 170),
+                              child: StatusChip(status: value.status),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        // Full width: real identifiers are long (RD-…12 hex).
+                        Text.rich(
+                          TextSpan(
+                            text: '${s.caseId}: ',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: mutedText,
+                            ),
+                            children: [
+                              TextSpan(
+                                text: caseDisplayIdIsolated(value.id),
+                                style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        const Divider(height: 1),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.schedule,
+                              size: 16,
+                              color: mutedText,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                '${s.updatedLabel}: ${caseDate(context, value.updatedAt)}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: mutedText,
+                                ),
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: onTap,
+                              iconAlignment: IconAlignment.end,
+                              style: TextButton.styleFrom(
+                                foregroundColor: home
+                                    ? AppColors.primary
+                                    : AppColors.secondary,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                              ),
+                              icon: const Icon(
+                                Icons.arrow_forward_ios,
+                                size: 12,
+                              ),
+                              label: Text(
+                                actionLabel ?? s.viewStatus,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
+}
+
+/// The ONE Report Missing flow, shared by every entry point (Home, My
+/// Individuals, Individual Profile): confirmation -> real case creation on the
+/// backend (which is what triggers the initial Volunteer alert) -> the
+/// required Guided Assistant opens automatically. Returns true once a case
+/// exists for this individual so the caller can refresh its own state.
+/// Backend failures propagate to the caller, which surfaces them in place.
+Future<bool> startReportMissing(
+  BuildContext context,
+  Individual individual, {
+  ValueChanged<bool>? onBusy,
+}) async {
+  final s = AppLocalizations.of(context)!;
+  final confirmed = await guardianConfirmation(
+    context,
+    title: s.reportMissing,
+    message: '${s.reportConfirm}\n\n${individual.fullName}',
+    confirm: s.confirm,
+    icon: Icons.person_search_outlined,
+  );
+  if (confirmed != true || !context.mounted) return false;
+  // Busy only from here: the confirmation itself is not "in progress".
+  onBusy?.call(true);
+  try {
+    final value = await AppServices.of(context).guardian
+        .reportMissing(individual.id);
+    if (!context.mounted) return true;
+    await Navigator.of(context)
+        .pushNamed(AppRoutes.guidedReport, arguments: value.id);
+    return true;
+  } finally {
+    onBusy?.call(false);
+  }
+}
+
+enum ReportMissingVariant {
+  /// My Individuals card: compact red button / amber "Active Case" row.
+  list,
+
+  /// Individual Profile: large full-width red button.
+  profile,
+
+  /// Home grid card: a single small chip-style control.
+  chip,
 }
 
 class ReportMissingAction extends StatefulWidget {
@@ -124,10 +376,12 @@ class ReportMissingAction extends StatefulWidget {
     required this.individual,
     required this.onChanged,
     this.activeCase,
+    this.variant = ReportMissingVariant.list,
   });
   final Individual individual;
   final MissingCase? activeCase;
   final VoidCallback onChanged;
+  final ReportMissingVariant variant;
   @override
   State<ReportMissingAction> createState() => _ReportMissingActionState();
 }
@@ -136,108 +390,209 @@ class _ReportMissingActionState extends State<ReportMissingAction> {
   bool _busy = false;
   Object? _error;
   Future<void> _report() async {
-    final s = AppLocalizations.of(context)!;
-    final confirmed = await guardianConfirmation(
-      context,
-      title: s.reportMissing,
-      message: '${s.reportConfirm}\n\n${widget.individual.fullName}',
-      confirm: s.confirm,
-      icon: Icons.person_search_outlined,
-    );
-    if (confirmed != true || !mounted) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
+    if (_busy) return;
+    setState(() => _error = null);
     try {
-      final value = await AppServices.of(context).guardian
-          .reportMissing(widget.individual.id);
-      if (!mounted) return;
-      await Navigator.of(context)
-          .pushNamed(AppRoutes.guidedReport, arguments: value.id);
-      if (mounted) widget.onChanged();
+      final created = await startReportMissing(
+        context,
+        widget.individual,
+        onBusy: (busy) {
+          if (mounted) setState(() => _busy = busy);
+        },
+      );
+      if (created && mounted) widget.onChanged();
     } catch (e) {
-      if (mounted) setState(() => _error = e);
+      if (!mounted) return;
+      if (widget.variant == ReportMissingVariant.chip) {
+        // No room for an inline notice on the compact Home card.
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(failureMessage(e, AppLocalizations.of(context)!)),
+          ),
+        );
+      } else {
+        setState(() => _error = e);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _openCase(String id) async {
+    await Navigator.of(context).pushNamed(AppRoutes.caseStatus, arguments: id);
+    if (mounted) widget.onChanged();
+  }
+
+  Future<void> _updatePhoto() async {
+    await Navigator.of(context)
+        .pushNamed(AppRoutes.editIndividual, arguments: widget.individual);
+    if (mounted) widget.onChanged();
   }
 
   @override
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
     final activeId = widget.individual.activeCaseId;
-    final active = widget.activeCase;
+    if (widget.variant == ReportMissingVariant.chip) return _chip(s, activeId);
+    final profile = widget.variant == ReportMissingVariant.profile;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (activeId != null)
           InkWell(
             borderRadius: BorderRadius.circular(12),
-            onTap: () async {
-              await Navigator.of(context)
-                  .pushNamed(AppRoutes.caseStatus, arguments: activeId);
-              if (mounted) widget.onChanged();
-            },
+            onTap: () => _openCase(activeId),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.secondary.withValues(alpha: .1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      active == null
-                          ? s.activeCase
-                          : caseStatusLabel(active.status, s),
-                      style: const TextStyle(
-                        color: AppColors.secondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
+                  _ActiveCaseChip(label: s.activeCase),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      activeId,
-                      textDirection: TextDirection.ltr,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600,
+                    child: Text.rich(
+                      TextSpan(
+                        text: '${s.caseId} ',
+                        style: const TextStyle(color: mutedText, fontSize: 13),
+                        children: [
+                          TextSpan(
+                            text: caseDisplayIdIsolated(activeId),
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
+                      textAlign: TextAlign.end,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  const SizedBox(width: 4),
                   const Icon(
                     Icons.arrow_forward_ios,
-                    size: 14,
-                    color: AppColors.secondary,
+                    size: 12,
+                    color: mutedText,
                   ),
                 ],
               ),
             ),
           )
-        else
-          FilledButton.icon(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-            onPressed: _busy ? null : _report,
-            icon: _busy
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.person_search_outlined),
-            label: Text(s.reportMissing),
+        else if (widget.individual.photoExpired) ...[
+          Text(
+            s.photoExpiredNotice,
+            style: const TextStyle(color: AppColors.error, fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.error,
+              side: const BorderSide(color: AppColors.error),
+            ),
+            onPressed: _updatePhoto,
+            icon: const Icon(Icons.camera_alt_outlined),
+            label: Text(s.updatePhotoRequired),
+          ),
+        ] else
+          Align(
+            alignment: profile
+                ? Alignment.center
+                : AlignmentDirectional.centerStart,
+            child: SizedBox(
+              width: profile ? double.infinity : null,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.error,
+                  minimumSize: Size(0, profile ? 52 : 44),
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                ),
+                onPressed: _busy ? null : _report,
+                icon: _busy
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.person_search_outlined, size: 20),
+                label: Text(s.reportMissing),
+              ),
+            ),
           ),
         if (_error != null) ErrorNotice(message: failureMessage(_error!, s)),
       ],
     );
   }
+
+  Widget _chip(AppLocalizations s, String? activeId) {
+    if (activeId != null) {
+      return InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => _openCase(activeId),
+        child: _ActiveCaseChip(label: s.activeCase),
+      );
+    }
+    final expired = widget.individual.photoExpired;
+    final color = expired ? AppColors.error : AppColors.secondary;
+    return Semantics(
+      button: true,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: _busy ? null : (expired ? _updatePhoto : _report),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: .08),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color.withValues(alpha: .6)),
+          ),
+          child: _busy
+              ? const SizedBox.square(
+                  dimension: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(
+                  expired ? s.updatePhotoRequired : s.reportMissing,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActiveCaseChip extends StatelessWidget {
+  const _ActiveCaseChip({required this.label});
+  final String label;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    decoration: BoxDecoration(
+      color: _amberBackground,
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.accent,
+            shape: BoxShape.circle,
+          ),
+          child: SizedBox.square(dimension: 7),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            color: _amberText,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    ),
+  );
 }

@@ -5,6 +5,7 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from .firebase import identity, database, bucket
 from .events import active_event
 from .case_models import STAGES
+from .push import notify_guardian
 from .volunteer_workflow import VolunteerWorkflow, register_workflow, key
 
 JOINABLE = STAGES[:2]
@@ -69,6 +70,7 @@ class VolunteerService(VolunteerWorkflow):
         return doc
 
     def start_search(self, case_id):
+        push = {}
         @firestore.transactional
         def join(tx):
             doc = self.accessible(case_id, tx)
@@ -81,10 +83,25 @@ class VolunteerService(VolunteerWorkflow):
             # The document read participates in the transaction: conflicting writes retry.
             update = {'joined_by': [*joined, self.uid]}
             if data['status'] == 'report_received':
-                update.update(status='search_in_progress', updated_at=firestore.SERVER_TIMESTAMP)
-                update['stage_timestamps.search_in_progress'] = firestore.SERVER_TIMESTAMP
+                now = firestore.SERVER_TIMESTAMP
+                update.update(status='search_in_progress', updated_at=now)
+                update['stage_timestamps.search_in_progress'] = now
+                # The first Volunteer to start searching moves the case to
+                # Search in Progress -- a Guardian-visible status change, so
+                # the Guardian gets the same notification record (and push)
+                # as every other status update. Later joins change nothing
+                # the Guardian sees and notify nobody.
+                tx.set(self.db.collection('users').document(data['guardian_id']).collection('notifications').document(case_id + '-search_in_progress'),
+                    {'case_id': case_id, 'event_id': data['event_id'], 'kind': 'status_update', 'status': 'search_in_progress', 'created_at': now, 'read_at': None})
+                push.update(guardian_id=data['guardian_id'], event_id=data['event_id'])
             tx.update(doc.reference, update)
         join(self.db.transaction())
+        if push:
+            try:
+                notify_guardian(push['guardian_id'], kind='status_update', status='search_in_progress',
+                    case_id=case_id, event_id=push['event_id'])
+            except Exception:
+                pass
         return self.public(self.accessible(case_id))
 
     def photo(self, case_id):

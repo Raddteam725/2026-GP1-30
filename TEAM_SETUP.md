@@ -64,5 +64,7 @@ backend/.venv/Scripts/python -m pytest backend/tests -q -o cache_dir=backend/.py
 
 Each developer must also test the normal Android app against the real backend. In-memory unit tests do not prove cloud persistence. Camera tests require a working device/emulator camera source; no gallery alternative is provided.
 
+To exercise the Guardian screens for the Volunteer-driven stages (Search in Progress, Match Confirmed, Awaiting Guardian Verification, Reunited) before the Volunteer app is integrated, advance a real development-event case with `backend/scripts/dev_case_state.py` (see backend/README.md, "Development case-state command"). It writes the same canonical fields the Volunteer workflow writes and refuses non-development events.
+
 ## Team Git rules
 Work only on your feature branch. Preserve lateef-guardian-backup and existing stashes. Push only the feature branch without force; open a pull request for review. Do not automatically merge to main. Shared backend changes must be coordinated with the Volunteer owner.

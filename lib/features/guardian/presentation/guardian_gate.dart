@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/app_services.dart';
+import '../../../core/routing/app_routes.dart';
 import '../../auth/presentation/session_screen.dart';
+import '../data/guardian_push_service.dart';
 import '../data/guardian_repository.dart';
 
 /// Deep links remain protected; failed authorization returns to session recovery.
@@ -14,6 +16,7 @@ class GuardianGate extends StatefulWidget {
 
 class _GuardianGateState extends State<GuardianGate> {
   Future<GuardianProfile>? _profile;
+  bool _pushInitStarted = false;
   @override
   Widget build(BuildContext context) {
     final services = AppServices.of(context);
@@ -23,6 +26,7 @@ class _GuardianGateState extends State<GuardianGate> {
       builder: (context, auth) {
         if (auth.data != true) {
           _profile = null;
+          _pushInitStarted = false;
           return const SessionScreen();
         }
         _profile ??= services.guardian.profile().timeout(
@@ -38,6 +42,35 @@ class _GuardianGateState extends State<GuardianGate> {
             }
             if (profile.hasError) {
               return const SessionScreen(expectedRole: 'guardian');
+            }
+            // Authenticated with a complete Guardian profile: normal
+            // application state is now available, so this is the right
+            // moment to (idempotently) set up push and act on a
+            // notification tap that brought the Guardian here. Neither
+            // ever blocks or replaces rendering `widget.child` below --
+            // both are fire-and-forget.
+            final locale = Localizations.localeOf(context).languageCode;
+            if (!_pushInitStarted) {
+              _pushInitStarted = true;
+              GuardianPushService.initialize(services.guardian, locale).then((
+                _,
+              ) {
+                if (!mounted) return;
+                final caseId = GuardianPushRouter.consumePendingCaseId();
+                if (caseId != null) {
+                  Navigator.of(context)
+                      .pushNamed(AppRoutes.caseStatus, arguments: caseId);
+                }
+              });
+            } else {
+              // Push was already set up earlier in this session; this later
+              // build (e.g. a fresh /guardian/* route push, since GuardianGate
+              // is re-instantiated on every one) is the "next opportunity" to
+              // notice the Guardian changed Radd's language since then, and
+              // keep this installation's push language in sync -- without a
+              // restart, logout, or token rotation. Fire-and-forget, like
+              // initialize() above; never blocks or replaces widget.child.
+              GuardianPushService.syncLocale(services.guardian, locale);
             }
             return widget.child;
           },

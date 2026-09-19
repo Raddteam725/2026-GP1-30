@@ -2,12 +2,14 @@ import 'support/guardian_fakes.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:radd/app/app_services.dart';
 import 'package:radd/app/radd_app.dart';
 import 'package:radd/core/localization/generated/app_localizations.dart';
 import 'package:radd/core/routing/app_routes.dart';
 import 'package:radd/features/auth/presentation/auth_screen.dart';
 import 'package:radd/features/auth/presentation/form_validation.dart';
+import 'package:radd/features/guardian/data/guardian_push_service.dart';
 import 'package:radd/features/guardian/data/guardian_repository.dart';
 import 'package:radd/features/guardian/presentation/guardian_home_screen.dart';
 import 'package:radd/features/guardian/presentation/individual_form_screen.dart';
@@ -251,6 +253,38 @@ void main() {
     expect(find.text('No individuals registered yet'), findsOneWidget);
     expect(t.takeException(), isNull);
   });
+  testWidgets(
+    'An expired photo hides Report Missing until a new photo is captured',
+    (t) async {
+      await start(t);
+      auth.active = true;
+      repo.records.add(
+        const Individual(
+          id: 'test-id',
+          fullName: 'Test Person',
+          age: 7,
+          gender: 'female',
+          relationship: 'child',
+          photoExpired: true,
+        ),
+      );
+      await route(t, AppRoutes.guardian);
+      await tapText(t, 'Test Person');
+      await scrollToText(t, 'Update Photo');
+      expect(find.text('Report Missing'), findsNothing);
+      expect(find.text('Update Photo'), findsOneWidget);
+      await tapText(t, 'Update Photo');
+      expect(find.byType(IndividualFormScreen), findsOneWidget);
+      // The fake's own save() never carries photoExpired forward from an
+      // edit, standing in for a freshly captured photo restarting the
+      // 24-hour window server-side.
+      await t.enterText(find.byType(TextFormField).first, 'Test Person');
+      await tapText(t, 'Save Changes');
+      await scrollToText(t, 'Report Missing');
+      expect(find.text('Report Missing'), findsOneWidget);
+      expect(find.text('Update Photo'), findsNothing);
+    },
+  );
   testWidgets('Language remains accessible from the authenticated profile', (
     t,
   ) async {
@@ -285,9 +319,12 @@ void main() {
       }
       await tapText(t, 'QR Code');
       expect(find.byType(GuardianQrScreen), findsOneWidget);
-      await scrollToText(t, 'No cases are awaiting Guardian verification.');
+      // The account-level QR exists even with no active case at all.
+      expect(find.byType(QrImageView), findsOneWidget);
       expect(
-        find.text('No cases are awaiting Guardian verification.'),
+        find.text(
+          'You have no active cases right now. Your Guardian QR remains valid for verification.',
+        ),
         findsOneWidget,
       );
       Navigator.pop(t.element(find.byType(GuardianQrScreen)));
@@ -332,7 +369,8 @@ void main() {
     expect(find.byType(GuidedReportScreen), findsOneWidget);
     Navigator.pop(t.element(find.byType(GuidedReportScreen)));
     await t.pumpAndSettle();
-    expect(find.text('Report Received'), findsWidgets);
+    // The profile now carries the Active Case indicator with the real id.
+    expect(find.text('Active Case'), findsWidgets);
     expect(find.textContaining('RD-TEST'), findsWidgets);
   });
   testWidgets(
@@ -388,6 +426,32 @@ void main() {
     await t.pumpAndSettle();
     expect(t.takeException(), isNull);
   });
+  testWidgets(
+    'A foreground push refreshes Notifications without a manual refresh',
+    (t) async {
+      await start(t);
+      auth.active = true;
+      await route(t, AppRoutes.notifications);
+      expect(find.byType(NotificationsScreen), findsOneWidget);
+      expect(find.text('No notifications yet'), findsOneWidget);
+      // The push payload itself is never trusted for data -- this only
+      // stands in for "a push arrived", exactly like GuardianPushService's
+      // real onMessage listener does; the screen must go re-fetch itself.
+      repo.notificationRecords.add(
+        GuardianNotification(
+          id: 'n1',
+          caseId: 'RD-1',
+          status: 'report_received',
+          read: false,
+          createdAt: DateTime.now().toUtc(),
+        ),
+      );
+      GuardianPushRefresh.instance.ping();
+      await t.pumpAndSettle();
+      expect(find.text('No notifications yet'), findsNothing);
+      expect(t.takeException(), isNull);
+    },
+  );
   testWidgets('Refresh on Case Status never passes a Future to setState', (
     t,
   ) async {
@@ -408,7 +472,99 @@ void main() {
     await t.tap(find.byIcon(Icons.refresh));
     await t.pumpAndSettle();
     expect(t.takeException(), isNull);
+    // Dispose the screen so its background status-poll timer is cancelled
+    // before the test ends (an outstanding Timer otherwise fails teardown).
+    Navigator.pop(t.element(find.byType(CaseStatusScreen)));
+    await t.pumpAndSettle();
   });
+  testWidgets(
+    'Case Status reflects a Volunteer-driven change without a manual refresh',
+    (t) async {
+      await start(t);
+      auth.active = true;
+      repo.records.add(
+        const Individual(
+          id: 'test-id',
+          fullName: 'Test Person',
+          age: 7,
+          gender: 'female',
+          relationship: 'child',
+        ),
+      );
+      final case1 = await repo.reportMissing('test-id');
+      await route(t, AppRoutes.caseStatus, arguments: case1.id);
+      expect(find.byType(CaseStatusScreen), findsOneWidget);
+      expect(find.text('Report Received'), findsWidgets);
+      // The Guardian never taps refresh here -- this mutation stands in for
+      // a Volunteer selecting "Start Search" from their own device.
+      repo.caseRecords
+        ..removeWhere((c) => c.id == case1.id)
+        ..add(
+          MissingCase(
+            id: case1.id,
+            individualId: case1.individualId,
+            name: case1.name,
+            age: case1.age,
+            status: 'search_in_progress',
+            eventId: case1.eventId,
+            createdAt: case1.createdAt,
+            updatedAt: DateTime.now().toUtc(),
+            stages: {
+              ...case1.stages,
+              'search_in_progress': DateTime.now().toUtc().toIso8601String(),
+            },
+          ),
+        );
+      await t.pump(const Duration(seconds: 9));
+      await t.pump();
+      expect(find.text('Search in Progress'), findsWidgets);
+      Navigator.pop(t.element(find.byType(CaseStatusScreen)));
+      await t.pumpAndSettle();
+    },
+  );
+  testWidgets(
+    'A foreground push refreshes Case Status without waiting for the poll',
+    (t) async {
+      await start(t);
+      auth.active = true;
+      repo.records.add(
+        const Individual(
+          id: 'test-id',
+          fullName: 'Test Person',
+          age: 7,
+          gender: 'female',
+          relationship: 'child',
+        ),
+      );
+      final case1 = await repo.reportMissing('test-id');
+      await route(t, AppRoutes.caseStatus, arguments: case1.id);
+      expect(find.text('Report Received'), findsWidgets);
+      repo.caseRecords
+        ..removeWhere((c) => c.id == case1.id)
+        ..add(
+          MissingCase(
+            id: case1.id,
+            individualId: case1.individualId,
+            name: case1.name,
+            age: case1.age,
+            status: 'search_in_progress',
+            eventId: case1.eventId,
+            createdAt: case1.createdAt,
+            updatedAt: DateTime.now().toUtc(),
+            stages: {
+              ...case1.stages,
+              'search_in_progress': DateTime.now().toUtc().toIso8601String(),
+            },
+          ),
+        );
+      // No 8-second wait this time -- a foreground push arrives instead.
+      GuardianPushRefresh.instance.ping();
+      await t.pumpAndSettle();
+      expect(find.text('Search in Progress'), findsWidgets);
+      Navigator.pop(t.element(find.byType(CaseStatusScreen)));
+      await t.pumpAndSettle();
+    },
+  );
   testWidgets('Refresh on the QR screen never passes a Future to setState', (
     t,
   ) async {
@@ -461,8 +617,8 @@ void main() {
       ),
     );
     expect(deleteButton.onPressed, isNull);
-    expect(find.text('Report Received'), findsWidgets);
-    await tapText(t, 'RD-TEST1');
+    expect(find.textContaining('#RD-TEST1'), findsWidgets);
+    await tapText(t, 'Active Case');
     await t.pumpAndSettle();
     expect(find.byType(CaseStatusScreen), findsOneWidget);
     await scrollToText(t, 'Cancel Report');
@@ -482,6 +638,135 @@ void main() {
     await scrollToText(t, 'Report Missing');
     expect(find.text('Report Missing'), findsWidgets);
   });
+  testWidgets('Forgot Password performs the real reset request and shows one '
+      'confirmation regardless of whether the account exists', (t) async {
+    await start(t);
+    await route(t, AppRoutes.forgotPassword);
+    await t.enterText(find.byType(TextFormField).first, 'someone@example.test');
+    await tapText(t, 'Send Reset Instructions');
+    // The request actually reached the authentication service...
+    expect(auth.resetRequests, ['someone@example.test']);
+    // ...and the confirmation never reveals whether that email is registered.
+    expect(find.text('Check your email'), findsOneWidget);
+    expect(
+      find.text(
+        'If an account exists for this email, password reset instructions will be sent.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Send Reset Instructions'), findsNothing);
+    await tapText(t, 'Send again');
+    expect(find.text('Send Reset Instructions'), findsOneWidget);
+    await tapText(t, 'Send Reset Instructions');
+    expect(auth.resetRequests, hasLength(2));
+    await tapText(t, 'Back to Log In');
+    expect(find.byType(AuthScreen), findsNothing);
+  });
+  testWidgets(
+    'Home shows compact individual cards whose state control reports or '
+    'tracks the real case',
+    (t) async {
+      await start(t);
+      auth.active = true;
+      repo.records.add(
+        const Individual(
+          id: 'test-id',
+          fullName: 'Test Person',
+          age: 7,
+          gender: 'female',
+          relationship: 'child',
+        ),
+      );
+      await route(t, AppRoutes.guardian);
+      expect(find.text('Age: 7'), findsOneWidget);
+      expect(find.text('Active Case'), findsNothing);
+      await tapText(t, 'Report Missing');
+      await tapText(t, 'Confirm');
+      await t.pumpAndSettle();
+      expect(repo.caseRecords, hasLength(1));
+      Navigator.pop(t.element(find.byType(GuidedReportScreen)));
+      await t.pumpAndSettle();
+      // The card now carries the Active Case chip; the Home "Active Cases"
+      // section lists the real case with its id and Track Status action.
+      expect(find.text('Report Missing'), findsNothing);
+      expect(find.text('Active Case'), findsWidgets);
+      await scrollToText(t, 'Track Status');
+      expect(find.textContaining('#RD-TEST1'), findsWidgets);
+      await tapText(t, 'Track Status');
+      expect(find.byType(CaseStatusScreen), findsOneWidget);
+      Navigator.pop(t.element(find.byType(CaseStatusScreen)));
+      await t.pumpAndSettle();
+    },
+  );
+  testWidgets(
+    'Cases screen keeps closed cases out of the active count, as history',
+    (t) async {
+      await start(t);
+      auth.active = true;
+      repo.records.addAll([
+        const Individual(
+          id: 'a',
+          fullName: 'Person A',
+          age: 7,
+          gender: 'female',
+          relationship: 'child',
+        ),
+        const Individual(
+          id: 'b',
+          fullName: 'Person B',
+          age: 9,
+          gender: 'male',
+          relationship: 'child',
+        ),
+      ]);
+      await repo.reportMissing('a');
+      final closed = await repo.reportMissing('b');
+      await repo.cancelCase(closed.id);
+      await route(t, AppRoutes.cases);
+      expect(find.text('ACTIVE CASES'), findsOneWidget);
+      expect(find.text('CASE HISTORY'), findsOneWidget);
+      expect(find.text('1'), findsWidgets);
+      expect(find.text('Cancelled'), findsOneWidget);
+      expect(find.text('Report Received'), findsOneWidget);
+    },
+  );
+  testWidgets(
+    'QR screen shows the account QR with the selected active case context '
+    'and its case-specific identifier',
+    (t) async {
+      await start(t);
+      auth.active = true;
+      repo.records.add(
+        const Individual(
+          id: 'test-id',
+          fullName: 'Test Person',
+          age: 7,
+          gender: 'female',
+          relationship: 'child',
+        ),
+      );
+      final case1 = await repo.reportMissing('test-id');
+      await route(t, AppRoutes.qrCode);
+      expect(find.byType(QrImageView), findsOneWidget);
+      expect(find.text('Test Person'), findsWidgets);
+      expect(find.text('Stage 1: Report Received'), findsOneWidget);
+      await scrollToText(
+        t,
+        'This QR code verifies that your authenticated Guardian account is associated with this case.',
+      );
+      expect(
+        find.text(
+          'This QR code verifies that your authenticated Guardian account is associated with this case.',
+        ),
+        findsOneWidget,
+      );
+      await tapText(t, 'Show Case Identifier');
+      expect(find.text('ACTIVE CASE IDENTIFIER'), findsOneWidget);
+      expect(find.textContaining(case1.id), findsWidgets);
+      await tapText(t, 'Close');
+      expect(find.text('ACTIVE CASE IDENTIFIER'), findsNothing);
+    },
+  );
   for (final locale in ['en', 'ar']) {
     testWidgets(
       'Guardian forms scroll without overflow at large text in $locale',

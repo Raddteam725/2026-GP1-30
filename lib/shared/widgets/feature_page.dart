@@ -87,6 +87,7 @@ String failureMessage(Object error, AppLocalizations s) =>
       'activeCase' => s.activeCaseError,
       'caseClosed' => s.caseClosedActionError,
       'reportAlreadySubmitted' => s.reportAlreadySubmitted,
+      'photoExpired' => s.photoExpiredError,
       'password' => s.passwordHelp,
       'validation' => s.validationError,
       'unauthorized' => s.sessionExpired,

@@ -8,6 +8,7 @@ from uuid import uuid4
 from PIL import Image, ImageOps, UnidentifiedImageError
 from fastapi import HTTPException
 from firebase_admin import firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 from .firebase import database, bucket
 from .events import active_event
 
@@ -30,11 +31,26 @@ def ensure_deletable(data):
     if data.get("active_case_id"):
         raise HTTPException(409, detail="active_case")
 
+# Independent of any event/case timer: a registered individual's photo is only
+# ever "current" for exactly 24 hours from its own capture time (Firestore's
+# server clock, never a client-supplied value -- see save()/photo_expired()).
+PHOTO_FRESHNESS = timedelta(hours=24)
+
+def photo_expired(data):
+    captured = data.get("photo_captured_at")
+    # No authoritative capture time on record (never captured, or pre-dates
+    # this field) is treated as expired -- freshness is never assumed absent
+    # server-stamped proof.
+    if not isinstance(captured, datetime):
+        return True
+    return datetime.now(timezone.utc) - captured >= PHOTO_FRESHNESS
+
 def public_individual(doc):
     data = doc.to_dict()
     return {**{k: data[k] for k in ("full_name", "age", "gender", "relationship")},
         "relationship_other": data.get("relationship_other"),
-        "id": doc.id, "active_case_id": data.get("active_case_id")}
+        "id": doc.id, "active_case_id": data.get("active_case_id"),
+        "photo_expired": photo_expired(data)}
 
 def normalize_photo(encoded):
     try:
@@ -101,6 +117,55 @@ class GuardianService:
         return {"payload": "radd:guardian-verification:v1:" + self.uid + ":" + nonce,
             "expires_at": expires}
 
+    def register_fcm_token(self, token, locale="en"):
+        # A Guardian-owned SUBcollection, not an array field on the account
+        # doc: each app installation gets its own document, so one can be
+        # removed (see app.push.notify_guardian's UnregisteredError handling)
+        # or refreshed without touching any other installation's registration.
+        # The doc ID is derived from the token itself (never client-supplied)
+        # so re-uploading the SAME token is inherently idempotent -- it always
+        # resolves to the same document instead of accumulating duplicates.
+        # `locale` is this installation's own current in-app language (never
+        # the device's system locale) -- only ever "en"/"ar" (Radd's own
+        # supported languages), used solely to pick which of two fixed,
+        # generic, pre-translated strings the visible notification uses.
+        self.profile()
+        doc_id = hashlib.sha256(token.encode()).hexdigest()
+        # Defense-in-depth against a cross-account leak if a PREVIOUS
+        # logout's best-effort cleanup never reached the server (e.g. this
+        # device was offline at logout time, or the app was killed without a
+        # clean sign-out): this same installation registering again -- which
+        # must happen for ANY guardian to receive pushes on it -- sweeps away
+        # any OTHER guardian's registration for this exact token first, so a
+        # token is never simultaneously live under two guardians. A second
+        # legitimate device (a different token) is never touched by this.
+        for other in self.db.collection("users").where(filter=FieldFilter("role", "==", "guardian")).stream():
+            if other.id == self.uid:
+                continue
+            stale = other.reference.collection("fcm_registrations").document(doc_id).get()
+            if stale.exists and stale.to_dict().get("token") == token:
+                stale.reference.delete()
+        ref = self.user.collection("fcm_registrations").document(doc_id)
+        @firestore.transactional
+        def upsert(tx):
+            existing = ref.get(transaction=tx)
+            data = {"token": token, "locale": locale, "updated_at": firestore.SERVER_TIMESTAMP}
+            if not existing.exists:
+                data["created_at"] = firestore.SERVER_TIMESTAMP
+            tx.set(ref, data, merge=True)
+        upsert(self.db.transaction())
+        return {"registered": True}
+
+    def unregister_fcm_token(self, token):
+        # Always scoped to the CALLER's own subcollection (self.user) -- there
+        # is no way to target another guardian's registration through this or
+        # any other endpoint. Deleting an already-absent document is a no-op,
+        # so this is safe to call repeatedly (e.g. a retried logout).
+        self.profile()
+        doc_id = hashlib.sha256(token.encode()).hexdigest()
+        self.user.collection("fcm_registrations").document(doc_id).delete()
+        return {"unregistered": True}
+
     def save_profile(self, value, create=False):
         if self.token.get("role") not in (None, "guardian"):
             raise HTTPException(403, detail="guardian_required")
@@ -137,7 +202,12 @@ class GuardianService:
 
     def photo(self, item_id):
         doc = self.get(item_id)
-        return bucket().blob(doc.to_dict()["photo_path"]).download_as_bytes()
+        data = doc.to_dict()
+        # A photo past its own 24-hour freshness window is never served, even
+        # if the sweep job (see cleanup.expire_photos) has not yet run for it.
+        if not data.get("photo_path") or photo_expired(data):
+            raise HTTPException(404, detail="photo_expired")
+        return bucket().blob(data["photo_path"]).download_as_bytes()
 
     def cleanup(self, path):
         if not path:
@@ -182,6 +252,9 @@ class GuardianService:
             data.update(guardian_id=self.uid, updated_at=firestore.SERVER_TIMESTAMP)
             if new_path:
                 data["photo_path"] = new_path
+                # A freshly captured photo always restarts its own 24-hour
+                # window -- independent of the individual's case/event history.
+                data["photo_captured_at"] = firestore.SERVER_TIMESTAMP
             if existing is None:
                 data["created_at"] = firestore.SERVER_TIMESTAMP
                 data["event_id"] = event.id

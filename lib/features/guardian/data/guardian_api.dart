@@ -15,6 +15,7 @@ const _detailFailures = {
   'active_case': 'activeCase',
   'case_closed': 'caseClosed',
   'report_already_submitted': 'reportAlreadySubmitted',
+  'photo_expired': 'photoExpired',
 };
 
 class GuardianApi implements GuardianRepository {
@@ -204,4 +205,24 @@ class GuardianApi implements GuardianRepository {
   Future<MissingCase> resolveCase(String id) async => MissingCase.fromJson(
     _json(await _request('POST', '/cases/${Uri.encodeComponent(id)}/resolve')),
   );
+  @override
+  Future<void> registerFcmToken(String token, String locale) async {
+    // The token itself is the whole point of this request; never logged
+    // (this call goes through the same _request as everything else, which
+    // logs nothing about request bodies).
+    await _request(
+      'PUT',
+      '/guardian/fcm-registrations',
+      body: {'token': token, 'locale': locale},
+    );
+  }
+
+  @override
+  Future<void> unregisterFcmToken(String token) async {
+    await _request(
+      'POST',
+      '/guardian/fcm-registrations/unregister',
+      body: {'token': token},
+    );
+  }
 }

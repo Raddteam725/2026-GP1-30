@@ -10,6 +10,7 @@ from .firebase import bucket
 from .events import active_event
 from .service import normalize_photo
 from .case_models import STAGES
+from .push import notify_guardian
 
 class FoundInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -23,6 +24,12 @@ class MatchInput(BaseModel):
 class VerifyInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     payload: str = Field(min_length=1, max_length=1024)
+
+class IdentifierVerifyInput(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    # The case identifier the Guardian displays from their signed-in Radd
+    # account ("#RD-…" as shown, or the bare id), typed/compared by the Volunteer.
+    case_id: str = Field(min_length=1, max_length=128, pattern=r'^[^/]+$')
 
 def key(doc):
     return hashlib.sha256(doc.reference.path.encode()).hexdigest()
@@ -182,6 +189,7 @@ class VolunteerWorkflow:
             return self.public_found(found)
         person_ref = self.registration(profile_id).reference
         new_case = self.cases.document('RD-' + secrets.token_hex(6).upper())
+        push = {}
         @firestore.transactional
         def confirm(tx):
             report = self.found_owned(report_id, tx)
@@ -222,7 +230,16 @@ class VolunteerWorkflow:
                     {'case_id': ref.id, 'event_id': rd['event_id'], 'kind': 'status_update', 'status': 'match_confirmed', 'created_at': now, 'read_at': None})
             tx.set(self.db.collection('users').document(pd['guardian_id']).collection('notifications').document(ref.id + '-match_confirmed'),
                 {'case_id': ref.id, 'event_id': rd['event_id'], 'kind': 'status_update', 'status': 'match_confirmed', 'created_at': now, 'read_at': None})
+            push.update(guardian_id=pd['guardian_id'], case_id=ref.id, event_id=rd['event_id'])
         confirm(self.db.transaction())
+        if push:
+            # Guardian-side push only -- this is not the Volunteer alert/radius
+            # contract (alerts.py), which this task does not touch.
+            try:
+                notify_guardian(push['guardian_id'], kind='status_update', status='match_confirmed',
+                    case_id=push['case_id'], event_id=push['event_id'])
+            except Exception:
+                pass
         return self.public_found(self.found_owned(report_id))
 
     def confirmed_case(self, report_id, tx=None):
@@ -236,17 +253,57 @@ class VolunteerWorkflow:
         return case
 
     def begin_verification(self, report_id):
+        push = {}
         @firestore.transactional
         def begin(tx):
             case = self.confirmed_case(report_id, tx)
-            if case.to_dict()['status'] == 'awaiting_guardian_verification':
+            cd = case.to_dict()
+            if cd['status'] == 'awaiting_guardian_verification':
                 return
-            if case.to_dict()['status'] != 'match_confirmed':
+            if cd['status'] != 'match_confirmed':
                 raise HTTPException(409, detail='invalid_transition')
-            tx.update(case.reference, {'status': 'awaiting_guardian_verification', 'updated_at': firestore.SERVER_TIMESTAMP,
-                'stage_timestamps.awaiting_guardian_verification': firestore.SERVER_TIMESTAMP})
+            now = firestore.SERVER_TIMESTAMP
+            tx.update(case.reference, {'status': 'awaiting_guardian_verification', 'updated_at': now,
+                'stage_timestamps.awaiting_guardian_verification': now})
+            # The Guardian must know to open their QR now: same notification
+            # record shape as every other Guardian status update.
+            tx.set(self.db.collection('users').document(cd['guardian_id']).collection('notifications').document(case.id + '-awaiting_guardian_verification'),
+                {'case_id': case.id, 'event_id': cd['event_id'], 'kind': 'status_update', 'status': 'awaiting_guardian_verification', 'created_at': now, 'read_at': None})
+            push.update(guardian_id=cd['guardian_id'], case_id=case.id, event_id=cd['event_id'])
         begin(self.db.transaction())
+        if push:
+            try:
+                notify_guardian(push['guardian_id'], kind='status_update', status='awaiting_guardian_verification',
+                    case_id=push['case_id'], event_id=push['event_id'])
+            except Exception:
+                pass
         return self.public_found(self.found_owned(report_id))
+
+    def verify_guardian_identifier(self, report_id, case_id):
+        # CASE-SPECIFIC alternative for when the Guardian's QR cannot be shown
+        # or scanned: the Volunteer compares the identifier the Guardian
+        # displays from their signed-in Radd account with this Volunteer's OWN
+        # current case. Recorded distinctly (method=case_identifier, never qr)
+        # so the handover record always says how the Guardian was verified;
+        # a mismatch records nothing and can never touch any other case.
+        presented = case_id.strip().lstrip('#').upper()
+        @firestore.transactional
+        def verify(tx):
+            case = self.confirmed_case(report_id, tx)
+            cd = case.to_dict()
+            if cd['status'] != 'awaiting_guardian_verification':
+                raise HTTPException(409, detail='invalid_transition')
+            receipt = cd.get('guardian_verification') or {}
+            if receipt.get('volunteer_uid') == self.uid and receipt.get('method') == 'case_identifier':
+                return True  # Same-device lost-response retry.
+            if presented != case.id.upper():
+                tx.update(case.reference, {'guardian_verification': None})
+                return False
+            now = firestore.SERVER_TIMESTAMP
+            tx.update(case.reference, {'guardian_verification': {'method': 'case_identifier', 'volunteer_uid': self.uid,
+                'guardian_id': cd['guardian_id'], 'case_id': case.id, 'verified_at': now}, 'updated_at': now})
+            return True
+        return {'verified': verify(self.db.transaction()), 'report': self.public_found(self.found_owned(report_id))}
 
     def verify_guardian(self, report_id, payload):
         # The QR is Guardian-account-level, not per-case: the payload names WHICH
@@ -288,6 +345,7 @@ class VolunteerWorkflow:
         return {'verified': verify(self.db.transaction()), 'report': self.public_found(self.found_owned(report_id))}
 
     def handover_found(self, report_id):
+        push = {}
         @firestore.transactional
         def handover(tx):
             case = self.confirmed_case(report_id, tx)
@@ -296,7 +354,9 @@ class VolunteerWorkflow:
             proof = cd.get('guardian_verification') or {}
             if cd['status'] == 'reunited' and cd.get('handed_over_by') == self.uid:
                 return
-            if cd['status'] != 'awaiting_guardian_verification' or proof.get('method') != 'qr' or proof.get('volunteer_uid') != self.uid or proof.get('case_id') != case.id or proof.get('guardian_id') != cd['guardian_id']:
+            # Either verification method authorizes handover; the recorded
+            # method itself is retained on the case for the handover record.
+            if cd['status'] != 'awaiting_guardian_verification' or proof.get('method') not in ('qr', 'case_identifier') or proof.get('volunteer_uid') != self.uid or proof.get('case_id') != case.id or proof.get('guardian_id') != cd['guardian_id']:
                 raise HTTPException(409, detail='guardian_verification_required')
             now = firestore.SERVER_TIMESTAMP
             tx.update(case.reference, {'status': 'reunited', 'updated_at': now, 'stage_timestamps.reunited': now,
@@ -305,7 +365,14 @@ class VolunteerWorkflow:
                 tx.update(person.reference, {'active_case_id': None, 'updated_at': now})
             tx.set(self.db.collection('users').document(cd['guardian_id']).collection('notifications').document(case.id + '-reunited'),
                 {'case_id': case.id, 'event_id': cd['event_id'], 'kind': 'status_update', 'status': 'reunited', 'created_at': now, 'read_at': None})
+            push.update(guardian_id=cd['guardian_id'], case_id=case.id, event_id=cd['event_id'])
         handover(self.db.transaction())
+        if push:
+            try:
+                notify_guardian(push['guardian_id'], kind='status_update', status='reunited',
+                    case_id=push['case_id'], event_id=push['event_id'])
+            except Exception:
+                pass
         return self.public_found(self.found_owned(report_id))
 
     def notifications_list(self):
@@ -385,6 +452,9 @@ def register_workflow(router, service):
     @router.post('/found-reports/{report_id}/verify')
     def verify(report_id: str, value: VerifyInput, s=Depends(service)):
         return s.verify_guardian(report_id, value.payload)
+    @router.post('/found-reports/{report_id}/verify-identifier')
+    def verify_identifier(report_id: str, value: IdentifierVerifyInput, s=Depends(service)):
+        return s.verify_guardian_identifier(report_id, value.case_id)
     @router.post('/found-reports/{report_id}/handover')
     def handover(report_id: str, s=Depends(service)):
         return s.handover_found(report_id)
