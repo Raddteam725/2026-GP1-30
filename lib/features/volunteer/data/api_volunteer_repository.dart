@@ -344,7 +344,9 @@ class ApiVolunteerRepository extends VolunteerRepository {
         caseId: data['case_id'] as String,
         guardianId: proof['guardian_id'] as String,
         volunteerUid: proof['volunteer_uid'] as String,
-        method: VerificationMethod.qr,
+        method: proof['method'] == 'case_identifier'
+            ? VerificationMethod.caseIdentifier
+            : VerificationMethod.qr,
         at: DateTime.parse(proof['verified_at'] as String),
       );
     }
@@ -526,12 +528,20 @@ class ApiVolunteerRepository extends VolunteerRepository {
     String value, {
     bool authenticatedAccountShown = false,
   }) async {
-    if (method != VerificationMethod.qr) throw StateError('qr-required');
+    if (method == VerificationMethod.caseIdentifier &&
+        !authenticatedAccountShown) {
+      throw StateError('guardian-account-required');
+    }
+    final action = method == VerificationMethod.qr
+        ? 'verify'
+        : 'verify-identifier';
     final data = jsonDecode(
       (await _request(
         'POST',
-        '/found-reports/${report.id}/verify',
-        body: {'payload': value},
+        '/found-reports/${report.id}/$action',
+        body: method == VerificationMethod.qr
+            ? {'payload': value}
+            : {'case_id': value},
       )).body,
     ) as Map<String, dynamic>;
     _updateReport(report, data['report'] as Map<String, dynamic>);

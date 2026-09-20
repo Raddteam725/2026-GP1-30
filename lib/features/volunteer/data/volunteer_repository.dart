@@ -17,8 +17,12 @@ abstract class VolunteerRepository extends ChangeNotifier {
         (c) => c.joinable ? c.joinedBy.contains(uid) : c.confirmedBy == uid,
       )
       .toList();
-  List<RegisteredPerson> get reviewableProfiles => profiles.where((person) =>
-      !cases.any((item) => item.person.id == person.id && !item.joinable)).toList();
+  List<RegisteredPerson> get reviewableProfiles => profiles
+      .where(
+        (person) =>
+            !cases.any((item) => item.person.id == person.id && !item.joinable),
+      )
+      .toList();
 
   VolunteerCase? caseForPerson(String personId) {
     for (final item in cases) {

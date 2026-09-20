@@ -75,6 +75,7 @@ class FeaturePage extends StatelessWidget {
 
 String failureMessage(Object error, AppLocalizations s) =>
     switch (error is AppFailure ? error.code : 'service') {
+      'eventUnavailable' => s.eventUnavailable,
       'profilePending' => s.sessionUnavailable,
       'credentials' => s.invalidCredentials,
       'emailExists' => s.emailExists,
@@ -83,6 +84,10 @@ String failureMessage(Object error, AppLocalizations s) =>
       'role' => s.roleError,
       'notFound' => s.notFoundError,
       'conflict' => s.activeCaseError,
+      'activeCase' => s.activeCaseError,
+      'caseClosed' => s.caseClosedActionError,
+      'reportAlreadySubmitted' => s.reportAlreadySubmitted,
+      'photoExpired' => s.photoExpiredError,
       'password' => s.passwordHelp,
       'validation' => s.validationError,
       'unauthorized' => s.sessionExpired,

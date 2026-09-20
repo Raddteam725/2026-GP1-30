@@ -8,7 +8,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app import volunteer, service
+from app import volunteer, service, push
 from app.main import app
 from app.firebase import identity
 from app.cases import CaseService
@@ -49,6 +49,9 @@ def db(monkeypatch):
     monkeypatch.setattr(service, 'database', lambda: db)
     monkeypatch.setattr(service, 'bucket', lambda: storage)
     monkeypatch.setattr(volunteer, 'bucket', lambda: storage)
+    # confirm()/handover_found() (app.volunteer_workflow) fire a best-effort
+    # Guardian push via app.push, a separate `database` binding of its own.
+    monkeypatch.setattr(push, 'database', lambda: db)
     def transactional(fn):
         def run(tx):
             with tx.lock:

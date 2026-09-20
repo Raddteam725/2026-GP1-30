@@ -7,6 +7,7 @@ import '../../../core/localization/generated/app_localizations.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../shared/widgets/feature_page.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../guardian/data/guardian_push_service.dart';
 import '../../guardian/data/guardian_repository.dart';
 
 /// Resolves identity, then the server-owned role, then the role's profile.
@@ -107,9 +108,15 @@ class _SessionScreenState extends State<SessionScreen> {
 
   Future<void> _signOut() async {
     if (_loading) return;
+    final services = AppServices.of(context);
     setState(() => _loading = true);
     try {
-      await AppServices.of(context).auth.logout();
+      // Must happen before signing out -- it needs this account's still-valid
+      // ID token to authorize removing this installation's own registration.
+      // A no-op if this was never a Guardian session with push set up; never
+      // throws, so it can't turn a normal sign-out into a failed one.
+      await GuardianPushService.handleLogout(services.guardian);
+      await services.auth.logout();
       if (mounted) _onboarding();
     } catch (_) {
       if (mounted) {

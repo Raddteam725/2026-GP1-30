@@ -119,13 +119,6 @@ class _EditGuardianProfileScreenState extends State<EditGuardianProfileScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    s.emailReadOnly,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF718096),
-                    ),
-                  ),
                 ],
               ),
             ),

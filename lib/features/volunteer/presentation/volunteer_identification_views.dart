@@ -751,22 +751,17 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
       onPressed: _busy ? null : _scanPreview,
     ),
     const SizedBox(height: 24),
-    Text(
-      repo.isPreview ? s.vUnableScan : s.vQrRequired,
-      textAlign: TextAlign.center,
-    ),
+    Text(s.vUnableScan, textAlign: TextAlign.center),
     const SizedBox(height: 12),
     VolunteerAction(
       s.vUseIdentifier,
       icon: Icons.pin_outlined,
       secondary: true,
-      onPressed: !repo.isPreview
-          ? null
-          : () {
-              _identifier.clear();
-              _authenticatedShown = false;
-              _open(VolunteerView.identifier);
-            },
+      onPressed: () {
+        _identifier.clear();
+        _authenticatedShown = false;
+        _open(VolunteerView.identifier);
+      },
     ),
   ];
   Future<void> _scanPreview() async {
@@ -915,13 +910,11 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
       s.vUseIdentifier,
       secondary: true,
       icon: Icons.pin_outlined,
-      onPressed: !repo.isPreview
-          ? null
-          : () {
-              _identifier.clear();
-              _authenticatedShown = false;
-              _replace(VolunteerView.identifier);
-            },
+      onPressed: () {
+        _identifier.clear();
+        _authenticatedShown = false;
+        _replace(VolunteerView.identifier);
+      },
     ),
   ];
   List<Widget> _verified() => [
