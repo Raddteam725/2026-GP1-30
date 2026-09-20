@@ -386,6 +386,7 @@ extension _VolunteerCaseViews on _VolunteerWorkspaceState {
               ],
             ),
             const Divider(height: 30),
+            Text('${s.vReported}: ${timeText(context, item.createdAt)}'),
             Text(
               '${s.vUpdated}: ${timeText(context, item.updatedAt)}',
               style: const TextStyle(fontSize: 12, color: Color(0xFF747783)),
@@ -400,6 +401,15 @@ extension _VolunteerCaseViews on _VolunteerWorkspaceState {
           s.vPendingHint,
           title: s.vPendingDetails,
           color: volunteerNavy,
+        ),
+      if (info?.coordinates != null)
+        VolunteerCard(
+          child: VolunteerDetail(
+            s.vLastSeen,
+            '${info!.coordinates!.latitude}, ${info.coordinates!.longitude}',
+            ltr: true,
+            icon: Icons.location_on_outlined,
+          ),
         ),
       if (info?.lastSeen != null)
         VolunteerCard(

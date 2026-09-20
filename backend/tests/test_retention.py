@@ -230,7 +230,7 @@ def test_scrub_removes_every_identifying_field_and_keeps_only_statistical_ones(s
         assert field not in data, f"{field} should have been scrubbed"
     # Minimum statistical fields: retained, unchanged.
     assert data["status"] == "resolved"
-    assert data["age_group"] == "6-12"  # guardian_with_individual registers age 7.
+    assert data["age_group"] == "6-17"  # guardian_with_individual registers age 7.
     assert data["created_at"] is not None
     assert data["closed_at"] is not None
     assert data["event_id"] == "test-event"

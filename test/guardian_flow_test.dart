@@ -217,8 +217,8 @@ void main() {
     await tapText(t, 'تسجيل الخروج');
     await tapText(t, 'تسجيل الخروج');
     expect(auth.active, isFalse);
-    expect(find.byType(LanguageSelectionScreen), findsOneWidget);
-    final context = t.element(find.byType(LanguageSelectionScreen));
+    expect(find.byType(AuthScreen), findsOneWidget);
+    final context = t.element(find.byType(AuthScreen));
     expect(Navigator.of(context).canPop(), isFalse);
     expect(Directionality.of(context), TextDirection.rtl);
   });

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app/app_services.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../auth/presentation/session_screen.dart';
+import '../../auth/presentation/auth_screen.dart';
 import '../data/guardian_push_service.dart';
 import '../data/guardian_repository.dart';
 
@@ -17,6 +18,7 @@ class GuardianGate extends StatefulWidget {
 class _GuardianGateState extends State<GuardianGate> {
   Future<GuardianProfile>? _profile;
   bool _pushInitStarted = false;
+  bool _hadAuthenticatedSession = false;
   @override
   Widget build(BuildContext context) {
     final services = AppServices.of(context);
@@ -27,8 +29,13 @@ class _GuardianGateState extends State<GuardianGate> {
         if (auth.data != true) {
           _profile = null;
           _pushInitStarted = false;
-          return const SessionScreen();
+          // A session ending must not start onboarding and race the explicit
+          // logout route. A cold unauthenticated deep link still uses startup.
+          return _hadAuthenticatedSession
+              ? const AuthScreen()
+              : const SessionScreen();
         }
+        _hadAuthenticatedSession = true;
         _profile ??= services.guardian.profile().timeout(
           const Duration(seconds: 30),
         );

@@ -10,6 +10,7 @@ import 'volunteer_repository.dart';
 class ApiVolunteerRepository extends VolunteerRepository {
   ApiVolunteerRepository({
     required this.token,
+    this.onAccessLost,
     http.Client? client,
     String? baseUrl,
   }) : _client = client ?? http.Client(),
@@ -20,6 +21,21 @@ class ApiVolunteerRepository extends VolunteerRepository {
              defaultValue: kDebugMode ? 'http://10.0.2.2:8000' : '',
            );
   final Future<String?> Function() token;
+  final Future<void> Function(String reason)? onAccessLost;
+  bool _accessLost = false;
+  Future<void> Function()? closeSession;
+  void clearProtectedData() {
+    _accessLost = true;
+    for (final report in _reports) {
+      report.photoBytes = null;
+    }
+    _cases = [];
+    _profiles = [];
+    _reports = [];
+    _alerts = [];
+    account = null;
+  }
+
   final http.Client _client;
   final String _base;
   VolunteerAccount? account;
@@ -35,25 +51,34 @@ class ApiVolunteerRepository extends VolunteerRepository {
   @override
   List<FoundReport> get foundReports => List.unmodifiable(_reports);
   @override
-  List<VolunteerAlert> alertsFor(String uid) => uid != account?.uid
-      ? []
-      : _alerts.map((alert) {
-          final coordinates = caseById(alert.caseId)?.information?.coordinates;
-          final nearby =
-              proximityLocation != null &&
-              coordinates != null &&
-              proximityLocation!.distanceTo(coordinates) <= 500;
-          return VolunteerAlert(
-            id: alert.id,
-            readAt: alert.readAt,
-            caseId: alert.caseId,
-            at: alert.at,
-            kind: nearby && alert.kind == AlertKind.newCase
-                ? AlertKind.priority
-                : alert.kind,
-            status: alert.status,
-          );
-        }).toList();
+  List<VolunteerAlert> alertsFor(String uid) =>
+      uid == account?.uid ? List.unmodifiable(_alerts) : [];
+
+  Future<void> registerDevice(
+    String token,
+    String locale,
+    Coordinates? location,
+  ) async {
+    await _request(
+      'PUT',
+      '/fcm-registrations',
+      body: {
+        'token': token,
+        'locale': locale,
+        'latitude': location?.latitude,
+        'longitude': location?.longitude,
+      },
+    );
+  }
+
+  Future<void> unregisterDevice(String token) async {
+    await _request(
+      'POST',
+      '/fcm-registrations/unregister',
+      body: {'token': token},
+    );
+  }
+
   bool _disposed = false, _joining = false;
   Future<void>? _pendingRefresh;
   String? error;
@@ -67,13 +92,20 @@ class ApiVolunteerRepository extends VolunteerRepository {
     String path, {
     Object? body,
   }) async {
+    if (_accessLost && path != '/fcm-registrations/unregister') {
+      throw StateError('unauthorized');
+    }
     if (_base.isEmpty) throw StateError('backend-unavailable');
     final uri = Uri.parse('$_base/v1/volunteer$path');
     if (!kDebugMode && uri.scheme != 'https') {
       throw StateError('backend-unavailable');
     }
     final jwt = await token();
-    if (jwt == null) throw StateError('unauthorized');
+    if (jwt == null) {
+      clearProtectedData();
+      if (onAccessLost != null) await onAccessLost!('unauthorized');
+      throw StateError('unauthorized');
+    }
     final request = http.Request(method, uri)
       ..headers['Authorization'] = 'Bearer $jwt';
     if (body != null) {
@@ -84,6 +116,28 @@ class ApiVolunteerRepository extends VolunteerRepository {
         .send(request)
         .then(http.Response.fromStream)
         .timeout(const Duration(seconds: 30));
+    if (kDebugMode && path.isEmpty) {
+      debugPrint('Radd Volunteer profile HTTP ${response.statusCode}');
+    }
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      String? detail;
+      try {
+        detail = (jsonDecode(response.body) as Map)['detail'] as String?;
+      } catch (_) {}
+      if (response.statusCode == 401 ||
+          detail == 'volunteer_inactive' ||
+          detail == 'volunteer_required') {
+        clearProtectedData();
+        if (onAccessLost != null) await onAccessLost!(detail ?? 'unauthorized');
+      }
+    }
+    if (_accessLost && path != '/fcm-registrations/unregister') {
+      throw StateError('unauthorized');
+    }
+    if (response.statusCode == 503 &&
+        response.body.contains('photo_deletion_pending')) {
+      throw StateError('photo-deletion-pending');
+    }
     if (response.statusCode >= 400) {
       throw StateError(switch (response.statusCode) {
         401 => 'unauthorized',
@@ -106,7 +160,12 @@ class ApiVolunteerRepository extends VolunteerRepository {
       email: data['email'] as String?,
       phone: data['phone'] as String?,
     );
-    if (!_disposed) account = result;
+    if (!result.active) {
+      clearProtectedData();
+      if (onAccessLost != null) await onAccessLost!('volunteer_inactive');
+      throw StateError('volunteer_inactive');
+    }
+    if (!_disposed && !_accessLost) account = result;
     return result;
   }
 
@@ -158,7 +217,9 @@ class ApiVolunteerRepository extends VolunteerRepository {
                   (row) => VolunteerAlert(
                     id: row['id'] as String,
                     caseId: row['case_id'] as String,
-                    kind: row['kind'] == 'status_update'
+                    kind: row['kind'] == 'priority'
+                        ? AlertKind.priority
+                        : row['kind'] == 'status_update'
                         ? AlertKind.statusUpdate
                         : AlertKind.newCase,
                     status: _status(row['status'] as String?),
@@ -170,7 +231,7 @@ class ApiVolunteerRepository extends VolunteerRepository {
                 )
                 .toList()
           : <VolunteerAlert>[];
-      if (!_disposed) {
+      if (!_disposed && !_accessLost) {
         _reports = reports;
         _alerts = alerts..sort((a, b) => b.at.compareTo(a.at));
         if (!user.active) _profiles = [];
@@ -178,8 +239,11 @@ class ApiVolunteerRepository extends VolunteerRepository {
           ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
         error = null;
       }
-    } catch (e) {
-      if (!_disposed) {
+    } catch (e, stack) {
+      if (kDebugMode) {
+        debugPrint('Radd Volunteer refresh failed (${e.runtimeType})\n$stack');
+      }
+      if (!_disposed && !_accessLost) {
         _cases = [];
         _reports = [];
         _alerts = [];
@@ -311,6 +375,15 @@ class ApiVolunteerRepository extends VolunteerRepository {
       information: info == null
           ? null
           : CaseInformation(
+              coordinates:
+                  info['same_location'] == true &&
+                      info['latitude'] is num &&
+                      info['longitude'] is num
+                  ? Coordinates(
+                      (info['latitude'] as num).toDouble(),
+                      (info['longitude'] as num).toDouble(),
+                    )
+                  : null,
               lastSeen: optional(info['last_seen_description']),
               clothing: optional(info['clothing']),
               distinctive: optional(info['distinctive_description']),
@@ -319,7 +392,7 @@ class ApiVolunteerRepository extends VolunteerRepository {
       guardian: GuardianContact(
         id: '',
         name: _text(guardian?['full_name']),
-        relationship: _text(data['relationship']),
+        relationship: _text(data['relationship_other'] ?? data['relationship']),
         phone: guardian?['phone'] as String?,
       ),
     );
@@ -350,6 +423,7 @@ class ApiVolunteerRepository extends VolunteerRepository {
         at: DateTime.parse(proof['verified_at'] as String),
       );
     }
+    result.ended = data['ended'] == true;
     result.handedOverBy = data['handed_over_by'] as String?;
     if (data['handed_over_at'] != null) {
       result.handedOverAt = DateTime.parse(data['handed_over_at'] as String);
@@ -359,6 +433,11 @@ class ApiVolunteerRepository extends VolunteerRepository {
 
   void _updateReport(FoundReport target, Map<String, dynamic> data) {
     final value = _found(data, photo: target.photoBytes);
+    if (data['photo_available'] == false ||
+        data['matched_profile_id'] != null) {
+      target.photoBytes = null;
+    }
+    target.ended = value.ended;
     target.caseId = value.caseId;
     target.status = value.status;
     if (data['person'] != null) {
@@ -380,10 +459,14 @@ class ApiVolunteerRepository extends VolunteerRepository {
     final data = jsonDecode(
       (await _request('GET', '/found-reports/${Uri.encodeComponent(id)}')).body,
     ) as Map<String, dynamic>;
-    final photo = (await _request(
-      'GET',
-      '/found-reports/${Uri.encodeComponent(id)}/photo',
-    )).bodyBytes;
+    if (data['ended'] == true) throw StateError('identification-ended');
+    final photo =
+        data['photo_available'] == false || data['matched_profile_id'] != null
+        ? null
+        : (await _request(
+            'GET',
+            '/found-reports/${Uri.encodeComponent(id)}/photo',
+          )).bodyBytes;
     final result = _found(data, photo: photo);
     if (data['person'] != null) {
       Uint8List? registered;
@@ -403,6 +486,18 @@ class ApiVolunteerRepository extends VolunteerRepository {
     return result;
   }
 
+  Future<void> endIdentification(FoundReport report) async {
+    await _reportAction(report, 'end');
+    report.photoBytes = null;
+  }
+
+  Future<RegisteredPerson> loadProfileDetails(RegisteredPerson person) async {
+    final row = jsonDecode(
+      (await _request('GET', '/profiles/${person.id}')).body,
+    ) as Map<String, dynamic>;
+    return _person(row, photo: person.photoBytes);
+  }
+
   Future<void> loadProfiles() async {
     final rows = jsonDecode((await _request('GET', '/profiles')).body) as List;
     final result = <RegisteredPerson>[];
@@ -418,7 +513,7 @@ class ApiVolunteerRepository extends VolunteerRepository {
       }
       result.add(_person(row as Map<String, dynamic>, photo: photo));
     }
-    if (!_disposed) {
+    if (!_disposed && !_accessLost) {
       _profiles = result;
       notifyListeners();
     }
@@ -495,6 +590,13 @@ class ApiVolunteerRepository extends VolunteerRepository {
         )).body,
       ) as Map<String, dynamic>;
       _updateReport(report, data);
+    } on StateError catch (error) {
+      if (error.message == 'photo-deletion-pending') {
+        report.photoBytes = null;
+        if (action == 'end') report.ended = true;
+        if (!_disposed) notifyListeners();
+      }
+      rethrow;
     } finally {
       _joining = false;
     }
@@ -519,7 +621,19 @@ class ApiVolunteerRepository extends VolunteerRepository {
   Future<void> beginVerification(
     VolunteerAccount account,
     FoundReport report,
-  ) => _reportAction(report, 'begin-verification');
+  ) async {
+    // This transition is authorized by the server for this report. Unrelated
+    // list/photo refreshes must not prevent navigation after it succeeds.
+    final data = jsonDecode(
+      (await _request(
+        'POST',
+        '/found-reports/${report.id}/begin-verification',
+      )).body,
+    ) as Map<String, dynamic>;
+    _updateReport(report, data);
+    if (!_disposed) notifyListeners();
+  }
+
   @override
   Future<bool> verify(
     VolunteerAccount account,

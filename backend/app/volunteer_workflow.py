@@ -6,11 +6,13 @@ from fastapi import HTTPException, Depends, Response
 from pydantic import BaseModel, ConfigDict, Field
 from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
+from google.api_core.exceptions import NotFound
 from .firebase import bucket
 from .events import active_event
 from .service import normalize_photo, photo_expired
 from .case_models import STAGES, age_group
 from .push import notify_guardian
+from .volunteer_alerts import safe_dispatch
 
 class FoundInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -67,7 +69,7 @@ class VolunteerWorkflow:
 
     def public_registration(self, doc, contact=False):
         data = doc.to_dict()
-        result = {'id': key(doc), **{k: data.get(k) for k in ('full_name', 'age', 'gender', 'relationship')}}
+        result = {'id': key(doc), **{k: data.get(k) for k in ('full_name', 'age', 'gender', 'relationship', 'relationship_other')}}
         case_id = data.get('active_case_id')
         if case_id:
             case = self.cases.document(case_id).get().to_dict() or {}
@@ -85,7 +87,7 @@ class VolunteerWorkflow:
         doc = self.registration(profile_id)
         if not self.eligible(doc):
             raise HTTPException(404, detail='not_found')
-        return self.public_registration(doc)
+        return self.public_registration(doc, contact=True)
 
     def registration_photo(self, profile_id):
         doc = self.registration(profile_id)
@@ -117,7 +119,8 @@ class VolunteerWorkflow:
     def public_found(self, doc):
         data = doc.to_dict()
         result = {'id': doc.id, 'created_at': data.get('created_at'), 'ai_status': data['ai_status'],
-                  'case_id': data.get('case_id'), 'matched_profile_id': data.get('matched_profile_id')}
+                  'case_id': data.get('case_id'), 'matched_profile_id': data.get('matched_profile_id'),
+                  'ended': data.get('ended', False), 'photo_available': bool(data.get('photo_path')) and not data.get('ended') and not data.get('matched_profile_id')}
         if data.get('case_id'):
             case = self.accessible(data['case_id'])
             state = case.to_dict()
@@ -142,7 +145,7 @@ class VolunteerWorkflow:
         result = []
         for doc in docs:
             data = doc.to_dict()
-            if data.get('event_id') != event.id:
+            if data.get('event_id') != event.id or data.get('ended'):
                 continue
             case_id = data.get('case_id')
             if case_id and not self.visible(self.cases.document(case_id).get().to_dict() or {}):
@@ -187,19 +190,59 @@ class VolunteerWorkflow:
 
     def found_photo(self, report_id):
         data = self.found_owned(report_id).to_dict()
+        if data.get('ended') or data.get('matched_profile_id'):
+            raise HTTPException(404, detail='not_found')
         path = data.get('photo_path', '')
         if not path.startswith(f'found/{self.uid}/{report_id}/'):
             raise HTTPException(404, detail='not_found')
-        return bucket().blob(path).download_as_bytes()
+        image = bucket().blob(path).download_as_bytes()
+        current = self.found_owned(report_id).to_dict()
+        if current.get('ended') or current.get('matched_profile_id'):
+            raise HTTPException(404, detail='not_found')
+        return image
+
+    def delete_found_photo(self, report_id):
+        # State is recorded first, so concurrent readers cannot serve the photo.
+        # A failed Storage delete returns an error; retry repeats this idempotent step.
+        doc = self.found_owned(report_id)
+        path = doc.to_dict().get('photo_path')
+        if not path:
+            return
+        try:
+            bucket().blob(path).delete()
+        except NotFound:
+            pass
+        except Exception:
+            # Reuse the existing durable cleanup queue if the caller cannot retry.
+            self.db.collection('photo_cleanup').document(hashlib.sha256(path.encode()).hexdigest()).set({
+                'path': path, 'created_at': firestore.SERVER_TIMESTAMP})
+            raise HTTPException(503, detail='photo_deletion_pending') from None
+        doc.reference.update({'photo_path': firestore.DELETE_FIELD})
+
+    def end_identification(self, report_id):
+        @firestore.transactional
+        def end(tx):
+            doc = self.found_owned(report_id, tx)
+            if doc.to_dict().get('matched_profile_id'):
+                raise HTTPException(409, detail='match_already_confirmed')
+            if not doc.to_dict().get('ended'):
+                tx.update(doc.reference, {'ended': True, 'ended_at': firestore.SERVER_TIMESTAMP})
+        end(self.db.transaction())
+        self.delete_found_photo(report_id)
+        return self.public_found(self.found_owned(report_id))
 
     def candidates(self, report_id):
-        self.found_owned(report_id)
+        if self.found_owned(report_id).to_dict().get('ended'):
+            raise HTTPException(409, detail='identification_ended')
         # Explicit contract for the future model worker; zero fabricated candidates.
         return {'state': 'unavailable', 'candidates': []}
 
     def confirm(self, report_id, profile_id):
         found = self.found_owned(report_id)
+        if found.to_dict().get('ended'):
+            raise HTTPException(409, detail='identification_ended')
         if found.to_dict().get('matched_profile_id') == profile_id:
+            self.delete_found_photo(report_id)
             return self.public_found(found)
         person_ref = self.registration(profile_id).reference
         new_case = self.cases.document('RD-' + secrets.token_hex(6).upper())
@@ -208,6 +251,8 @@ class VolunteerWorkflow:
         def confirm(tx):
             report = self.found_owned(report_id, tx)
             rd = report.to_dict()
+            if rd.get('ended'):
+                raise HTTPException(409, detail='identification_ended')
             person = person_ref.get(transaction=tx)
             pd = person.to_dict() or {}
             if rd.get('matched_profile_id'):
@@ -239,7 +284,7 @@ class VolunteerWorkflow:
             else:
                 tx.update(ref, {'status': 'match_confirmed', 'confirmed_by': self.uid,
                     'found_report_id': report_id, 'updated_at': now, 'stage_timestamps.match_confirmed': now})
-            tx.update(report.reference, {'matched_profile_id': profile_id, 'case_id': ref.id, 'updated_at': now, 'matched_snapshot': {k: pd.get(k) for k in ('full_name', 'age', 'gender', 'relationship')}})
+            tx.update(report.reference, {'matched_profile_id': profile_id, 'case_id': ref.id, 'updated_at': now, 'matched_snapshot': {k: pd.get(k) for k in ('full_name', 'age', 'gender', 'relationship', 'relationship_other')}})
             for uid in set(cd.get('joined_by', [])) - {self.uid}:
                 tx.set(self.db.collection('users').document(uid).collection('volunteer_notifications').document(ref.id + '-match_confirmed'),
                     {'case_id': ref.id, 'event_id': rd['event_id'], 'kind': 'status_update', 'status': 'match_confirmed', 'created_at': now, 'read_at': None})
@@ -247,9 +292,11 @@ class VolunteerWorkflow:
                 {'case_id': ref.id, 'event_id': rd['event_id'], 'kind': 'status_update', 'status': 'match_confirmed', 'created_at': now, 'read_at': None})
             push.update(guardian_id=pd['guardian_id'], case_id=ref.id, event_id=rd['event_id'])
         confirm(self.db.transaction())
+        self.delete_found_photo(report_id)
         if push:
-            # Guardian-side push only -- this is not the Volunteer alert/radius
-            # contract (alerts.py), which this task does not touch.
+            safe_dispatch(self.db, push['case_id'], matched=True)
+            # Guardian and Volunteer delivery share the existing Firebase app;
+            # their role-specific notification records remain ownership-scoped.
             try:
                 notify_guardian(push['guardian_id'], kind='status_update', status='match_confirmed',
                     case_id=push['case_id'], event_id=push['event_id'])
@@ -438,7 +485,7 @@ def register_workflow(router, service):
         return s.profile_detail(profile_id)
     @router.get('/profiles/{profile_id}/photo')
     def profile_photo(profile_id: str, s=Depends(service)):
-        return Response(s.registration_photo(profile_id), media_type='image/jpeg')
+        return Response(s.registration_photo(profile_id), media_type='image/jpeg', headers={'Cache-Control': 'no-store'})
     @router.get('/found-reports')
     def reports(s=Depends(service)):
         return s.found_list()
@@ -450,15 +497,18 @@ def register_workflow(router, service):
         return s.public_found(s.found_owned(report_id))
     @router.get('/found-reports/{report_id}/photo')
     def found_photo(report_id: str, s=Depends(service)):
-        return Response(s.found_photo(report_id), media_type='image/jpeg')
+        return Response(s.found_photo(report_id), media_type='image/jpeg', headers={'Cache-Control': 'no-store'})
     @router.get('/found-reports/{report_id}/registered-photo')
     def matched_photo(report_id: str, s=Depends(service)):
         case = s.confirmed_case(report_id).to_dict()
         doc = s.db.collection('users').document(case['guardian_id']).collection('individuals').document(case['individual_id']).get()
-        return Response(s.registration_bytes(doc), media_type='image/jpeg')
+        return Response(s.registration_bytes(doc), media_type='image/jpeg', headers={'Cache-Control': 'no-store'})
     @router.get('/found-reports/{report_id}/candidates')
     def candidates(report_id: str, s=Depends(service)):
         return s.candidates(report_id)
+    @router.post('/found-reports/{report_id}/end')
+    def end_identification(report_id: str, s=Depends(service)):
+        return s.end_identification(report_id)
     @router.post('/found-reports/{report_id}/confirm-match')
     def confirm(report_id: str, value: MatchInput, s=Depends(service)):
         return s.confirm(report_id, value.profile_id)

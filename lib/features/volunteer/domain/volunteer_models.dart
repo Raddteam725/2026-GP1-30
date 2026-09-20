@@ -142,6 +142,7 @@ class FoundReport {
   });
   final String id, volunteerUid, photo;
   Uint8List? photoBytes;
+  bool ended = false;
   String? caseId;
   DateTime? createdAt;
   RegisteredPerson? matchedPerson;

@@ -1418,4 +1418,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get resendReset => 'Send again';
+
+  @override
+  String get vAccountDeactivated =>
+      'Your Volunteer account is inactive. You have been signed out.';
+
+  @override
+  String get vEndIdentification => 'End Identification Attempt';
+
+  @override
+  String get vEndIdentificationHint =>
+      'End this identification attempt and delete the captured photo? The missing-person case and search will continue.';
+
+  @override
+  String get locationNotRecorded =>
+      'Location could not be recorded. You can continue; the general alert remains active.';
 }

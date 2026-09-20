@@ -19,8 +19,10 @@ class AuthScreen extends StatefulWidget {
     super.key,
     this.mode = AuthMode.login,
     this.volunteer = false,
+    this.notice,
   });
   final bool volunteer;
+  final String? notice;
   final AuthMode mode;
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -82,7 +84,7 @@ class _AuthScreenState extends State<AuthScreen> {
         Navigator.of(context).pushNamedAndRemoveUntil(
           AppRoutes.session,
           (_) => false,
-          arguments: widget.volunteer ? 'volunteer' : 'guardian',
+          arguments: _register ? 'guardian' : null,
         );
       }
     } catch (e) {
@@ -118,6 +120,9 @@ class _AuthScreenState extends State<AuthScreen> {
             ? s.volunteerLogin
             : s.welcomeBack,
         children: [
+          if ((widget.notice == 'volunteer_inactive' ||
+              widget.notice == 'account_disabled'))
+            ErrorNotice(message: s.vAccountDeactivated),
           if (!_register)
             Center(
               child: Image.asset(

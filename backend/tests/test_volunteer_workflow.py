@@ -376,7 +376,7 @@ def test_volunteer_handover_sets_guardian_retention_metadata(db):
     vol().handover_found(report['id'])
     data = db.data['cases/' + case_id]
     assert data['closed_at'] == data['handed_over_at'] or data['closed_at'] >= data['handed_over_at']
-    assert data['age_group'] == '6-12'
+    assert data['age_group'] == '6-17'
 
 def test_expired_guardian_photo_is_not_served_or_matched_by_volunteer(db):
     guardian, case_id = case()
@@ -401,3 +401,61 @@ def test_unknown_account_challenge_rejects_instead_of_crashing(db):
     guardian, case_id, report = matching()
     vol().begin_verification(report['id'])
     assert not vol().verify_guardian(report['id'], f'radd:guardian-verification:v1:{guardian.uid}:unknown')['verified']
+
+
+def test_selected_profile_exposes_only_authorized_contact(db):
+    guardian, person = guardian_with_individual('guardian')
+    identifier = vol().profiles_list()[0]['id']
+    assert 'guardian' not in vol().profiles_list()[0]
+    detail = vol().profile_detail(identifier)
+    assert detail['guardian']['phone'] == '+966500000001'
+    assert set(detail['guardian']) == {'full_name', 'phone', 'relationship'}
+    with pytest.raises(HTTPException): vol('guardian').profile_detail(identifier)
+    db.data['users/one']['active'] = False
+    with pytest.raises(HTTPException): vol().profile_detail(identifier)
+
+
+def test_end_attempt_preserves_case_and_participation_and_blocks_resume(db):
+    guardian, case_id = case()
+    vol().start_search(case_id)
+    report = submit()
+    profile = vol().profiles_list()[0]['id']
+    before = dict(db.data['cases/' + case_id])
+    assert vol().end_identification(report['id'])['ended']
+    assert db.data['cases/' + case_id] == before
+    assert vol().list(True)[0]['id'] == case_id
+    assert vol('two').list()[0]['id'] == case_id
+    assert vol().found_list() == []
+    assert 'photo_path' not in db.data['found_reports/' + report['id']]
+    for action in [lambda: vol().found_photo(report['id']), lambda: vol().candidates(report['id']), lambda: vol().confirm(report['id'], profile)]:
+        with pytest.raises(HTTPException): action()
+    assert vol().end_identification(report['id'])['ended']
+
+
+def test_confirm_deletes_photo_before_verification_and_is_retryable(db):
+    guardian, case_id, report = matching()
+    assert 'photo_path' not in db.data['found_reports/' + report['id']]
+    assert not report['photo_available']
+    with pytest.raises(HTTPException): vol().found_photo(report['id'])
+    with pytest.raises(HTTPException): vol().end_identification(report['id'])
+    assert vol().confirm(report['id'], report['matched_profile_id'])['status'] == 'match_confirmed'
+
+
+@pytest.mark.parametrize('confirm', [False, True])
+def test_storage_delete_failure_fails_closed_and_retry_finishes(db, monkeypatch, confirm):
+    case()
+    identifier = vol().profiles_list()[0]['id']
+    report = submit()
+    original = volunteer_workflow.bucket
+    class BrokenBucket:
+        def blob(self, path): return self
+        def delete(self): raise OSError('storage unavailable')
+    monkeypatch.setattr(volunteer_workflow, 'bucket', lambda: BrokenBucket())
+    action = lambda: vol().confirm(report['id'], identifier) if confirm else vol().end_identification(report['id'])
+    with pytest.raises(HTTPException) as error: action()
+    assert error.value.status_code == 503
+    assert db.data['found_reports/' + report['id']]['photo_path']
+    with pytest.raises(HTTPException): vol().found_photo(report['id'])
+    monkeypatch.setattr(volunteer_workflow, 'bucket', original)
+    action()
+    assert 'photo_path' not in db.data['found_reports/' + report['id']]

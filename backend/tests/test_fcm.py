@@ -31,6 +31,7 @@ def storage(monkeypatch):
     monkeypatch.setattr(service, "bucket", lambda: bucket)
     monkeypatch.setattr(service.firestore, "transactional", lambda f: f)
     monkeypatch.setattr(push, "database", lambda: db)
+    monkeypatch.setattr(push, "firebase_app", lambda: None)
     return db, bucket
 
 def registrations_path(uid):
@@ -52,7 +53,7 @@ class FakeSendEach:
     def __init__(self, outcomes):
         self.outcomes = outcomes  # {token: SendResponse}
         self.calls = []
-    def __call__(self, messages):
+    def __call__(self, messages, app=None):
         self.calls.append(list(messages))
         return messaging.BatchResponse([self.outcomes[m.token] for m in messages])
 
@@ -256,7 +257,7 @@ def test_send_each_raising_entirely_never_propagates(storage, monkeypatch):
     db, _ = storage
     s, _ = guardian_with_individual("owner")
     s.register_fcm_token("token-a")
-    def raising(messages):
+    def raising(messages, app=None):
         raise ConnectionError("FCM unreachable")
     monkeypatch.setattr(push.messaging, "send_each", raising)
     push.notify_guardian("owner", kind="case_created", status="report_received", case_id="RD-1", event_id="test-event")  # Must not raise.
@@ -272,7 +273,7 @@ def test_push_failure_never_fails_case_creation_and_the_notification_still_write
     db, _ = storage
     s, individual_id = guardian_with_individual("owner")
     s.register_fcm_token("token-a")
-    def raising(messages):
+    def raising(messages, app=None):
         raise ConnectionError("FCM unreachable")
     monkeypatch.setattr(push.messaging, "send_each", raising)
     created = CaseService(s).create(CaseCreate(individual_id=individual_id))
@@ -286,7 +287,7 @@ def test_push_failure_never_fails_cancel_or_resolve(storage, monkeypatch):
     s, individual_id = guardian_with_individual("owner")
     s.register_fcm_token("token-a")
     case_id = CaseService(s).create(CaseCreate(individual_id=individual_id))["id"]
-    def raising(messages):
+    def raising(messages, app=None):
         raise ConnectionError("FCM unreachable")
     monkeypatch.setattr(push.messaging, "send_each", raising)
     resolved = CaseService(s).resolve(case_id)

@@ -84,3 +84,46 @@ backend/.venv/Scripts/python backend/scripts/dev_case_state.py --case-id RD-XXXX
 backend/.venv/Scripts/python -m pytest backend/tests
 ```
 Unit/API tests use isolated fakes only; they do not seed production.
+
+
+## Volunteer/shared completion update
+
+The local runner now enables one-minute maintenance (retention and Volunteer
+push retries). See [manual keyless Firebase setup](../docs/firebase-local-setup.md)
+for the approved local setup; the earlier text above describing unscheduled
+retention and unimplemented Volunteer push is superseded by this section.
+No live Firebase verification is claimed until that manual setup is complete.
+
+Volunteer login/reset/logout now reuse the shared Flutter authentication UI and
+service. Inactive accounts are denied even profile/ID access. The client clears
+protected state and signs out when a protected request detects deactivation.
+
+`PUT /v1/volunteer/fcm-registrations` accepts the device token, locale and optional
+foreground latitude/longitude. It reuses `users/{uid}/fcm_registrations`, associates
+the active event and verified Firebase token expiry, and never accepts a UID.
+`POST /v1/volunteer/fcm-registrations/unregister` removes only that user's device.
+Locations expire after 60 seconds without a foreground heartbeat; the app clears
+location on pause and collects no background positions. Denied location does not
+prevent general alerts. Priority notifications use the same case and 500 m radius.
+Delivery receipts and expiring send leases suppress concurrent/repeated sends;
+FCM remains at-least-once across a crash between sending and recording success.
+
+Selected profile details expose only associated Guardian name, phone and
+relationship to an authorized active Volunteer; list responses omit contact.
+Camera capture uses preview/retake/use. The real Found Report precedes manual
+review. The AI endpoint remains explicitly unavailable, with no generated scores.
+
+`POST /v1/volunteer/found-reports/{id}/end` closes only an unmatched identification
+attempt. Confirmation or explicit end makes the photo inaccessible immediately
+and deletes it synchronously before reporting success. Storage failures return
+503, retain a retry reference and reuse the durable cleanup queue; the local
+worker retries. The case transaction and Storage deletion are not one atomic
+operation: a failed delete can leave a confirmed/ended report with deletion
+pending, but it cannot expose the image or report that deletion succeeded.
+Back navigation does not invoke this endpoint.
+
+Registered photo expiry remains 24 hours; terminal case scrubbing remains
+24 hours after closure. Age-group buckets now match the latest proposal:
+0–5, 6–17, 18–59 and 60+. Guardian location denial can complete guided reporting
+without coordinates and without a priority alert. Existing Guardian UI/workflows
+and shared records otherwise remain in place.

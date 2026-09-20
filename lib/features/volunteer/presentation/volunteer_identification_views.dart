@@ -177,6 +177,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     }
   });
   Future<void> _openManual() => _run(() async {
+    if (_report?.ended == true) throw StateError('identification-ended');
     if (repo is ApiVolunteerRepository) {
       await (repo as ApiVolunteerRepository).loadProfiles();
     }
@@ -271,7 +272,31 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
       icon: Icons.close,
     ),
   ];
+  Future<void> _endIdentification() async {
+    if (!await _confirm(
+          s.vEndIdentification,
+          s.vEndIdentificationHint,
+          s.vEndIdentification,
+        ) ||
+        !mounted) {
+      return;
+    }
+    await _run(() async {
+      await (repo as ApiVolunteerRepository).endIdentification(_report!);
+      _report = null;
+      _person = null;
+      _candidates = [];
+      if (mounted) _selectTab(2);
+    });
+  }
+
   List<Widget> _matches() => [
+    if (repo is ApiVolunteerRepository && _report?.matchedPerson == null)
+      VolunteerAction(
+        s.vEndIdentification,
+        secondary: true,
+        onPressed: _busy ? null : _endIdentification,
+      ),
     VolunteerInfo(
       _aiUnavailable ? s.vAiUnavailable : s.vCandidateHint,
       title: s.vPotentialMatches,
@@ -330,15 +355,20 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     VolunteerAction(
       s.vManualReview,
       icon: Icons.manage_search,
-      onPressed: _busy ? null : _openManual,
+      onPressed: _busy || _report?.ended == true ? null : _openManual,
       secondary: true,
     ),
   ];
-  void _candidate(RegisteredPerson person, double? similarity) {
-    _person = person;
-    _similarity = similarity;
-    _open(VolunteerView.matchDetails);
-  }
+  Future<void> _candidate(RegisteredPerson person, double? similarity) =>
+      _run(() async {
+        final selected = repo is ApiVolunteerRepository
+            ? await (repo as ApiVolunteerRepository).loadProfileDetails(person)
+            : person;
+        if (!mounted) return;
+        _person = selected;
+        _similarity = similarity;
+        _open(VolunteerView.matchDetails);
+      });
 
   List<Widget> _manual() {
     final query = _search.text.trim().toLowerCase();
@@ -564,10 +594,18 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
             VolunteerHeading(s.vCaseInformation),
             const SizedBox(height: 10),
             if (_associatedCase != null) Text(_associatedCase!.id),
-            VolunteerDetail(
-              s.vGender,
-              person.gender == Gender.male ? s.vMale : s.vFemale,
-            ),
+            if (person.gender != null)
+              VolunteerDetail(
+                s.vGender,
+                person.gender == Gender.male ? s.vMale : s.vFemale,
+              ),
+            if (info?.coordinates != null)
+              VolunteerDetail(
+                s.vLastSeen,
+                '${info!.coordinates!.latitude}, ${info.coordinates!.longitude}',
+                ltr: true,
+                icon: Icons.location_on_outlined,
+              ),
             if (info?.lastSeen != null)
               VolunteerDetail(
                 s.vLastSeen,
@@ -592,7 +630,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
                 dataText(context, info!.additional!),
                 icon: Icons.info_outline,
               ),
-            if (repo.isPreview) ...[
+            ...[
               const Divider(height: 24),
               VolunteerDetail(
                 s.vGuardianName,
@@ -600,7 +638,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
               ),
               VolunteerDetail(
                 s.vRelationship,
-                dataText(context, person.guardian.relationship),
+                relationshipText(context, person.guardian.relationship),
               ),
               if (person.guardian.phone != null)
                 VolunteerDetail(
@@ -968,7 +1006,10 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
           ),
           VolunteerDetail(
             s.vRelationship,
-            dataText(context, _report!.matchedPerson!.guardian.relationship),
+            relationshipText(
+              context,
+              _report!.matchedPerson!.guardian.relationship,
+            ),
           ),
           VolunteerDetail(s.vVolunteerId, account.volunteerId),
         ],

@@ -100,27 +100,38 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
       if (step == 0) {
         next['same_location'] = choice;
         if (choice == true) {
-          // Real current location, only with the Guardian's permission --
-          // never invented, and never captured at all when they answer No.
-          if (!await Geolocator.isLocationServiceEnabled()) {
-            throw const AppFailure('locationRequired');
+          try {
+            // Real current location, only with the Guardian's permission --
+            // never invented, and never captured at all when they answer No.
+            if (!await Geolocator.isLocationServiceEnabled()) {
+              throw const AppFailure('locationRequired');
+            }
+            var permission = await Geolocator.checkPermission();
+            if (permission == LocationPermission.denied) {
+              permission = await Geolocator.requestPermission();
+            }
+            if (permission == LocationPermission.denied ||
+                permission == LocationPermission.deniedForever) {
+              throw const AppFailure('locationRequired');
+            }
+            final position = await Geolocator.getCurrentPosition(
+              locationSettings: const LocationSettings(
+                accuracy: LocationAccuracy.high,
+                timeLimit: Duration(seconds: 15),
+              ),
+            );
+            next['latitude'] = position.latitude;
+            next['longitude'] = position.longitude;
+          } catch (_) {
+            // Consent to using this last-seen location does not guarantee the
+            // device can provide coordinates. Continue with a general alert.
+            next['latitude'] = null;
+            next['longitude'] = null;
+            if (mounted) {
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text(s.locationNotRecorded)));
+            }
           }
-          var permission = await Geolocator.checkPermission();
-          if (permission == LocationPermission.denied) {
-            permission = await Geolocator.requestPermission();
-          }
-          if (permission == LocationPermission.denied ||
-              permission == LocationPermission.deniedForever) {
-            throw const AppFailure('locationRequired');
-          }
-          final position = await Geolocator.getCurrentPosition(
-            locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.high,
-              timeLimit: Duration(seconds: 15),
-            ),
-          );
-          next['latitude'] = position.latitude;
-          next['longitude'] = position.longitude;
         } else {
           next['latitude'] = null;
           next['longitude'] = null;
@@ -273,7 +284,9 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
                   _reply(
                     _answers['same_location'] == true ? s.yes : s.no,
                     note: _answers['same_location'] == true
-                        ? s.locationReady
+                        ? (_answers['latitude'] != null
+                              ? s.locationReady
+                              : s.locationNotRecorded)
                         : null,
                   ),
                 if (_answers['same_location'] == false) ...[

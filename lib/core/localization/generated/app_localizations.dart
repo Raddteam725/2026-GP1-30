@@ -2707,6 +2707,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Send again'**
   String get resendReset;
+
+  /// No description provided for @vAccountDeactivated.
+  ///
+  /// In en, this message translates to:
+  /// **'Your Volunteer account is inactive. You have been signed out.'**
+  String get vAccountDeactivated;
+
+  /// No description provided for @vEndIdentification.
+  ///
+  /// In en, this message translates to:
+  /// **'End Identification Attempt'**
+  String get vEndIdentification;
+
+  /// No description provided for @vEndIdentificationHint.
+  ///
+  /// In en, this message translates to:
+  /// **'End this identification attempt and delete the captured photo? The missing-person case and search will continue.'**
+  String get vEndIdentificationHint;
+
+  /// No description provided for @locationNotRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Location could not be recorded. You can continue; the general alert remains active.'**
+  String get locationNotRecorded;
 }
 
 class _AppLocalizationsDelegate

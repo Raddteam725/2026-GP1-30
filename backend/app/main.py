@@ -1,4 +1,7 @@
 import logging
+import os
+from contextlib import asynccontextmanager
+from .local_jobs import LocalJobs
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -6,7 +9,18 @@ from .firebase import identity
 from .models import ProfileCreate, ProfileUpdate, IndividualInput, FcmRegistration, FcmUnregister
 from .service import GuardianService
 
-app = FastAPI(title="Radd Guardian API", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app):
+    jobs = LocalJobs() if os.getenv('RADD_LOCAL_JOBS') == '1' else None
+    if jobs:
+        jobs.start()
+    try:
+        yield
+    finally:
+        if jobs:
+            jobs.stop()
+
+app = FastAPI(title="Radd Shared API", version="0.1.0", lifespan=lifespan)
 
 @app.middleware("http")
 async def limits(request: Request, call_next):

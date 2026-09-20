@@ -14,6 +14,7 @@ import '../../../core/localization/generated/app_localizations.dart';
 import '../data/mock_volunteer_repository.dart';
 import '../data/api_volunteer_repository.dart';
 import '../data/volunteer_location.dart';
+import '../data/volunteer_push_service.dart';
 import '../data/volunteer_repository.dart';
 import '../domain/volunteer_models.dart';
 import 'volunteer_components.dart';
@@ -60,6 +61,7 @@ class VolunteerWorkspace extends StatefulWidget {
 class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     with WidgetsBindingObserver {
   Timer? _poll;
+  VolunteerPushService? _push;
   bool _refreshing = false;
   bool _aiUnavailable = false;
   Uint8List? _pendingCapture;
@@ -97,7 +99,22 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     repo.addListener(_refresh);
     if (repo is ApiVolunteerRepository) {
       WidgetsBinding.instance.addObserver(this);
-      WidgetsBinding.instance.addPostFrameCallback((_) => _loadRemote());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _push = VolunteerPushService(
+          repo as ApiVolunteerRepository,
+          onRefresh: () => _loadRemote(),
+          onOpen: (id) => _run(() async {
+            final item = await (repo as ApiVolunteerRepository).loadCase(id);
+            if (mounted) {
+              _case = item;
+              _open(VolunteerView.caseDetails);
+            }
+          }),
+        );
+        _push!.initialize(Localizations.localeOf(context).languageCode);
+        _loadRemote();
+      });
       _poll = Timer.periodic(const Duration(seconds: 20), (_) {
         if (WidgetsBinding.instance.lifecycleState ==
             AppLifecycleState.resumed) {
@@ -106,7 +123,13 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
       });
     }
     if (!repo.isPreview) {
-      _location = VolunteerLocation()..addListener(_refresh);
+      _location = VolunteerLocation()
+        ..addListener(() {
+          _refresh();
+          if (mounted) {
+            _push?.sync(Localizations.localeOf(context).languageCode, location);
+          }
+        });
     }
   }
 
@@ -115,6 +138,12 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     setState(() => _refreshing = true);
     try {
       await (repo as ApiVolunteerRepository).refresh();
+      if (mounted) {
+        await _push?.sync(
+          Localizations.localeOf(context).languageCode,
+          location,
+        );
+      }
     } catch (_) {
       // Keep the existing screen with an explicit retry; never populate fixtures.
     } finally {
@@ -124,7 +153,11 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _loadRemote();
+    if (state == AppLifecycleState.resumed) {
+      _loadRemote();
+    } else if (mounted) {
+      _push?.sync(Localizations.localeOf(context).languageCode, null);
+    }
   }
 
   void _refresh() {
@@ -152,6 +185,7 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
   @override
   void dispose() {
     _poll?.cancel();
+    _push?.close();
     WidgetsBinding.instance.removeObserver(this);
     ++_searchGeneration;
     repo.removeListener(_refresh);
@@ -197,7 +231,11 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     _update(() => _busy = true);
     try {
       await action();
-    } catch (_) {
+    } catch (error, stack) {
+      assert(() {
+        debugPrint('Radd Volunteer action failed (${error.runtimeType})\n$stack');
+        return true;
+      }());
       if (mounted) _message(s.vActionFailed);
     } finally {
       if (mounted) _update(() => _busy = false);

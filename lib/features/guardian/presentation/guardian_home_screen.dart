@@ -80,7 +80,7 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
       await auth.logout();
       if (navigator.mounted) {
         navigator.pushNamedAndRemoveUntil(
-          AppRoutes.languageSelection,
+          AppRoutes.auth,
           (_) => false,
         );
       }

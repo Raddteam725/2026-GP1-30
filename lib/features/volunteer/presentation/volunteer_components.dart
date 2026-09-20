@@ -16,13 +16,20 @@ AppLocalizations stringsOf(BuildContext context) =>
     AppLocalizations.of(context)!;
 String dataText(BuildContext context, LocalizedData value) =>
     value.inLanguage(Localizations.localeOf(context).languageCode);
+String relationshipText(BuildContext context, LocalizedData value) =>
+    switch (value.en) {
+      'child' => stringsOf(context).child,
+      'parent' => stringsOf(context).parent,
+      'other' => stringsOf(context).other,
+      _ => dataText(context, value),
+    };
 String numberText(BuildContext context, num value) =>
     NumberFormat.decimalPattern(Localizations.localeOf(context).languageCode)
         .format(value);
 String timeText(BuildContext context, DateTime date) =>
     DateFormat.MMMd(Localizations.localeOf(context).languageCode)
         .add_jm()
-        .format(date);
+        .format(date.toLocal());
 String statusText(AppLocalizations s, CaseStatus status) => switch (status) {
   CaseStatus.reportReceived => s.vReportReceived,
   CaseStatus.searchInProgress => s.vSearchProgress,

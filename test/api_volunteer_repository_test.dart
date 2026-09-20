@@ -106,33 +106,45 @@ void main() {
     );
   });
 
-  test('Admin deactivation refreshes badge account and clears cases without fetching protected endpoints', () async {
-    var active = true;
-    final repo = ApiVolunteerRepository(
-      token: () async => 'token',
-      baseUrl: 'http://localhost',
-      client: MockClient((request) async {
-        if (request.url.path.endsWith('/found-reports') ||
-            request.url.path.endsWith('/notifications')) {
-          return json([]);
-        }
-        if (request.url.path == '/v1/volunteer') {
-          return json(profile(active: active));
-        }
-        expect(active, isTrue);
-        if (request.url.path.endsWith('/available')) return json([caseData()]);
-        if (request.url.path.endsWith('/mine')) return json([]);
-        return http.Response('', 404);
-      }),
-    );
-    addTearDown(repo.dispose);
-    await repo.refresh();
-    expect(repo.cases, hasLength(1));
-    active = false;
-    await repo.refresh();
-    expect(repo.account!.active, isFalse);
-    expect(repo.cases, isEmpty);
-  });
+  test(
+    'Admin deactivation clears all protected state and requests shared logout',
+    () async {
+      var active = true;
+      String? lostReason;
+      final repo = ApiVolunteerRepository(
+        token: () async => 'token',
+        onAccessLost: (reason) async {
+          lostReason = reason;
+        },
+        baseUrl: 'http://localhost',
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/found-reports') ||
+              request.url.path.endsWith('/notifications')) {
+            return json([]);
+          }
+          if (request.url.path == '/v1/volunteer') {
+            return json(profile(active: active));
+          }
+          expect(active, isTrue);
+          if (request.url.path.endsWith('/available')) {
+            return json([caseData()]);
+          }
+          if (request.url.path.endsWith('/mine')) return json([]);
+          return http.Response('', 404);
+        }),
+      );
+      addTearDown(repo.dispose);
+      await repo.refresh();
+      expect(repo.cases, hasLength(1));
+      active = false;
+      await expectLater(repo.refresh(), throwsStateError);
+      expect(lostReason, 'volunteer_inactive');
+      expect(repo.account, isNull);
+      expect(repo.profiles, isEmpty);
+      expect(repo.foundReports, isEmpty);
+      expect(repo.cases, isEmpty);
+    },
+  );
 
   test(
     'Backend failure clears stale cases and never loads sample data',
@@ -210,63 +222,81 @@ void main() {
     addTearDown(repo.dispose);
     await expectLater(repo.loadProfile(), throwsStateError);
   });
-  for (final language in ['en', 'ar']) {
-    testWidgets(
-      'API account drives Home, Profile and inactive ID in $language',
-      (tester) async {
-        var active = true;
-        final repo = ApiVolunteerRepository(
-          token: () async => 'token',
-          baseUrl: 'http://localhost',
-          client: MockClient((request) async {
-            if (request.url.path.endsWith('/found-reports') ||
-                request.url.path.endsWith('/notifications')) {
-              return json([]);
-            }
-            if (request.url.path == '/v1/volunteer') {
-              return json(profile(active: active));
-            }
-            if (request.url.path.endsWith('/available')) {
-              return json([caseData()]);
-            }
-            if (request.url.path.endsWith('/mine')) return json([]);
-            return http.Response('', 404);
-          }),
-        );
-        await repo.loadProfile();
-        await tester.pumpWidget(
-          harness(
-            VolunteerWorkspace(
-              account: repo.account!,
-              repository: repo,
-              onLogout: () async {},
-            ),
-            language,
-          ),
-        );
-        await tester.pumpAndSettle();
-        expect(find.text('اسم حقيقي'), findsWidgets);
-        expect(repo.cases.single.id, 'RD-real');
-        final navigation = tester.widget<NavigationBar>(
-          find.byType(NavigationBar),
-        );
-        navigation.onDestinationSelected!(4);
-        await tester.pumpAndSettle();
-        expect(find.text('real@example.test'), findsOneWidget);
-        active = false;
-        await repo.refresh();
-        navigation.onDestinationSelected!(3);
-        await tester.pumpAndSettle();
-        final badge = tester.widget<VolunteerBadgeCard>(
-          find.byType(VolunteerBadgeCard),
-        );
-        expect(badge.account.active, isFalse);
-        expect(badge.account.volunteerId, 'V-42');
-        expect(repo.cases, isEmpty);
-        expect(tester.takeException(), isNull);
-        await tester.pumpWidget(const SizedBox());
-        repo.dispose();
+  test('Backend inactive response requests logout and prevents later protected requests', () async {
+    var calls = 0;
+    String? reason;
+    final repo = ApiVolunteerRepository(
+      token: () async => 'token',
+      baseUrl: 'http://localhost',
+      onAccessLost: (value) async {
+        reason = value;
       },
+      client: MockClient((request) async {
+        calls++;
+        return http.Response('{"detail":"volunteer_inactive"}', 403);
+      }),
     );
+    addTearDown(repo.dispose);
+    await expectLater(repo.loadProfile(), throwsStateError);
+    expect(reason, 'volunteer_inactive');
+    expect(repo.account, isNull);
+    expect(repo.cases, isEmpty);
+    await expectLater(repo.loadProfiles(), throwsStateError);
+    expect(calls, 1);
+  });
+  for (final language in ['en', 'ar']) {
+    testWidgets('API account drives Home, Profile and active ID in $language', (
+      tester,
+    ) async {
+      final repo = ApiVolunteerRepository(
+        token: () async => 'token',
+        baseUrl: 'http://localhost',
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/found-reports') ||
+              request.url.path.endsWith('/notifications')) {
+            return json([]);
+          }
+          if (request.url.path == '/v1/volunteer') {
+            return json(profile());
+          }
+          if (request.url.path.endsWith('/available')) {
+            return json([caseData()]);
+          }
+          if (request.url.path.endsWith('/mine')) return json([]);
+          return http.Response('', 404);
+        }),
+      );
+      await repo.loadProfile();
+      await tester.pumpWidget(
+        harness(
+          VolunteerWorkspace(
+            account: repo.account!,
+            repository: repo,
+            onLogout: () async {},
+          ),
+          language,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('اسم حقيقي'), findsWidgets);
+      expect(repo.cases.single.id, 'RD-real');
+      final navigation = tester.widget<NavigationBar>(
+        find.byType(NavigationBar),
+      );
+      navigation.onDestinationSelected!(4);
+      await tester.pumpAndSettle();
+      expect(find.text('real@example.test'), findsOneWidget);
+      navigation.onDestinationSelected!(3);
+      await tester.pump(const Duration(milliseconds: 400));
+      final badge = tester.widget<VolunteerBadgeCard>(
+        find.byType(VolunteerBadgeCard),
+      );
+      expect(badge.account.active, isTrue);
+      expect(badge.account.volunteerId, 'V-42');
+      expect(repo.cases, hasLength(1));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      repo.dispose();
+    });
   }
 }

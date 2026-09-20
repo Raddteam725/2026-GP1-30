@@ -33,7 +33,7 @@ whole send call raising) is treated as transient and leaves the stored
 registration untouched, to be retried on the next triggering event.
 """
 from firebase_admin import messaging
-from .firebase import database
+from .firebase import database, firebase_app
 
 # Fixed, generic, privacy-safe: no individual's name, no case detail, no
 # status-specific wording that could hint at sensitive content. Exactly two
@@ -72,7 +72,7 @@ def notify_guardian(guardian_uid, *, kind, status, case_id, event_id):
                 token=reg["token"],
             )
             pairs.append((doc, message))
-        batch = messaging.send_each([message for _, message in pairs])
+        batch = messaging.send_each([message for _, message in pairs], app=firebase_app())
         for (doc, _), result in zip(pairs, batch.responses):
             if result.success:
                 continue

@@ -11,11 +11,9 @@ TERMINAL_STATUSES = ("reunited", "resolved", "cancelled", "transferred_to_author
 def age_group(age):
     """Coarse bucket retained for Admin statistics without the exact age."""
     if age <= 5: return "0-5"
-    if age <= 12: return "6-12"
-    if age <= 17: return "13-17"
-    if age <= 30: return "18-30"
-    if age <= 50: return "31-50"
-    return "51+"
+    if age <= 17: return "6-17"
+    if age <= 59: return "18-59"
+    return "60+"
 
 class CaseCreate(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -36,7 +34,7 @@ class GuidedReport(BaseModel):
     @model_validator(mode="after")
     def location_and_details(self):
         if self.same_location:
-            if self.latitude is None or self.longitude is None:
+            if (self.latitude is None) != (self.longitude is None):
                 raise ValueError("coordinates_required")
         elif self.latitude is not None or self.longitude is not None:
             raise ValueError("text_location_required")

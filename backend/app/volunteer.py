@@ -6,10 +6,18 @@ from .firebase import identity, database, bucket
 from .events import active_event
 from .case_models import STAGES
 from .push import notify_guardian
-from .service import photo_expired
+from .service import photo_expired, GuardianService
+from .models import FcmRegistration, FcmUnregister
+from .volunteer_alerts import safe_dispatch
+from pydantic import BaseModel, Field, ConfigDict
+import hashlib
 from .volunteer_workflow import VolunteerWorkflow, register_workflow, key
 
 JOINABLE = STAGES[:2]
+
+class VolunteerDevice(FcmRegistration):
+    latitude: float | None = Field(default=None, ge=-90, le=90, allow_inf_nan=False)
+    longitude: float | None = Field(default=None, ge=-180, le=180, allow_inf_nan=False)
 
 class VolunteerService(VolunteerWorkflow):
     def __init__(self, token):
@@ -18,7 +26,7 @@ class VolunteerService(VolunteerWorkflow):
         self.user = self.db.collection('users').document(self.uid)
         self.cases = self.db.collection('cases')
 
-    def profile(self, tx=None, require_active=False):
+    def profile(self, tx=None, require_active=True):
         data = self.user.get(transaction=tx).to_dict() or {}
         if data.get('role') != 'volunteer' or self.token.get('role') not in (None, 'volunteer'):
             raise HTTPException(403, detail='volunteer_required')
@@ -27,6 +35,26 @@ class VolunteerService(VolunteerWorkflow):
         if require_active and data['active'] is not True:
             raise HTTPException(403, detail='volunteer_inactive')
         return {'uid': self.uid, **{k: data.get(k) for k in ('full_name', 'email', 'phone', 'volunteer_id', 'active')}}
+
+    def register_device(self, value):
+        self.profile()
+        event = active_event(self.db)
+        GuardianService.register_fcm_token(self, value.token, value.locale)
+        ref = self.user.collection('fcm_registrations').document(hashlib.sha256(value.token.encode()).hexdigest())
+        location = None
+        if value.latitude is not None and value.longitude is not None:
+            location = {'latitude': value.latitude, 'longitude': value.longitude, 'at': firestore.SERVER_TIMESTAMP}
+        ref.update({'event_id': event.id, 'session_expires_at': self.token.get('exp', 0), 'location': location})
+        for case in self.cases.where(filter=FieldFilter('event_id', '==', event.id)).stream():
+            safe_dispatch(self.db, case.id, matched=case.to_dict().get('status') == 'match_confirmed')
+        return {'registered': True}
+
+    def unregister_device(self, value):
+        # Unregistration may be needed after deactivation; only this UID's device.
+        self.profile(require_active=False)
+        ref = self.user.collection('fcm_registrations').document(hashlib.sha256(value.token.encode()).hexdigest())
+        ref.delete()
+        return {'unregistered': True}
 
     def visible(self, data):
         return data.get('status') in JOINABLE or (
@@ -122,6 +150,14 @@ class VolunteerService(VolunteerWorkflow):
 router = APIRouter(prefix='/v1/volunteer', tags=['Volunteer'])
 def service(token=Depends(identity)):
     return VolunteerService(token)
+
+@router.put('/fcm-registrations')
+def register_device(value: VolunteerDevice, s=Depends(service)):
+    return s.register_device(value)
+
+@router.post('/fcm-registrations/unregister')
+def unregister_device(value: FcmUnregister, s=Depends(service)):
+    return s.unregister_device(value)
 
 @router.get('')
 def profile(s=Depends(service)):

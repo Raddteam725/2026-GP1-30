@@ -77,13 +77,15 @@ def case():
 def test_profile_from_admin_document_and_no_self_registration(db):
     assert vol().profile()['volunteer_id'] == 'VOL-one'
     db.data['users/one']['active'] = False
-    assert vol().profile()['active'] is False
+    with pytest.raises(HTTPException) as inactive:
+        vol().profile()
+    assert inactive.value.detail == 'volunteer_inactive'
     with pytest.raises(HTTPException): vol('missing').profile()
     with pytest.raises(HTTPException): vol(role='guardian').profile()
     app.dependency_overrides[identity] = lambda: {'uid': 'one'}
     with TestClient(app) as client:
         assert client.put('/v1/volunteer', json={'active': True}).status_code == 405
-        assert client.get('/v1/volunteer').json()['uid'] == 'one'
+        assert client.get('/v1/volunteer').status_code == 403
 
 def test_guardian_cannot_use_any_volunteer_endpoint(db):
     _, case_id = case()

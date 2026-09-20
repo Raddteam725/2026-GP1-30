@@ -1,17 +1,12 @@
-"""Canonical, role-agnostic search-alert contract.
+"""Shared Guardian/Volunteer alert intents.
 
-Shared by Guardian, Volunteer and Admin services against the SAME top-level
-`alerts` collection -- there is no Guardian-only or Volunteer-only alert
-store. A Guardian action (successful case creation) only ever *writes* an
-alert intent here; delivery and targeting are Volunteer/Admin-side concerns
-that are not yet integrated (no Volunteer device token or live-location
-contract exists in this codebase yet). This module never claims a delivery
-that did not happen: `delivered` starts false and only a future delivery
-worker, wired against real Volunteer push tokens, may set it true.
+Guardian case creation persists the general intent in the case transaction.
+volunteer_alerts dispatches real FCM and records per-device delivery receipts
+under the recipient's notification. No delivery is inferred from an intent.
 """
 from firebase_admin import firestore
 
-# Nearby is defined centrally so every consumer (a future proximity worker,
+# Nearby is defined centrally so every consumer (the proximity worker,
 # tests, ops tooling) agrees on the same number. Subject to tuning during
 # system testing -- change this one constant, not call sites.
 PROXIMITY_RADIUS_METERS = 500
@@ -22,9 +17,9 @@ def general_alert(db, tx, *, case_id, event_id, status):
     Called once, inside the same transaction as case creation, immediately
     after the case document is written and before anything else -- the
     initial general alert must never be delayed by the Guided Assistant.
-    No Volunteer recipient list exists yet, so this is a broadcast-scoped
-    intent (recipient_volunteer_id=None) for a future dispatcher to fan out
-    once Volunteer device tokens are integrated.
+    This broadcast-scoped intent is fanned out through volunteer_alerts using
+    authenticated device registrations; delivery receipts live with each
+    recipient notification.
     """
     ref = db.collection("alerts").document()
     tx.set(ref, {
@@ -38,9 +33,9 @@ def general_alert(db, tx, *, case_id, event_id, status):
 def priority_alert(db, tx, *, case_id, event_id, status, volunteer_id, distance_meters):
     """Persist a priority alert intent for one Volunteer within PROXIMITY_RADIUS_METERS.
 
-    Not called anywhere yet: it requires a Volunteer live-location contract
-    that does not exist in this codebase. Kept here, alongside the general
-    alert it mirrors, as the documented shape a future proximity worker
+    The delivery service uses deterministic per-case/recipient intent IDs
+    so retries do not create duplicate priority intents. Kept here, alongside the general
+    alert it mirrors, as the documented shape the proximity worker
     (comparing a case's guided-report last-seen coordinates against
     available Volunteer locations) should write to -- so Guardian, Volunteer
     and Admin code all target one canonical `alerts` shape from day one.

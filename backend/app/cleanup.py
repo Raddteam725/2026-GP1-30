@@ -1,8 +1,5 @@
-"""Two independent, idempotent retention jobs. Deliberately NOT wired to any
-scheduler/deployment mechanism here -- during development they are invoked
-directly (by tests, or manually via `python -m app.cleanup` for controlled
-verification against real Firebase). Whatever eventually triggers them on a
-schedule in production calls these same functions unchanged.
+"""Idempotent retention jobs, invoked every minute by the approved local server.
+Production scheduling remains a deployment concern; the same jobs are reusable.
 
 - expire_photos(): a registered individual's photo is only ever current for
   24 hours from its own capture time (never from an event day/date boundary).
@@ -31,7 +28,7 @@ from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 from .firebase import database, bucket
 from .service import PHOTO_FRESHNESS
-from .case_models import TERMINAL_STATUSES
+from .case_models import TERMINAL_STATUSES, age_group
 
 CASE_RETENTION = timedelta(hours=24)
 
@@ -103,6 +100,8 @@ def _delete_case_debris(db, case_id, guardian_id):
     if guardian_id:
         notes = db.collection("users").document(guardian_id).collection("notifications")
         for note in notes.where(filter=FieldFilter("case_id", "==", case_id)).stream():
+            for receipt in note.reference.collection("deliveries").stream():
+                receipt.reference.delete()
             note.reference.delete()
     # Every Volunteer can end up with a case-linked notification (materialized
     # lazily by VolunteerWorkflow.notifications_list for anyone who viewed
@@ -112,6 +111,8 @@ def _delete_case_debris(db, case_id, guardian_id):
     for volunteer in db.collection("users").where(filter=FieldFilter("role", "==", "volunteer")).stream():
         notes = volunteer.reference.collection("volunteer_notifications")
         for note in notes.where(filter=FieldFilter("case_id", "==", case_id)).stream():
+            for receipt in note.reference.collection("deliveries").stream():
+                receipt.reference.delete()
             note.reference.delete()
 
 def _scrub_case(db, doc):
@@ -126,7 +127,7 @@ def _scrub_case(db, doc):
         return  # Case row already minimized; only the debris retry above matters now.
     minimal = {
         "status": data.get("status"), "created_at": data.get("created_at"),
-        "closed_at": data.get("closed_at"), "age_group": data.get("age_group"),
+        "closed_at": data.get("closed_at"), "age_group": age_group(data["age"]) if isinstance(data.get("age"), int) else data.get("age_group"),
         "event_id": data.get("event_id"), "scrubbed_at": firestore.SERVER_TIMESTAMP,
     }
     # The one identifier the documented "Reunited Cases by Volunteer" Admin
@@ -149,14 +150,23 @@ def scrub_terminal_cases():
         for doc in due:
             _scrub_case(db, doc)
 
+def delete_finished_found_photos():
+    """Retry interrupted synchronous deletion without touching missing cases."""
+    db = database()
+    for report in db.collection('found_reports').stream():
+        data = report.to_dict()
+        path = data.get('photo_path')
+        if path and (data.get('ended') or data.get('matched_profile_id')) and _delete_blob(path):
+            report.reference.update({'photo_path': firestore.DELETE_FIELD})
+
 def run_all():
     """Convenience for manual/controlled invocation during development
-    (`python -m app.cleanup`). Not wired to any scheduler -- deployment
-    decides how/when this runs; order here does not matter, each job is
-    independent and idempotent."""
+    (`python -m app.cleanup`). The local server also invokes these jobs
+    independently every minute."""
     run()
     expire_photos()
     scrub_terminal_cases()
+    delete_finished_found_photos()
 
 if __name__ == "__main__":
     run_all()

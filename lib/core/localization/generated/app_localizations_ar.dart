@@ -1400,4 +1400,18 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get resendReset => 'إرسال مرة أخرى';
+
+  @override
+  String get vAccountDeactivated => 'حساب المتطوع غير نشط. تم تسجيل خروجك.';
+
+  @override
+  String get vEndIdentification => 'إنهاء محاولة التعرف';
+
+  @override
+  String get vEndIdentificationHint =>
+      'هل تريد إنهاء محاولة التعرف وحذف الصورة الملتقطة؟ سيستمر بلاغ الفقدان والبحث دون تغيير.';
+
+  @override
+  String get locationNotRecorded =>
+      'تعذّر تسجيل الموقع. يمكنك المتابعة؛ يبقى التنبيه العام نشطًا.';
 }

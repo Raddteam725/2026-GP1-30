@@ -10,6 +10,7 @@ from .events import active_event
 from .service import owned_registration, photo_expired
 from .alerts import general_alert
 from .push import notify_guardian
+from .volunteer_alerts import safe_dispatch
 
 def public_case(doc):
     data = doc.to_dict()
@@ -86,6 +87,7 @@ class CaseService:
             return ref.id
         result = public_case(self.owned(create(self.db.transaction())))
         if created_new:
+            safe_dispatch(self.db, result['id'])
             # Push is an ADDITIONAL channel alongside the notification doc
             # already written above -- never a replacement for it, and never
             # allowed to affect this already-committed business operation.
@@ -110,6 +112,7 @@ class CaseService:
             tx.update(doc.reference, {"guided_report": value.model_dump(),
                 "updated_at": firestore.SERVER_TIMESTAMP})
         save(self.db.transaction())
+        safe_dispatch(self.db, case_id)
         return public_case(self.owned(case_id))
 
     def _terminate(self, case_id, outcome):

@@ -134,8 +134,9 @@ def test_validate_transition_enforces_ordered_progression():
         validate_transition("unknown", STAGES[0])
 
 def test_guided_report_requires_coordinates_only_when_same_location():
+    assert GuidedReport(same_location=True)  # Permission denied/unavailable: general alert only.
     with pytest.raises(ValidationError):
-        GuidedReport(same_location=True)
+        GuidedReport(same_location=True, latitude=1)
     with pytest.raises(ValidationError):
         GuidedReport(same_location=False, latitude=1, longitude=1)
     assert GuidedReport(same_location=True, latitude=1, longitude=1)
@@ -151,11 +152,11 @@ def test_case_retains_age_group_and_closure_timestamp_for_admin_reporting(storag
     s, individual_id = guardian_with_individual("owner")
     cs = CaseService(s)
     created = cs.create(CaseCreate(individual_id=individual_id))
-    assert created["age_group"] == "6-12"  # guardian_with_individual registers age 7
+    assert created["age_group"] == "6-17"  # guardian_with_individual registers age 7
     assert created["closed_at"] is None
     resolved = cs.resolve(created["id"])
     assert resolved["closed_at"] is not None
-    assert resolved["age_group"] == "6-12"  # preserved unchanged through closure
+    assert resolved["age_group"] == "6-17"  # preserved unchanged through closure
 
 def test_create_case_writes_the_shared_general_alert_intent(storage):
     db, _ = storage

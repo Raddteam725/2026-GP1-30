@@ -507,5 +507,9 @@
   "qrRefreshing": "Generating a new code…",
   "resetSentTitle": "Check your email",
   "backToLogin": "Back to Log In",
-  "resendReset": "Send again"
+  "resendReset": "Send again",
+  "vAccountDeactivated": "Your Volunteer account is inactive. You have been signed out.",
+  "vEndIdentification": "End Identification Attempt",
+  "vEndIdentificationHint": "End this identification attempt and delete the captured photo? The missing-person case and search will continue.",
+  "locationNotRecorded": "Location could not be recorded. You can continue; the general alert remains active."
 }

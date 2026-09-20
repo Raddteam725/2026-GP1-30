@@ -78,8 +78,8 @@ class GuardianService:
 
     def account_role(self):
         # Volunteer role/status now come from the admin-owned users document.
-        # Inactive Volunteers may restore their session to view their inactive ID;
-        # operational authorization is enforced by VolunteerService.profile().
+        # VolunteerService.profile() authoritatively denies inactive accounts;
+        # resolving a role alone never grants access to protected data or ID.
         doc = self.user.get()
         if not doc.exists:
             raise HTTPException(404, detail="profile_missing")
@@ -139,7 +139,7 @@ class GuardianService:
         # any OTHER guardian's registration for this exact token first, so a
         # token is never simultaneously live under two guardians. A second
         # legitimate device (a different token) is never touched by this.
-        for other in self.db.collection("users").where(filter=FieldFilter("role", "==", "guardian")).stream():
+        for other in self.db.collection("users").stream():
             if other.id == self.uid:
                 continue
             stale = other.reference.collection("fcm_registrations").document(doc_id).get()
