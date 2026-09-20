@@ -57,7 +57,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get arabicLanguage => 'Arabic language';
 
   @override
-  String get brandFooter => 'Radd • Bringing People Back Together';
+  String get brandFooter => 'Radd · Bringing People Back Together';
 
   @override
   String get joinRadd => 'Join Radd';
@@ -187,7 +187,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activeCaseError =>
-      'This individual cannot be deleted while an active case exists. Resolve or cancel the case first.';
+      'This individual cannot be edited or deleted while an active case exists. Resolve or cancel the case first.';
 
   @override
   String get retry => 'Try Again';
@@ -277,19 +277,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get relationship => 'Relationship to Guardian';
 
   @override
-  String get daughter => 'Daughter';
-
-  @override
-  String get son => 'Son';
+  String get child => 'Child';
 
   @override
   String get parent => 'Parent';
 
   @override
-  String get sibling => 'Sibling';
+  String get other => 'Other';
 
   @override
-  String get other => 'Other person under my care';
+  String get specifyRelationship => 'Specify relationship';
 
   @override
   String get save => 'Save';
@@ -1067,7 +1064,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get trackStatus => 'Track Status';
 
   @override
-  String get activeCases => 'Active cases';
+  String get activeCases => 'Active Cases';
 
   @override
   String get noCases => 'No cases yet';
@@ -1133,10 +1130,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get verificationExplanation =>
-      'Show this code to an authorized Volunteer to verify your connection to this case. It does not identify the missing individual.';
+      'Show this code to an authorized Volunteer to verify your identity as this account\'s Guardian. It does not identify any missing individual.';
 
   @override
   String get noEligibleCases => 'No cases are awaiting Guardian verification.';
+
+  @override
+  String get casesAwaitingVerification => 'Cases awaiting verification';
 
   @override
   String get verificationExpired =>
@@ -1169,7 +1169,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get requiredAnswer => 'Please complete this answer.';
 
   @override
-  String get activeCase => 'Active case';
+  String get activeCase => 'Active Case';
 
   @override
   String get verificationExpires => 'Valid until';
@@ -1190,4 +1190,223 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get vQrRequired =>
       'Ask the Guardian to display this case’s QR code in their signed-in Radd account. A case identifier alone cannot verify identity.';
+
+  @override
+  String get resolved => 'Resolved';
+
+  @override
+  String get cancelled => 'Cancelled';
+
+  @override
+  String get transferredToAuthority => 'Transferred to Authority';
+
+  @override
+  String get casesSubtitle => 'Track your missing-person cases';
+
+  @override
+  String get resolveReport => 'Resolve Report';
+
+  @override
+  String get resolveReportConfirm =>
+      'Resolve this report? Only do this if you found the individual independently, outside of Radd.';
+
+  @override
+  String get cancelReport => 'Cancel Report';
+
+  @override
+  String get cancelReportConfirm =>
+      'Cancel this report? Use this only if it was created by mistake.';
+
+  @override
+  String get reunitedOutcome =>
+      'This individual has been reunited with their Guardian.';
+
+  @override
+  String get caseClosedNotice =>
+      'This report is closed and is no longer part of active search and matching.';
+
+  @override
+  String get caseDetails => 'Case Details';
+
+  @override
+  String get activeCaseLockNotice =>
+      'Editing and deletion are unavailable while an active case exists for this individual.';
+
+  @override
+  String get guidedAssistantRequired =>
+      'Please finish the required questions before leaving this screen.';
+
+  @override
+  String get caseClosedActionError =>
+      'This report is closed and can no longer be changed.';
+
+  @override
+  String get reportAlreadySubmitted =>
+      'This report has already been submitted and can no longer be edited.';
+
+  @override
+  String get photoExpiredError =>
+      'This photo has expired and can no longer be used. Take a new photo to continue.';
+
+  @override
+  String get photoExpiredNotice =>
+      'This photo has expired and is no longer usable. Take a new photo before reporting this individual missing.';
+
+  @override
+  String get updatePhotoRequired => 'Update Photo';
+
+  @override
+  String get caseId => 'Case ID';
+
+  @override
+  String get updatedLabel => 'Updated';
+
+  @override
+  String ageYears(String value) {
+    return '$value yrs';
+  }
+
+  @override
+  String get caseHistory => 'Case History';
+
+  @override
+  String get noActiveCasesHint => 'No active cases right now.';
+
+  @override
+  String get progressTimeline => 'Progress Timeline';
+
+  @override
+  String stageLabel(String number) {
+    return 'Stage $number';
+  }
+
+  @override
+  String stageStatus(String number, String status) {
+    return 'Stage $number: $status';
+  }
+
+  @override
+  String get activeLabel => 'Active';
+
+  @override
+  String get completedLabel => 'Completed';
+
+  @override
+  String get statusUpdatesAutomatically => 'Status updates automatically';
+
+  @override
+  String get reportReceivedDescription =>
+      'Your report has been received and active Volunteers have been notified.';
+
+  @override
+  String get searchInProgressDescription =>
+      'Volunteers are actively searching for the individual.';
+
+  @override
+  String get matchConfirmedDescription =>
+      'A Volunteer has confirmed a match and will proceed to Guardian verification.';
+
+  @override
+  String get awaitingVerificationDescription =>
+      'Show your Guardian Verification QR to the Volunteer to confirm your identity.';
+
+  @override
+  String get reunitedDescription =>
+      'The individual has been safely reunited with you.';
+
+  @override
+  String get outcomeLabel => 'Outcome';
+
+  @override
+  String get lastSeenLocationLabel => 'Last-seen location';
+
+  @override
+  String get currentLocationConfirmed => 'Current location confirmed';
+
+  @override
+  String get clothingLabel => 'Clothing';
+
+  @override
+  String get distinctiveLabel => 'Distinctive item';
+
+  @override
+  String get additionalLabel => 'Additional information';
+
+  @override
+  String get none => 'None';
+
+  @override
+  String get detailsPending => 'Report details have not been completed yet.';
+
+  @override
+  String get reportedByGuardian => 'Reported by Guardian';
+
+  @override
+  String get todayJustNow => 'Today • Just now';
+
+  @override
+  String assistantIntro(String name) {
+    return 'Your missing-person report for $name has been submitted. I\'ll ask a few quick questions to help Volunteers with the search.';
+  }
+
+  @override
+  String get locationHint => 'Used to coordinate nearby Volunteers.';
+
+  @override
+  String get answersAutoSave => 'Answers save automatically to active case';
+
+  @override
+  String get typeAnswer => 'Type your answer…';
+
+  @override
+  String get send => 'Send';
+
+  @override
+  String get qrSubtitle =>
+      'Show this code to the Volunteer for Guardian verification';
+
+  @override
+  String get qrVerifiesAccount =>
+      'This QR code verifies that your authenticated Guardian account is associated with this case.';
+
+  @override
+  String get qrVerifiesAccountNoCase =>
+      'This QR code verifies your authenticated Guardian account. It does not identify any missing individual.';
+
+  @override
+  String get selectActiveCase => 'Select Active Case';
+
+  @override
+  String get scanInstruction =>
+      'Ask the Volunteer to scan this QR code using Radd.';
+
+  @override
+  String get cannotDisplayQr => 'Can\'t display the QR code?';
+
+  @override
+  String get caseIdentifierInstruction =>
+      'Show this identifier to the Volunteer for alternative verification.';
+
+  @override
+  String get caseIdentifierUsage =>
+      'Used to locate and verify the active case when the QR code cannot be displayed or scanned.';
+
+  @override
+  String get activeCaseIdentifier => 'Active case identifier';
+
+  @override
+  String get noActiveCaseQrNote =>
+      'You have no active cases right now. Your Guardian QR remains valid for verification.';
+
+  @override
+  String get qrRefreshing => 'Generating a new code…';
+
+  @override
+  String get resetSentTitle => 'Check your email';
+
+  @override
+  String get backToLogin => 'Back to Log In';
+
+  @override
+  String get resendReset => 'Send again';
 }

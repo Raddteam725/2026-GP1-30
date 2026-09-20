@@ -34,8 +34,11 @@ class TestAuth implements AuthService {
     events.add(false);
   }
 
+  final List<String> resetRequests = [];
   @override
-  Future<void> resetPassword(String email) async {}
+  Future<void> resetPassword(String email) async {
+    resetRequests.add(email);
+  }
 }
 
 class TestRepository implements GuardianRepository {
@@ -81,6 +84,9 @@ class TestRepository implements GuardianRepository {
       age: input.age,
       gender: input.gender,
       relationship: input.relationship,
+      relationshipOther: input.relationship == 'other'
+          ? input.relationshipOther
+          : null,
     );
     records.removeWhere((i) => i.id == p.id);
     records.add(p);
@@ -128,6 +134,7 @@ class TestRepository implements GuardianRepository {
           age: p.age,
           gender: p.gender,
           relationship: p.relationship,
+          relationshipOther: p.relationshipOther,
         ),
       );
     notificationRecords.add(
@@ -187,17 +194,80 @@ class TestRepository implements GuardianRepository {
       );
   }
 
+  int _verificationCounter = 0;
   @override
-  Future<GuardianVerification> verification(String id) async {
+  Future<GuardianVerification>
+  accountVerification() async => GuardianVerification(
+    payload:
+        'radd:guardian-verification:v1:test-guardian:test-nonce-${++_verificationCounter}',
+    expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 5)),
+  );
+
+  Future<MissingCase> _terminate(String id, String outcome) async {
     final current = caseRecords.singleWhere((c) => c.id == id);
-    if (current.status != 'awaiting_guardian_verification') {
-      throw const AppFailure('conflict');
-    }
-    return GuardianVerification(
-      caseId: id,
-      payload: 'radd:guardian-verification:v1:$id:test-nonce',
-      expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 5)),
+    if (!current.active) throw const AppFailure('conflict');
+    final updated = MissingCase(
+      id: current.id,
+      individualId: current.individualId,
+      name: current.name,
+      age: current.age,
+      status: outcome,
+      eventId: current.eventId,
+      createdAt: current.createdAt,
+      updatedAt: DateTime.now().toUtc(),
+      stages: current.stages,
+      report: current.report,
     );
+    caseRecords
+      ..removeWhere((c) => c.id == id)
+      ..add(updated);
+    final person = records.singleWhere((i) => i.id == current.individualId);
+    records
+      ..removeWhere((i) => i.id == person.id)
+      ..add(
+        Individual(
+          id: person.id,
+          fullName: person.fullName,
+          age: person.age,
+          gender: person.gender,
+          relationship: person.relationship,
+          relationshipOther: person.relationshipOther,
+        ),
+      );
+    return updated;
+  }
+
+  @override
+  Future<MissingCase> cancelCase(String id) => _terminate(id, 'cancelled');
+  @override
+  Future<MissingCase> resolveCase(String id) => _terminate(id, 'resolved');
+
+  final List<String> registeredFcmTokens = [];
+  final List<String> unregisteredFcmTokens = [];
+  String? lastRegisteredLocale;
+  // Lets tests simulate a temporary failure (e.g. offline) without any real
+  // network involved -- both flip back to false after throwing once, since a
+  // real failure is transient, not a permanent condition.
+  bool failNextFcmRegister = false;
+  bool failNextFcmUnregister = false;
+  @override
+  Future<void> registerFcmToken(String token, String locale) async {
+    if (failNextFcmRegister) {
+      failNextFcmRegister = false;
+      throw const AppFailure('network');
+    }
+    lastRegisteredLocale = locale;
+    if (!registeredFcmTokens.contains(token)) registeredFcmTokens.add(token);
+  }
+
+  @override
+  Future<void> unregisterFcmToken(String token) async {
+    if (failNextFcmUnregister) {
+      failNextFcmUnregister = false;
+      throw const AppFailure('network');
+    }
+    unregisteredFcmTokens.add(token);
+    registeredFcmTokens.remove(token);
   }
 
   @override

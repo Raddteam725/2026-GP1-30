@@ -30,6 +30,9 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
   );
   late String? _gender = widget.individual?.gender,
       _relationship = widget.individual?.relationship;
+  late final _relationshipOther = TextEditingController(
+    text: widget.individual?.relationshipOther,
+  );
   Uint8List? _photo;
   bool _busy = false, _photoError = false;
   Object? _error;
@@ -38,6 +41,7 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
     _scroll.dispose();
     _name.dispose();
     _age.dispose();
+    _relationshipOther.dispose();
     super.dispose();
   }
 
@@ -76,6 +80,9 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
           age: int.parse(_age.text.trim()),
           gender: _gender!,
           relationship: _relationship!,
+          relationshipOther: _relationship == 'other'
+              ? _relationshipOther.text
+              : null,
         ),
         id: widget.individual?.id,
         photo: _photo,
@@ -304,13 +311,7 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
                     hint: Text(s.selectRelationship),
                     decoration: const InputDecoration(),
                     items: [
-                      for (final v in [
-                        'daughter',
-                        'son',
-                        'parent',
-                        'sibling',
-                        'other',
-                      ])
+                      for (final v in ['child', 'parent', 'other'])
                         DropdownMenuItem(
                           value: v,
                           child: Text(relationshipLabel(v, s)),
@@ -321,6 +322,20 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
                         : (v) => setState(() => _relationship = v),
                     validator: (v) => FormValidation.required(v, s),
                   ),
+                  if (_relationship == 'other') ...[
+                    const SizedBox(height: 20),
+                    RequiredLabel(s.specifyRelationship),
+                    const SizedBox(height: 8),
+                    AppTextInput(
+                      label: s.specifyRelationship,
+                      showLabel: false,
+                      hint: s.specifyRelationship,
+                      controller: _relationshipOther,
+                      enabled: !_busy,
+                      validator: (v) => FormValidation.required(v?.trim(), s),
+                      textInputAction: TextInputAction.done,
+                    ),
+                  ],
                 ],
               ),
             ),

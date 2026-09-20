@@ -2,6 +2,20 @@
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 STAGES = ("report_received", "search_in_progress", "match_confirmed", "awaiting_guardian_verification", "reunited")
+# Guardian-initiated terminal outcomes, reachable from any non-terminal stage
+# (never sequential, never via validate_transition). "reunited" is both the
+# last ordered stage and a terminal outcome; these three are terminal only.
+GUARDIAN_TERMINAL_OUTCOMES = ("resolved", "cancelled")
+TERMINAL_STATUSES = ("reunited", "resolved", "cancelled", "transferred_to_authority")
+
+def age_group(age):
+    """Coarse bucket retained for Admin statistics without the exact age."""
+    if age <= 5: return "0-5"
+    if age <= 12: return "6-12"
+    if age <= 17: return "13-17"
+    if age <= 30: return "18-30"
+    if age <= 50: return "31-50"
+    return "51+"
 
 class CaseCreate(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)

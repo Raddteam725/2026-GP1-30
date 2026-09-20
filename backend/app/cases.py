@@ -1,19 +1,19 @@
 """Ownership-scoped Guardian operations on the shared top-level cases collection."""
-import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
-from .case_models import STAGES
+from .case_models import STAGES, TERMINAL_STATUSES, age_group
 from .events import active_event
-from .service import owned_registration
+from .service import owned_registration, photo_expired
+from .alerts import general_alert
+from .push import notify_guardian
 
 def public_case(doc):
     data = doc.to_dict()
     return {"id": doc.id, **{k: data.get(k) for k in (
-        "individual_id", "individual_name", "age", "event_id", "status",
-        "created_at", "updated_at", "stage_timestamps", "guided_report")}}
+        "individual_id", "individual_name", "age", "age_group", "event_id", "status",
+        "created_at", "updated_at", "closed_at", "stage_timestamps", "guided_report")}}
 
 def validate_transition(current, target):
     if current not in STAGES or target not in STAGES or STAGES.index(target) != STAGES.index(current) + 1:
@@ -41,6 +41,7 @@ class CaseService:
     def create(self, value):
         person = self.guardian.user.collection("individuals").document(value.individual_id)
         ref = self.cases.document("RD-" + secrets.token_hex(6).upper())
+        created_new = False
         @firestore.transactional
         def create(tx):
             person_doc = person.get(transaction=tx)
@@ -56,31 +57,93 @@ class CaseService:
                 raise HTTPException(409, detail="deletion_in_progress")
             if active:
                 return active.id  # Idempotent retry after a lost response.
+            # A report only becomes possible with a current photo -- this is
+            # the authoritative, server-side gate; the Flutter UI's own
+            # "needs a new photo" prompt is a convenience, not the enforcement.
+            if not data.get("photo_path") or photo_expired(data):
+                raise HTTPException(409, detail="photo_expired")
             if collision.exists:
                 raise HTTPException(409, detail="identifier_conflict")
+            nonlocal created_new
+            created_new = True
             now = firestore.SERVER_TIMESTAMP
             tx.set(ref, {"guardian_id": self.uid, "individual_id": value.individual_id,
                 "individual_path": person.path, "individual_name": data["full_name"],
-                "age": data["age"], "event_id": event_id, "status": STAGES[0],
-                "created_at": now, "updated_at": now,
+                "age": data["age"], "age_group": age_group(data["age"]),
+                "event_id": event_id, "status": STAGES[0],
+                "created_at": now, "updated_at": now, "closed_at": None,
                 "stage_timestamps": {STAGES[0]: now}, "guided_report": None})
             tx.update(person, {"active_case_id": ref.id})
+            # The initial general Volunteer alert happens as part of this same
+            # successful case-creation transaction -- never delayed by the
+            # (separate, subsequent) Guided Assistant step.
+            general_alert(self.db, tx, case_id=ref.id, event_id=event_id, status=STAGES[0])
             tx.set(self.notifications.document(ref.id + "-report_received"), {
                 "event_id": event_id, "case_id": ref.id, "kind": "case_created", "status": STAGES[0],
                 "created_at": now, "read_at": None})
             return ref.id
-        return public_case(self.owned(create(self.db.transaction())))
+        result = public_case(self.owned(create(self.db.transaction())))
+        if created_new:
+            # Push is an ADDITIONAL channel alongside the notification doc
+            # already written above -- never a replacement for it, and never
+            # allowed to affect this already-committed business operation.
+            try:
+                notify_guardian(self.uid, kind="case_created", status=result["status"],
+                    case_id=result["id"], event_id=result["event_id"])
+            except Exception:
+                pass
+        return result
 
     def save_report(self, case_id, value):
         @firestore.transactional
         def save(tx):
             doc = self.owned(case_id, tx)
-            if doc.to_dict()["status"] == "reunited":
+            data = doc.to_dict()
+            if data["status"] in TERMINAL_STATUSES:
                 raise HTTPException(409, detail="case_closed")
+            # Guided Assistant answers become read-only Case Details once submitted;
+            # this is not a permanent editable chat session.
+            if (data.get("guided_report") or {}).get("completed"):
+                raise HTTPException(409, detail="report_already_submitted")
             tx.update(doc.reference, {"guided_report": value.model_dump(),
                 "updated_at": firestore.SERVER_TIMESTAMP})
         save(self.db.transaction())
         return public_case(self.owned(case_id))
+
+    def _terminate(self, case_id, outcome):
+        # Shared by cancel() and resolve(): a Guardian-initiated terminal outcome,
+        # reachable from any still-active case (never sequential, never via
+        # validate_transition). Clears active_case_id so normal profile
+        # management (edit/delete) can resume on the individual.
+        @firestore.transactional
+        def terminate(tx):
+            doc = self.owned(case_id, tx)
+            data = doc.to_dict()
+            if data["status"] in TERMINAL_STATUSES:
+                raise HTTPException(409, detail="case_closed")
+            person = self.guardian.user.collection("individuals").document(data["individual_id"])
+            now = firestore.SERVER_TIMESTAMP
+            tx.update(doc.reference, {"status": outcome, "updated_at": now, "closed_at": now})
+            tx.update(person, {"active_case_id": None})
+            tx.set(self.notifications.document(case_id + "-" + outcome), {
+                "event_id": data["event_id"], "case_id": case_id, "kind": "status_changed",
+                "status": outcome, "created_at": firestore.SERVER_TIMESTAMP, "read_at": None})
+        terminate(self.db.transaction())
+        result = public_case(self.owned(case_id))
+        try:
+            notify_guardian(self.uid, kind="status_changed", status=outcome,
+                case_id=case_id, event_id=result["event_id"])
+        except Exception:
+            pass
+        return result
+
+    def cancel(self, case_id):
+        """Guardian reports a mistaken case; never confuse with a Volunteer-confirmed reunification."""
+        return self._terminate(case_id, "cancelled")
+
+    def resolve(self, case_id):
+        """Guardian independently found the individual; never confuse with Reunited."""
+        return self._terminate(case_id, "resolved")
 
     def list_notifications(self):
         return sorted([{"id": d.id, **d.to_dict()} for d in self.notifications.stream()],
@@ -99,24 +162,9 @@ class CaseService:
                 tx.update(ref, {"read_at": firestore.SERVER_TIMESTAMP})
         mark(self.db.transaction())
 
-    def verification(self, case_id):
-        # Opaque, short-lived, revocable bearer challenge. No UID or PII in QR.
-        nonce = secrets.token_urlsafe(32)
-        digest = hashlib.sha256(nonce.encode()).hexdigest()
-        expires = datetime.now(timezone.utc) + timedelta(minutes=5)
-        @firestore.transactional
-        def issue(tx):
-            doc = self.owned(case_id, tx)
-            if doc.to_dict()["status"] != "awaiting_guardian_verification":
-                raise HTTPException(409, detail="verification_not_ready")
-            tx.set(doc.reference.collection("verification").document("current"), {
-                "token_hash": digest, "guardian_id": self.uid,
-                "event_id": doc.to_dict()["event_id"], "expires_at": expires, "consumed_at": None})
-        issue(self.db.transaction())
-        return {"case_id": case_id, "payload": "radd:guardian-verification:v1:" + case_id + ":" + nonce,
-            "expires_at": expires}
-
 # No Guardian status mutation endpoint. Volunteer/Admin services must call a
 # transactional transition with role/event authorization and verification proof.
-# validate_transition is the shared ordered-progression guard; issuance of a QR
-# never changes status and a case identifier alone is not proof of identity.
+# validate_transition is the shared ordered-progression guard.
+# Guardian verification is account-level (GuardianService.account_verification),
+# not per-case: the case context comes from the Volunteer's own current case
+# (VolunteerWorkflow.verify_guardian). A case identifier alone is not proof of identity.

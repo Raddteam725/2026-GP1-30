@@ -1,4 +1,5 @@
 import os
+import time
 from functools import lru_cache
 import firebase_admin
 from firebase_admin import auth, firestore, storage
@@ -23,9 +24,16 @@ bearer = HTTPBearer(auto_error=False)
 def identity(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)):
     if credentials is None:
         raise HTTPException(401, detail="unauthorized")
-    try:
-        return auth.verify_id_token(credentials.credentials, app=firebase_app(), check_revoked=True)
-    except (auth.InvalidIdTokenError, auth.ExpiredIdTokenError, auth.RevokedIdTokenError, auth.UserDisabledError, ValueError):
-        raise HTTPException(401, detail="unauthorized") from None
-    except Exception:
-        raise HTTPException(503, detail="service_unavailable") from None
+    # check_revoked=True makes a network round-trip on every request (beyond
+    # local JWT verification); a transient connection blip there must not
+    # surface as "unavailable" to the Guardian on an otherwise-healthy token.
+    attempts = 3
+    for attempt in range(attempts):
+        try:
+            return auth.verify_id_token(credentials.credentials, app=firebase_app(), check_revoked=True)
+        except (auth.InvalidIdTokenError, auth.ExpiredIdTokenError, auth.RevokedIdTokenError, auth.UserDisabledError, ValueError):
+            raise HTTPException(401, detail="unauthorized") from None
+        except Exception:
+            if attempt == attempts - 1:
+                raise HTTPException(503, detail="service_unavailable") from None
+            time.sleep(0.3 * (attempt + 1))
