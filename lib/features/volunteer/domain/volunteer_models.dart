@@ -111,7 +111,7 @@ class VolunteerCase {
     this.confirmedBy,
   }) : joinedBy = {...?joinedBy};
   final String id;
-  final RegisteredPerson person;
+  RegisteredPerson person;
   final DateTime createdAt;
   DateTime updatedAt;
   CaseStatus status;
@@ -165,7 +165,14 @@ class VerificationReceipt {
   final DateTime at;
 }
 
-enum AlertKind { newCase, priority, statusUpdate }
+enum AlertKind {
+  newCase,
+  priority,
+  statusUpdate,
+  cancelled,
+  resolved,
+  reunited,
+}
 
 class VolunteerAlert {
   const VolunteerAlert({

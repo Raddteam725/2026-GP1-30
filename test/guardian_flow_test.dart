@@ -14,6 +14,7 @@ import 'package:radd/features/guardian/data/guardian_repository.dart';
 import 'package:radd/features/guardian/presentation/guardian_home_screen.dart';
 import 'package:radd/features/guardian/presentation/individual_form_screen.dart';
 import 'package:radd/features/guardian/presentation/cases_screen.dart';
+import 'package:radd/features/guardian/presentation/case_widgets.dart';
 import 'package:radd/features/guardian/presentation/guardian_qr_screen.dart';
 import 'package:radd/features/guardian/presentation/notifications_screen.dart';
 import 'package:radd/features/guardian/presentation/guided_report_screen.dart';
@@ -23,13 +24,12 @@ void main() {
   late TestAuth auth;
   late TestRepository repo;
   setUp(() {
+    GuardianPushService.resetForTesting();
     auth = TestAuth();
     repo = TestRepository();
-    GuardianPushService.resetForTesting();
   });
   tearDown(() async {
     await auth.events.close();
-    GuardianPushService.resetForTesting();
   });
   Future<void> start(WidgetTester t, {String locale = 'en'}) async {
     await t.pumpWidget(
@@ -440,6 +440,49 @@ void main() {
     await t.pumpAndSettle();
     expect(t.takeException(), isNull);
   });
+  for (final destination in [AppRoutes.guardian, AppRoutes.cases]) {
+    testWidgets('Guardian event refreshes $destination immediately', (t) async {
+      await start(t);
+      auth.active = true;
+      repo.records.add(
+        const Individual(
+          id: 'live-test',
+          fullName: 'Event Person',
+          age: 7,
+          gender: 'female',
+          relationship: 'child',
+        ),
+      );
+      await route(t, destination);
+      expect(find.text('Report Received'), findsNothing);
+      await repo.reportMissing('live-test');
+      GuardianPushRefresh.instance.ping();
+      await t.pumpAndSettle();
+      await scrollToText(t, 'Report Received');
+      expect(find.text('Report Received'), findsWidgets);
+      final value = repo.caseRecords.single;
+      repo.caseRecords[0] = MissingCase(
+        id: value.id,
+        individualId: value.individualId,
+        name: value.name,
+        age: value.age,
+        status: 'search_in_progress',
+        eventId: value.eventId,
+        createdAt: value.createdAt,
+        stages: value.stages,
+      );
+      GuardianPushRefresh.instance.acceptPush({
+        'role': 'guardian',
+        'case_id': value.id,
+        'status': 'search_in_progress',
+      });
+      await t.pumpAndSettle();
+      await scrollToText(t, 'Search in Progress');
+      expect(find.text('Search in Progress'), findsWidgets);
+      expect(find.text('Report Received'), findsNothing);
+      expect(t.takeException(), isNull);
+    });
+  }
   testWidgets('Refresh on Notifications never passes a Future to setState', (
     t,
   ) async {
@@ -540,8 +583,6 @@ void main() {
             },
           ),
         );
-      // No push arrived (simulating a missed FCM): the slow FALLBACK poll
-      // still picks the change up -- 30 s, deliberately not the normal path.
       await t.pump(const Duration(seconds: 31));
       await t.pump();
       expect(find.text('Search in Progress'), findsWidgets);
@@ -584,14 +625,98 @@ void main() {
             },
           ),
         );
-      // No 8-second wait this time -- a foreground push arrives instead.
-      GuardianPushRefresh.instance.ping();
+      final before = repo.caseFetches;
+      GuardianPushRefresh.instance.acceptPush({
+        'role': 'guardian',
+        'case_id': 'other',
+        'status': 'search_in_progress',
+      });
+      await t.pumpAndSettle();
+      expect(repo.caseFetches, before);
+      repo.failNextMissingCase = true;
+      GuardianPushRefresh.instance.acceptPush({
+        'role': 'guardian',
+        'case_id': case1.id,
+        'status': 'search_in_progress',
+      });
+      await t.pumpAndSettle();
+      expect(find.text('Report Received'), findsWidgets);
+      GuardianPushRefresh.instance.didChangeAppLifecycleState(
+        AppLifecycleState.resumed,
+      );
       await t.pumpAndSettle();
       expect(find.text('Search in Progress'), findsWidgets);
       Navigator.pop(t.element(find.byType(CaseStatusScreen)));
       await t.pumpAndSettle();
     },
   );
+
+  testWidgets('Individual Profile refetches after a relevant status event', (
+    t,
+  ) async {
+    await start(t);
+    auth.active = true;
+    repo.records.add(
+      const Individual(
+        id: 'test-id',
+        fullName: 'Test Person',
+        age: 7,
+        gender: 'female',
+        relationship: 'child',
+      ),
+    );
+    final value = await repo.reportMissing('test-id');
+    await route(t, AppRoutes.individual, arguments: 'test-id');
+    final before = repo.caseFetches;
+    GuardianPushRefresh.instance.acceptPush({
+      'role': 'guardian',
+      'case_id': 'other',
+      'status': 'resolved',
+    });
+    await t.pumpAndSettle();
+    expect(repo.caseFetches, before);
+    repo.caseRecords[0] = MissingCase(
+      id: value.id,
+      individualId: value.individualId,
+      name: value.name,
+      age: value.age,
+      status: 'search_in_progress',
+      eventId: value.eventId,
+      createdAt: value.createdAt,
+      stages: value.stages,
+    );
+    GuardianPushRefresh.instance.acceptPush({
+      'role': 'guardian',
+      'case_id': value.id,
+      'status': 'search_in_progress',
+    });
+    await t.pumpAndSettle();
+    expect(repo.caseFetches, before + 1);
+    await scrollToText(t, 'Active Case');
+    expect(
+      t
+          .widget<ReportMissingAction>(find.byType(ReportMissingAction))
+          .activeCase!
+          .status,
+      'search_in_progress',
+    );
+    await repo.resolveCase(value.id);
+    GuardianPushRefresh.instance.acceptPush({
+      'role': 'guardian',
+      'case_id': value.id,
+      'status': 'resolved',
+    });
+    await t.pumpAndSettle();
+    expect(find.text('Active Case'), findsNothing);
+    expect(
+      t
+          .widget<ReportMissingAction>(find.byType(ReportMissingAction))
+          .activeCase,
+      isNull,
+    );
+    expect(t.takeException(), isNull);
+  });
+
   testWidgets('Refresh on the QR screen never passes a Future to setState', (
     t,
   ) async {

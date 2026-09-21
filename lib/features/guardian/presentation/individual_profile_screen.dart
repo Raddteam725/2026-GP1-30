@@ -4,8 +4,9 @@ import '../../../app/app_services.dart';
 import '../../../core/localization/generated/app_localizations.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../shared/widgets/feature_page.dart';
-import '../data/guardian_case_events.dart';
 import '../data/guardian_repository.dart';
+import '../data/guardian_push_service.dart';
+import '../data/coalesced_refresh.dart';
 import 'individual_widgets.dart';
 import 'guardian_components.dart';
 import 'case_widgets.dart';
@@ -21,25 +22,37 @@ class IndividualProfileScreen extends StatefulWidget {
 
 class _IndividualProfileScreenState extends State<IndividualProfileScreen> {
   Future<(Individual, MissingCase?)>? _data;
-  // Latest authoritative (individual, active case) -- set by every load, so
-  // the active-case presentation follows a Volunteer-driven change in place.
+  final _refresh = CoalescedRefresh();
+  int _generation = 0;
   (Individual, MissingCase?)? _current;
-  final _sync = CoalescedRefresh('individual');
-  bool _busy = false;
-  Object? _error;
-  int _revision = 0;
   @override
   void initState() {
     super.initState();
-    GuardianCaseEvents.instance.addListener(_onEvent);
+    GuardianPushRefresh.instance.addListener(_onEvent);
   }
 
   @override
   void dispose() {
-    GuardianCaseEvents.instance.removeListener(_onEvent);
+    GuardianPushRefresh.instance.removeListener(_onEvent);
     super.dispose();
   }
 
+  void _onEvent() {
+    final id = _current?.$2?.id;
+    if (id != null && !GuardianPushRefresh.instance.concerns(id)) return;
+    _refresh.run(() async {
+      if (!mounted) return;
+      final value = await _load();
+      if (!mounted || _current != value) return;
+      setState(() {
+        _data = Future.value(value);
+      });
+    });
+  }
+
+  bool _busy = false;
+  Object? _error;
+  int _revision = 0;
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -47,38 +60,16 @@ class _IndividualProfileScreenState extends State<IndividualProfileScreen> {
   }
 
   Future<(Individual, MissingCase?)> _load() async {
+    final generation = ++_generation;
     final guardian = AppServices.of(context).guardian;
     final person = await guardian.individual(widget.id);
     final activeCaseId = person.activeCaseId;
     final activeCase = activeCaseId == null
         ? null
         : await guardian.missingCase(activeCaseId);
-    final result = (person, activeCase);
-    if (mounted) _current = result;
-    return result;
-  }
-
-  void _onEvent() {
-    final event = GuardianCaseEvents.instance.last;
-    if (event == null || !mounted || _busy) return;
-    // With an active case only an event about it matters; without one, any
-    // case event may concern this individual (a Volunteer's confirmed found
-    // report can open a case for them), so refetch.
-    final activeId = _current?.$2?.id;
-    if (activeId != null && !event.concerns(activeId)) return;
-    _sync.run(() async {
-      await _load();
-      if (mounted) setState(() {});
-    });
-    if (event.source == GuardianEventSource.push &&
-        event.caseId != null &&
-        event.status != null) {
-      showCaseUpdateNotice(
-        context,
-        caseId: event.caseId!,
-        status: event.status!,
-      );
-    }
+    final value = (person, activeCase);
+    if (mounted && generation == _generation) _current = value;
+    return value;
   }
 
   Future<void> _delete(Individual person) async {
@@ -124,9 +115,8 @@ class _IndividualProfileScreenState extends State<IndividualProfileScreen> {
       child: FutureBuilder<(Individual, MissingCase?)>(
         future: _data,
         builder: (context, state) {
-          final data = _current ?? state.data;
-          final p = data?.$1;
-          final activeCase = data?.$2;
+          final p = (_current ?? state.data)?.$1;
+          final activeCase = (_current ?? state.data)?.$2;
           final locked = activeCase != null;
           return FeaturePage(
             title: s.individualProfile,

@@ -52,6 +52,8 @@ class TestRepository implements GuardianRepository {
   final List<Individual> records = [];
   final List<MissingCase> caseRecords = [];
   final List<GuardianNotification> notificationRecords = [];
+  int caseFetches = 0;
+  bool failNextMissingCase = false;
   int _caseCounter = 0;
   @override
   Future<GuardianProfile> profile() async => person;
@@ -100,59 +102,16 @@ class TestRepository implements GuardianRepository {
     records.removeWhere((i) => i.id == id);
   }
 
-  // Real-time tests count authoritative refetches and simulate a transient
-  // backend failure (flips back after throwing once, like a real blip).
-  int caseListFetches = 0, caseFetches = 0, notificationFetches = 0;
-  bool failNextCases = false, failNextMissingCase = false;
   @override
-  Future<List<MissingCase>> cases() async {
-    caseListFetches++;
-    if (failNextCases) {
-      failNextCases = false;
-      throw const AppFailure('network');
-    }
-    return List.of(caseRecords);
-  }
-
+  Future<List<MissingCase>> cases() async => List.of(caseRecords);
   @override
   Future<MissingCase> missingCase(String id) async {
     caseFetches++;
     if (failNextMissingCase) {
       failNextMissingCase = false;
-      throw const AppFailure('network');
+      throw const AppFailure('unavailable');
     }
     return caseRecords.singleWhere((c) => c.id == id);
-  }
-
-  /// Stands in for a Volunteer-driven stage change committed on the backend.
-  void advanceCase(String id, String status) {
-    final current = caseRecords.singleWhere((c) => c.id == id);
-    final now = DateTime.now().toUtc();
-    caseRecords
-      ..removeWhere((c) => c.id == id)
-      ..add(
-        MissingCase(
-          id: current.id,
-          individualId: current.individualId,
-          name: current.name,
-          age: current.age,
-          status: status,
-          eventId: current.eventId,
-          createdAt: current.createdAt,
-          updatedAt: now,
-          stages: {...current.stages, status: now.toIso8601String()},
-          report: current.report,
-        ),
-      );
-    notificationRecords.add(
-      GuardianNotification(
-        id: '$id-$status',
-        caseId: id,
-        status: status,
-        read: false,
-        createdAt: now,
-      ),
-    );
   }
 
   @override
@@ -225,11 +184,8 @@ class TestRepository implements GuardianRepository {
   }
 
   @override
-  Future<List<GuardianNotification>> notifications() async {
-    notificationFetches++;
-    return List.of(notificationRecords);
-  }
-
+  Future<List<GuardianNotification>> notifications() async =>
+      List.of(notificationRecords);
   @override
   Future<void> readNotification(String id) async {
     final n = notificationRecords.singleWhere((n) => n.id == id);

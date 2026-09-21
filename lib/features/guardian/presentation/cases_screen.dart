@@ -7,7 +7,8 @@ import '../../../core/localization/generated/app_localizations.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/feature_page.dart';
-import '../data/guardian_case_events.dart';
+import '../data/guardian_push_service.dart';
+import '../data/coalesced_refresh.dart';
 import '../data/guardian_repository.dart';
 import 'case_widgets.dart';
 import 'guardian_components.dart';
@@ -21,51 +22,55 @@ class CasesScreen extends StatefulWidget {
 }
 
 class _CasesScreenState extends State<CasesScreen> {
-  Future<List<MissingCase>>? _data;
-  // The latest authoritative list from an event-driven (push/resume) refetch;
-  // takes precedence over the initial/explicit future so the list updates
-  // in place without a loading flash, and is kept if a refetch fails.
-  List<MissingCase>? _live;
-  final _sync = CoalescedRefresh('cases');
   @override
   void initState() {
     super.initState();
-    GuardianCaseEvents.instance.addListener(_onEvent);
+    GuardianPushRefresh.instance.addListener(_recover);
   }
 
   @override
   void dispose() {
-    GuardianCaseEvents.instance.removeListener(_onEvent);
+    GuardianPushRefresh.instance.removeListener(_recover);
     super.dispose();
   }
 
+  int _eventGeneration = 0;
+  final _eventRefresh = CoalescedRefresh();
+  Future<void> _recover() => _eventRefresh.run(_recoverOnce);
+  Future<void> _recoverOnce() async {
+    if (!mounted) return;
+    final generation = ++_eventGeneration;
+    try {
+      final data = await AppServices.of(context).guardian.cases();
+      if (!mounted || generation != _eventGeneration) return;
+      setState(() {
+        _data = Future.value(data);
+      });
+      assert(() {
+        debugPrint(
+          'Radd Guardian authoritative refresh T8/T9 ${DateTime.now().toUtc().toIso8601String()}',
+        );
+        return true;
+      }());
+    } catch (error) {
+      assert(() {
+        debugPrint(
+          'Radd Guardian background refresh failed (${error.runtimeType})',
+        );
+        return true;
+      }());
+    }
+  }
+
+  Future<List<MissingCase>>? _data;
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _data ??= AppServices.of(context).guardian.cases();
   }
 
-  void _onEvent() {
-    final event = GuardianCaseEvents.instance.last;
-    if (event == null || !mounted) return;
-    final guardian = AppServices.of(context).guardian;
-    _sync.run(() async {
-      final value = await guardian.cases();
-      if (mounted) setState(() => _live = value);
-    });
-    if (event.source == GuardianEventSource.push &&
-        event.caseId != null &&
-        event.status != null) {
-      showCaseUpdateNotice(
-        context,
-        caseId: event.caseId!,
-        status: event.status!,
-      );
-    }
-  }
-
   void _reload() => setState(() {
-    _live = null;
+    ++_eventGeneration;
     _data = AppServices.of(context).guardian.cases();
   });
 
@@ -81,8 +86,7 @@ class _CasesScreenState extends State<CasesScreen> {
     return FutureBuilder<List<MissingCase>>(
       future: _data,
       builder: (context, state) {
-        final loaded = _live ?? state.data;
-        final cases = loaded ?? const <MissingCase>[];
+        final cases = state.data ?? const <MissingCase>[];
         // Only non-terminal cases are Active; closed ones are history and
         // never counted or mixed into the active section.
         final active = cases.where((c) => c.active).toList();
@@ -125,12 +129,12 @@ class _CasesScreenState extends State<CasesScreen> {
               ],
             ),
             const SizedBox(height: 20),
-            if (state.hasError && loaded == null)
+            if (state.hasError)
               ErrorNotice(
                 message: failureMessage(state.error!, s),
                 onRetry: _reload,
               )
-            else if (loaded == null)
+            else if (!state.hasData)
               const Center(child: CircularProgressIndicator())
             else if (cases.isEmpty)
               GuardianPanel(
@@ -228,17 +232,15 @@ class CaseStatusScreen extends StatefulWidget {
   State<CaseStatusScreen> createState() => _CaseStatusScreenState();
 }
 
-// The case-status screen reflects Volunteer-driven progress (stage changes,
-// guardian-verification requests) without the Guardian doing anything: the
-// NORMAL path is the backend's FCM signal for this case (GuardianCaseEvents),
-// answered by an immediate authoritative refetch. The quiet poll below is a
-// FALLBACK only -- for a missed/delayed push -- so it is deliberately slow,
-// restarted after every event-driven refetch (it never fires right behind
-// one), coalesced with it (never a parallel request), and stopped once the
-// case is terminal. Radd talks to the backend only through the REST API (no
-// client-side Firestore listener), so the push signal + refetch is the
-// contract-compliant real-time path.
-const _fallbackPollInterval = Duration(seconds: 30);
+// The case-status screen must reflect Volunteer-driven progress (stage
+// changes, guardian-verification requests) without the Guardian needing to
+// pull to refresh -- this polls quietly in the background while the case is
+// still active and this screen is on-screen, per the "status updates
+// automatically" requirement. Radd talks to the Business Logic Layer only
+// through the REST API (no direct Firestore listener on the client), so a
+// foreground FCM/resume event refreshes immediately. This poll is recovery
+// only, for a missed signal or a temporary transport failure.
+const _liveStatusPollInterval = Duration(seconds: 30);
 
 class _CaseStatusScreenState extends State<CaseStatusScreen> {
   Future<MissingCase>? _data;
@@ -246,18 +248,29 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
   bool _busy = false;
   Object? _error;
   Timer? _poll;
-  final _sync = CoalescedRefresh('case-status');
   @override
   void initState() {
     super.initState();
-    GuardianCaseEvents.instance.addListener(_onEvent);
+    // A foreground push is a hint only -- this reuses the same silent
+    // background refresh the 8-second poll already does; it never trusts
+    // the push payload itself for status/case data.
+    GuardianPushRefresh.instance.addListener(_onCaseEvent);
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _data ??= AppServices.of(context).guardian.missingCase(widget.id)
-      ..then(_onLoaded);
+    _data ??= _loadCurrent();
+  }
+
+  Future<MissingCase> _loadCurrent() {
+    final generation = ++_liveGeneration;
+    return AppServices.of(context).guardian
+        .missingCase(widget.id)
+        .then((value) {
+          if (generation == _liveGeneration) _onLoaded(value);
+          return value;
+        });
   }
 
   void _onLoaded(MissingCase value) {
@@ -266,54 +279,51 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
     _startPolling();
   }
 
-  // Only an event about THIS case (or a case-less recovery/generic signal)
-  // triggers a refetch; the push payload is never used for the state itself.
-  void _onEvent() {
-    final event = GuardianCaseEvents.instance.last;
-    if (event == null || !mounted || !event.concerns(widget.id)) return;
-    _refreshNow();
-  }
-
-  Future<void> _refreshNow() {
-    _restartPolling();
-    return _sync.run(_fetch);
-  }
-
   void _startPolling() {
-    if (_live?.active == false) return; // Terminal: nothing left to watch.
-    _poll ??= Timer.periodic(_fallbackPollInterval, (_) => _sync.run(_fetch));
+    _poll ??= Timer.periodic(_liveStatusPollInterval, (_) => _pollOnce());
   }
 
-  void _restartPolling() {
-    if (_poll == null) return;
-    _poll!.cancel();
-    _poll = null;
-    _startPolling();
-  }
-
-  Future<void> _fetch() async {
-    if (_busy) return; // Never race a Guardian-initiated action's own reload.
-    // A transient failure here is swallowed by CoalescedRefresh: it must not
-    // surface as an error banner over an otherwise-fine screen, and the last
-    // valid state stays; the next signal/tick (or manual refresh) retries.
-    final value = await AppServices.of(context).guardian.missingCase(widget.id);
-    if (!mounted) return;
-    setState(() => _live = value);
-    if (!value.active) {
+  int _liveGeneration = 0;
+  final _caseRefresh = CoalescedRefresh();
+  void _onCaseEvent() {
+    if (GuardianPushRefresh.instance.concerns(widget.id)) {
       _poll?.cancel();
       _poll = null;
+      _startPolling();
+      _pollOnce();
+    }
+  }
+
+  Future<void> _pollOnce() => _caseRefresh.run(_fetchCase);
+  Future<void> _fetchCase() async {
+    if (!mounted) return;
+    if (_busy) return; // Never race a Guardian-initiated action's own reload.
+    final generation = ++_liveGeneration;
+    try {
+      final value = await AppServices.of(context).guardian
+          .missingCase(widget.id);
+      if (!mounted || generation != _liveGeneration) return;
+      setState(() => _live = value);
+      if (value.active) _startPolling();
+      if (!value.active) _poll?.cancel(); // Terminal: nothing left to watch.
+    } catch (error) {
+      assert(() {
+        debugPrint('Radd Guardian case refresh failed (${error.runtimeType})');
+        return true;
+      }());
+      // A transient failure here must not surface as an error banner over an
+      // otherwise-fine screen; the next tick (or manual refresh) retries.
     }
   }
 
   void _reload() => setState(() {
-    _data = AppServices.of(context).guardian.missingCase(widget.id)
-      ..then(_onLoaded);
+    _data = _loadCurrent();
   });
 
   @override
   void dispose() {
     _poll?.cancel();
-    GuardianCaseEvents.instance.removeListener(_onEvent);
+    GuardianPushRefresh.instance.removeListener(_onCaseEvent);
     super.dispose();
   }
 

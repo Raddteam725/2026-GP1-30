@@ -9,16 +9,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 @lru_cache
 def firebase_app():
     # Application Default Credentials; never load keys from the repository.
-    # On Cloud Run this resolves to the service's own identity with no key
-    # file at all; locally run_dev.py points ADC at a key kept OUTSIDE the repo.
     return firebase_admin.initialize_app(options={
         "projectId": os.getenv("FIREBASE_PROJECT_ID", "radd-32eb6"),
         "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET", "radd-32eb6.firebasestorage.app"),
-        # Bounds EVERY Firebase Admin HTTP call (FCM sends, Auth lookups): an
-        # already-committed case transition can be delayed by a stalled push
-        # network path by at most this long before the API responds, and is
-        # never hung by it. Firestore uses its own gRPC channel, unaffected.
-        "httpTimeout": float(os.getenv("FIREBASE_HTTP_TIMEOUT_SECONDS", "10")),
+        # Explicit per-attempt bound; SDK retries are separate from this value.
+        "httpTimeout": 5,
     }, name="radd-backend")
 
 def database():
@@ -35,6 +30,7 @@ def identity(credentials: HTTPAuthorizationCredentials | None = Depends(bearer))
     # local JWT verification); a transient connection blip there must not
     # surface as "unavailable" to the Guardian on an otherwise-healthy token.
     attempts = 3
+    started = time.monotonic()
     for attempt in range(attempts):
         try:
             return auth.verify_id_token(credentials.credentials, app=firebase_app(), check_revoked=True)
@@ -43,6 +39,8 @@ def identity(credentials: HTTPAuthorizationCredentials | None = Depends(bearer))
         except (auth.InvalidIdTokenError, auth.ExpiredIdTokenError, auth.RevokedIdTokenError, ValueError):
             raise HTTPException(401, detail="unauthorized") from None
         except Exception:
-            if attempt == attempts - 1:
+            # Do not multiply a slow SDK attempt by our outer recovery loop.
+            # This bounds additional retries, not an in-flight SDK operation.
+            if attempt == attempts - 1 or time.monotonic() - started >= 8:
                 raise HTTPException(503, detail="service_unavailable") from None
             time.sleep(0.3 * (attempt + 1))

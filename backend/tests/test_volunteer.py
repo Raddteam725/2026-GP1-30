@@ -74,6 +74,22 @@ def case():
     result = CaseService(guardian).create(CaseCreate(individual_id=person))
     return guardian, result['id']
 
+@pytest.mark.parametrize('outcome', ['cancelled', 'resolved'])
+def test_closed_state_is_minimal_authoritative_and_scoped_to_previous_recipient(db, outcome):
+    from datetime import timedelta
+    guardian, identifier = case()
+    getattr(CaseService(guardian), 'cancel' if outcome == 'cancelled' else 'resolve')(identifier)
+    assert vol().case_state(identifier) == {'id': identifier, 'status': outcome}
+    with pytest.raises(HTTPException):
+        vol().accessible(identifier)  # Status access never unlocks private details.
+    for note in list(vol('two').user.collection('volunteer_notifications').stream()):
+        note.reference.delete()
+    with pytest.raises(HTTPException):
+        vol('two').case_state(identifier)
+    db.data['cases/' + identifier]['closed_at'] = datetime.now(timezone.utc) - timedelta(hours=24)
+    with pytest.raises(HTTPException):
+        vol().case_state(identifier)
+
 def test_profile_from_admin_document_and_no_self_registration(db):
     assert vol().profile()['volunteer_id'] == 'VOL-one'
     db.data['users/one']['active'] = False

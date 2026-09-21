@@ -24,13 +24,6 @@ def validate_transition(current, target):
     if current not in STAGES or target not in STAGES or STAGES.index(target) != STAGES.index(current) + 1:
         raise HTTPException(409, detail="invalid_transition")
 
-def _timing(op, case_id, started):
-    # T2/T3 of the integration timeline: the authoritative commit (which in
-    # this service always includes the durable notification records) is
-    # complete. Identifiers and durations only.
-    logging.getLogger("radd.timing").info("Radd timing: T3 committed op=%s case=%s commit_ms=%d",
-                                          op, case_id, int((time.monotonic() - started) * 1000))
-
 class CaseService:
     def __init__(self, guardian):
         guardian.profile()
@@ -94,18 +87,13 @@ class CaseService:
                 "event_id": event_id, "case_id": ref.id, "kind": "case_created", "status": STAGES[0],
                 "created_at": now, "read_at": None})
             return ref.id
-        started = time.monotonic()
         result = public_case(self.owned(create(self.db.transaction())))
         if created_new:
-            _timing("create", result["id"], started)
-            # Immediate delivery, still inside this request, straight after
-            # the commit: the Volunteer alert (durable record + push) and the
-            # Guardian's own push. Both are ADDITIONAL channels alongside the
-            # records already written above -- never a replacement for them,
-            # never allowed to affect this already-committed operation, and
-            # never something the response waits on beyond the bounded FCM
-            # attempt (see app.delivery).
+            logging.getLogger("uvicorn.error").info("Radd event %s-new T2 committed epoch_ms=%d", result["id"], time.time()*1000)
             safe_dispatch(self.db, result['id'])
+            # Push is an ADDITIONAL channel alongside the notification doc
+            # already written above -- never a replacement for it, and never
+            # allowed to affect this already-committed business operation.
             try:
                 notify_guardian(self.uid, kind="case_created", status=result["status"],
                     case_id=result["id"], event_id=result["event_id"])
@@ -135,7 +123,6 @@ class CaseService:
         # reachable from any still-active case (never sequential, never via
         # validate_transition). Clears active_case_id so normal profile
         # management (edit/delete) can resume on the individual.
-        started = time.monotonic()
         @firestore.transactional
         def terminate(tx):
             doc = self.owned(case_id, tx)
@@ -150,14 +137,9 @@ class CaseService:
                 "event_id": data["event_id"], "case_id": case_id, "kind": "status_changed",
                 "status": outcome, "created_at": firestore.SERVER_TIMESTAMP, "read_at": None})
         terminate(self.db.transaction())
-        _timing(outcome, case_id, started)
-        result = public_case(self.owned(case_id))
-        # The Volunteers who were alerted to this case are told it is closed
-        # -- durable `volunteer_notifications/{case}-{outcome}` records plus
-        # the immediate push (see volunteer_alerts.dispatch) -- so it never
-        # silently disappears from their active list. Then the Guardian's
-        # own push. Neither can affect the committed outcome above.
+        logging.getLogger("uvicorn.error").info("Radd event %s-%s T2 committed epoch_ms=%d", case_id, outcome, time.time()*1000)
         safe_dispatch(self.db, case_id)
+        result = public_case(self.owned(case_id))
         try:
             notify_guardian(self.uid, kind="status_changed", status=outcome,
                 case_id=case_id, event_id=result["event_id"])

@@ -1,15 +1,19 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:url_launcher/url_launcher.dart';
 
 import 'volunteer_capture.dart';
+import 'volunteer_notification_banner.dart';
+import '../domain/volunteer_notification_event.dart';
 
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../app/app_locale_scope.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../guardian/presentation/guardian_components.dart';
 import '../../../core/localization/generated/app_localizations.dart';
 import '../data/mock_volunteer_repository.dart';
 import '../data/api_volunteer_repository.dart';
@@ -50,7 +54,9 @@ class VolunteerWorkspace extends StatefulWidget {
     required this.account,
     required this.repository,
     required this.onLogout,
+    this.notificationEvents,
   });
+  final Stream<VolunteerNotificationEvent>? notificationEvents;
   final VolunteerAccount account;
   final VolunteerRepository repository;
   final Future<void> Function() onLogout;
@@ -62,7 +68,12 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     with WidgetsBindingObserver {
   Timer? _poll;
   VolunteerPushService? _push;
-  bool _refreshing = false;
+  bool _refreshing = false, _refreshAgain = false;
+  final _noticeDedup = VolunteerNotificationDeduplicator();
+  final _notices = <VolunteerNotificationEvent>[];
+  StreamSubscription<VolunteerNotificationEvent>? _noticeSubscription;
+  OverlayEntry? _noticeOverlay;
+  VolunteerNotificationEvent? _pendingNotificationOpen;
   bool _aiUnavailable = false;
   Uint8List? _pendingCapture;
   String? _captureRequestId;
@@ -97,22 +108,23 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
   void initState() {
     super.initState();
     repo.addListener(_refresh);
+    _noticeSubscription = widget.notificationEvents?.listen(
+      _receiveNotification,
+    );
     if (repo is ApiVolunteerRepository) {
       WidgetsBinding.instance.addObserver(this);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _push = VolunteerPushService(
           repo as ApiVolunteerRepository,
-          onRefresh: () => _loadRemote(),
-          onOpen: (id) => _run(() async {
-            final item = await (repo as ApiVolunteerRepository).loadCase(id);
-            if (mounted) {
-              _case = item;
-              _open(VolunteerView.caseDetails);
-            }
-          }),
+          onNotification: _receiveNotification,
+          onOpen: _openNotification,
         );
-        _push!.initialize(Localizations.localeOf(context).languageCode);
+        _push!
+            .initialize(Localizations.localeOf(context).languageCode)
+            .whenComplete(() {
+              if (mounted) _location?.initialize();
+            });
         _loadRemote();
       });
       _poll = Timer.periodic(const Duration(seconds: 20), (_) {
@@ -133,22 +145,181 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     }
   }
 
-  Future<void> _loadRemote() async {
-    if (!mounted || _refreshing || repo is! ApiVolunteerRepository) return;
+  Future<void> _loadRemote({bool event = false}) async {
+    if (!mounted || repo is! ApiVolunteerRepository) return;
+    if (_refreshing) {
+      if (event) _refreshAgain = true;
+      return;
+    }
     setState(() => _refreshing = true);
     try {
       await (repo as ApiVolunteerRepository).refresh();
       if (mounted) {
-        await _push?.sync(
-          Localizations.localeOf(context).languageCode,
-          location,
-        );
+        _push?.sync(Localizations.localeOf(context).languageCode, location);
       }
     } catch (_) {
       // Keep the existing screen with an explicit retry; never populate fixtures.
     } finally {
-      if (mounted) setState(() => _refreshing = false);
+      if (mounted) {
+        setState(() => _refreshing = false);
+        if (_refreshAgain) {
+          _refreshAgain = false;
+          unawaited(_loadRemote(event: true));
+        }
+      }
     }
+  }
+
+  void _receiveNotification(VolunteerNotificationEvent event) {
+    if (!mounted || !_noticeDedup.accept(event)) return;
+    // A newly arriving important event is visible immediately, even if the
+    // previous banner was not dismissed. Both remain in server-side history.
+    _noticeOverlay?.remove();
+    _noticeOverlay?.dispose();
+    _noticeOverlay = null;
+    _notices
+      ..clear()
+      ..add(event);
+    _showNotice();
+    // Display immediately; targeted authenticated lists/history reconcile the
+    // event without waiting for a full workspace refresh or device registration.
+    unawaited(_refreshEvent(event));
+  }
+
+  Future<void> _refreshEvent(VolunteerNotificationEvent event) async {
+    if (kDebugMode) {
+      debugPrint(
+        'Radd event ${event.id} T6/T7 ${DateTime.now().toUtc().toIso8601String()}',
+      );
+    }
+    if (repo is! ApiVolunteerRepository) return;
+    try {
+      await (repo as ApiVolunteerRepository).refreshEvent(caseId: event.caseId);
+      if (!mounted) return;
+      if (kDebugMode) {
+        debugPrint(
+          'Radd event ${event.id} T8 ${DateTime.now().toUtc().toIso8601String()}',
+        );
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && kDebugMode) {
+          debugPrint(
+            'Radd event ${event.id} T9 ${DateTime.now().toUtc().toIso8601String()}',
+          );
+        }
+      });
+      setState(() {});
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Radd event refresh failed (${error.runtimeType})');
+      }
+    }
+  }
+
+  void _showNotice() {
+    if (_noticeOverlay != null || _notices.isEmpty || !mounted) return;
+    final event = _notices.first;
+    _noticeOverlay = OverlayEntry(
+      builder: (overlayContext) => Positioned(
+        top: 0,
+        left: 16,
+        right: 16,
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: VolunteerNotificationBanner(
+                event: event,
+                onDismiss: _dismissNotice,
+                onOpen: () {
+                  _dismissNotice();
+                  _openNotification(event);
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    Overlay.of(context, rootOverlay: true).insert(_noticeOverlay!);
+  }
+
+  void _dismissNotice() {
+    _noticeOverlay?.remove();
+    _noticeOverlay?.dispose();
+    _noticeOverlay = null;
+    if (_notices.isNotEmpty) _notices.removeAt(0);
+    _showNotice();
+  }
+
+  String? _openingNotification;
+
+  void _openNotification(VolunteerNotificationEvent event) {
+    if (!mounted ||
+        _openingNotification == event.id ||
+        (view == VolunteerView.caseDetails && _case?.id == event.caseId)) {
+      return;
+    }
+    if (_busy) {
+      _pendingNotificationOpen = event;
+      return;
+    }
+    // Return from a camera/QR route only on an explicit notification action.
+    // This never ends a Found Report or confirms a handover.
+    final workspaceRoute = ModalRoute.of(context);
+    Navigator.of(context).popUntil((route) => route == workspaceRoute);
+    if (!event.opensCase) {
+      if (view != VolunteerView.notifications) {
+        _open(VolunteerView.notifications);
+      }
+      _message(volunteerAlertMessage(s, event.kind));
+      unawaited(_loadRemote(event: true));
+      return;
+    }
+    _openingNotification = event.id;
+    _run(() async {
+      try {
+        final item = repo is ApiVolunteerRepository
+            ? await (repo as ApiVolunteerRepository).loadCase(event.caseId)
+            : repo.caseById(event.caseId);
+        if (!mounted) return;
+        if (item == null || !item.joinable) {
+          await _notificationUnavailable(event);
+          return;
+        }
+        _case = item;
+        _open(VolunteerView.caseDetails);
+      } on StateError catch (error) {
+        if (error.message != 'not-found') rethrow;
+        await _notificationUnavailable(event);
+      } finally {
+        _openingNotification = null;
+      }
+    });
+  }
+
+  Future<void> _notificationUnavailable(
+    VolunteerNotificationEvent event,
+  ) async {
+    await _loadRemote(event: true);
+    if (!mounted) return;
+    if (view != VolunteerView.notifications) _open(VolunteerView.notifications);
+    final updates =
+        repo
+            .alertsFor(account.uid)
+            .where(
+              (alert) =>
+                  alert.caseId == event.caseId &&
+                  alert.kind != AlertKind.newCase &&
+                  alert.kind != AlertKind.priority,
+            )
+            .toList()
+          ..sort((a, b) => b.at.compareTo(a.at));
+    _message(
+      updates.isEmpty
+          ? s.vNotificationCaseUnavailable
+          : volunteerAlertMessage(s, updates.first.kind),
+    );
   }
 
   @override
@@ -167,13 +338,9 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
         (repo as ApiVolunteerRepository).proximityLocation = location;
       }
       if (repo is ApiVolunteerRepository && _case != null) {
-        _case = repo.caseById(_case!.id);
-        if (_case == null && view == VolunteerView.caseDetails) {
-          _tab = 1;
-          _stack
-            ..clear()
-            ..add(VolunteerView.cases);
-        }
+        // Preserve context when a case leaves active lists. Details render the
+        // authoritative history outcome below instead of silently navigating.
+        _case = repo.caseById(_case!.id) ?? _case;
       }
     });
   }
@@ -185,6 +352,9 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
   @override
   void dispose() {
     _poll?.cancel();
+    _noticeSubscription?.cancel();
+    _noticeOverlay?.remove();
+    _noticeOverlay?.dispose();
     _push?.close();
     WidgetsBinding.instance.removeObserver(this);
     ++_searchGeneration;
@@ -233,12 +403,19 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
       await action();
     } catch (error, stack) {
       assert(() {
-        debugPrint('Radd Volunteer action failed (${error.runtimeType})\n$stack');
+        debugPrint(
+          'Radd Volunteer action failed (${error.runtimeType})\n$stack',
+        );
         return true;
       }());
       if (mounted) _message(s.vActionFailed);
     } finally {
-      if (mounted) _update(() => _busy = false);
+      if (mounted) {
+        _update(() => _busy = false);
+        final pending = _pendingNotificationOpen;
+        _pendingNotificationOpen = null;
+        if (pending != null) _openNotification(pending);
+      }
     }
   }
 
@@ -323,55 +500,39 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
       },
       child: Scaffold(
         backgroundColor: volunteerCanvas,
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.transparent,
-          automaticallyImplyLeading: false,
-          leading: _stack.length > 1
-              ? BackButton(onPressed: _busy ? null : _back)
-              : null,
-          title: Text(
-            _title,
-            style: const TextStyle(
-              fontSize: 21,
-              fontWeight: FontWeight.w700,
-              color: volunteerNavy,
-            ),
-          ),
-          actions: _stack.length == 1
-              ? [
-                  VolunteerBell(
-                    onPressed: () => _open(VolunteerView.notifications),
-                    hasAlerts: repo
-                        .alertsFor(account.uid)
-                        .any((a) => a.readAt == null),
+        appBar: view == VolunteerView.home || view == VolunteerView.profile
+            ? null
+            : AppBar(
+                backgroundColor: volunteerCanvas,
+                surfaceTintColor: Colors.transparent,
+                automaticallyImplyLeading: false,
+                leading: _stack.length > 1
+                    ? BackButton(onPressed: _busy ? null : _back)
+                    : null,
+                title: Text(
+                  _title,
+                  style: const TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w700,
+                    color: volunteerNavy,
                   ),
-                ]
-              : null,
-        ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _tab,
-          onDestinationSelected: _selectTab,
-          backgroundColor: Colors.white,
-          indicatorColor: const Color(0xFFBCF7FC),
-          labelTextStyle: WidgetStateProperty.resolveWith(
-            (states) => TextStyle(
-              fontSize: 11,
-              fontWeight: states.contains(WidgetState.selected)
-                  ? FontWeight.w600
-                  : FontWeight.w400,
-              color: states.contains(WidgetState.selected)
-                  ? volunteerNavy
-                  : const Color(0xFF434652),
-            ),
-          ),
-          destinations: [
-            for (var i = 0; i < 5; i++)
-              NavigationDestination(
-                icon: Icon(icons[i], color: volunteerNavy),
-                label: roots[i],
+                ),
+                actions: _stack.length == 1
+                    ? [
+                        VolunteerBell(
+                          onPressed: () => _open(VolunteerView.notifications),
+                          hasAlerts: repo
+                              .alertsFor(account.uid)
+                              .any((a) => a.readAt == null),
+                        ),
+                      ]
+                    : null,
               ),
-          ],
+        bottomNavigationBar: GuardianNavigation(
+          selected: _tab,
+          onSelected: _selectTab,
+          labels: roots,
+          icons: icons,
         ),
         body: SafeArea(
           child: Column(
@@ -394,6 +555,8 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
                   ),
                 ),
               if (repo is ApiVolunteerRepository &&
+                  !(repo as ApiVolunteerRepository).hasLoadedCases &&
+                  !_refreshing &&
                   (repo as ApiVolunteerRepository).error != null)
                 TextButton(onPressed: _loadRemote, child: Text(s.vLoadFailed)),
               if (_busy || _refreshing)
@@ -402,11 +565,13 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
                 child: Align(
                   alignment: Alignment.topCenter,
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 560),
+                    constraints: const BoxConstraints(maxWidth: 480),
                     child: ListView(
                       key: ValueKey(view),
-                      padding: const EdgeInsets.all(20),
-                      children: _content(),
+                      padding: const EdgeInsets.all(24),
+                      children: _initialDataPending
+                          ? [const Center(child: CircularProgressIndicator())]
+                          : _content(),
                     ),
                   ),
                 ),
@@ -418,10 +583,76 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     );
   }
 
+  bool get _initialDataPending {
+    if (repo is! ApiVolunteerRepository) return false;
+    final api = repo as ApiVolunteerRepository;
+    final loaded = view == VolunteerView.notifications
+        ? api.hasLoadedNotifications
+        : api.hasLoadedCases;
+    return [
+          VolunteerView.home,
+          VolunteerView.cases,
+          VolunteerView.notifications,
+        ].contains(view) &&
+        !loaded &&
+        (_refreshing || api.error == null);
+  }
+
+  List<Widget> _currentCaseDetails() {
+    final id = _case?.id;
+    final state = repo is ApiVolunteerRepository
+        ? (repo as ApiVolunteerRepository).caseStates[id]
+        : null;
+    final stateKind = switch (state) {
+      'cancelled' => AlertKind.cancelled,
+      'resolved' => AlertKind.resolved,
+      'reunited' => AlertKind.reunited,
+      _ => null,
+    };
+    final outcomes =
+        repo
+            .alertsFor(account.uid)
+            .where(
+              (a) =>
+                  a.caseId == id &&
+                  (a.kind == AlertKind.cancelled ||
+                      a.kind == AlertKind.resolved ||
+                      a.kind == AlertKind.reunited ||
+                      a.kind == AlertKind.statusUpdate),
+            )
+            .toList()
+          ..sort((a, b) => b.at.compareTo(a.at));
+    final missing =
+        repo is ApiVolunteerRepository &&
+        id != null &&
+        repo.caseById(id) == null;
+    if (stateKind != null || outcomes.isNotEmpty || missing) {
+      return [
+        if (id != null) VolunteerHeading(id),
+        const SizedBox(height: 20),
+        if (stateKind != null || outcomes.isNotEmpty) ...[
+          VolunteerHeading(
+            volunteerAlertTitle(s, stateKind ?? outcomes.first.kind),
+            large: true,
+          ),
+          const SizedBox(height: 12),
+          Text(volunteerAlertMessage(s, stateKind ?? outcomes.first.kind)),
+        ] else
+          VolunteerInfo(s.vNotificationCaseUnavailable),
+        const SizedBox(height: 20),
+        VolunteerAction(
+          s.vNotifications,
+          onPressed: () => _open(VolunteerView.notifications),
+        ),
+      ];
+    }
+    return _caseDetails();
+  }
+
   List<Widget> _content() => switch (view) {
     VolunteerView.home => _home(),
     VolunteerView.cases => _cases(),
-    VolunteerView.caseDetails => _caseDetails(),
+    VolunteerView.caseDetails => _currentCaseDetails(),
     VolunteerView.notifications => _notifications(),
     VolunteerView.report => _reportView(),
     VolunteerView.finding => _finding(),

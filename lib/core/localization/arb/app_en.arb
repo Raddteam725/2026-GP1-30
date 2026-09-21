@@ -425,7 +425,7 @@
   "activeCase": "Active Case",
   "verificationExpires": "Valid until",
   "close": "Close",
-  "vLoadFailed": "Unable to load current data. Tap to try again.",
+  "vLoadFailed": "Couldn’t load right now. Tap to try again.",
   "vContinueReport": "Continue report",
   "vAiUnavailable": "AI matching is unavailable. Your report is saved; continue with manual review.",
   "vQrRequired": "Ask the Guardian to display this case’s QR code in their signed-in Radd account. A case identifier alone cannot verify identity.",
@@ -529,5 +529,17 @@
   "vAccountDeactivated": "Your Volunteer account is inactive. You have been signed out.",
   "vEndIdentification": "End Identification Attempt",
   "vEndIdentificationHint": "End this identification attempt and delete the captured photo? The missing-person case and search will continue.",
-  "locationNotRecorded": "Location could not be recorded. You can continue; the general alert remains active."
+  "locationNotRecorded": "Location could not be recorded. You can continue; the general alert remains active.",
+  "vCancelledAlert": "Case Cancelled",
+  "vResolvedAlert": "Person Found",
+  "vNewAlertMessage": "A new missing-person case has been reported.",
+  "vPriorityAlertMessage": "A missing-person case has been reported within 500 meters of your available location.",
+  "vMatchAlertMessage": "A match was confirmed for a case you joined. Guardian verification and handover are still required.",
+  "vCancelledAlertMessage": "The guardian cancelled this missing-person case.",
+  "vResolvedAlertMessage": "The guardian found the individual and resolved this case.",
+  "vReunitedAlertMessage": "The individual has been reunited with their guardian after verification.",
+  "vLocationSettings": "Open Settings",
+  "vLocationDeniedForever": "Location permission is disabled. Enable it in Settings to receive nearby alerts. General alerts remain available.",
+  "vLocationServicesDisabled": "Turn on device location services to receive nearby alerts.",
+  "vNotificationCaseUnavailable": "This case is no longer available for an active search. Notifications and cases have been refreshed."
 }

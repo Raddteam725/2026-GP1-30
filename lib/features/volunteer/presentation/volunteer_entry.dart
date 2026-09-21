@@ -36,8 +36,28 @@ class _VolunteerEntryState extends State<VolunteerEntry> {
   }
 
   Future<void> _load() async {
+    String? sessionUid;
     final repo = ApiVolunteerRepository(
-      token: () async => FirebaseAuth.instance.currentUser?.getIdToken(),
+      token: () async {
+        final user = FirebaseAuth.instance.currentUser;
+        sessionUid ??= user?.uid;
+        // A late callback from a previous workspace must never authenticate
+        // using a different account that subsequently signed in.
+        if (user == null || user.uid != sessionUid) return null;
+        try {
+          return await user.getIdToken();
+        } on FirebaseAuthException catch (error) {
+          if (const {
+            'user-disabled',
+            'user-token-expired',
+            'invalid-user-token',
+            'user-not-found',
+          }.contains(error.code)) {
+            return null; // Repository clears protected state and uses shared logout.
+          }
+          rethrow; // A network error is not proof that the session was revoked.
+        }
+      },
       onAccessLost: (reason) => _leave(reason: reason),
     );
     try {

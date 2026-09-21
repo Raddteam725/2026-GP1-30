@@ -1,9 +1,8 @@
 import logging
-import os
-import secrets
 import time
+import re
+import os
 from contextlib import asynccontextmanager
-from . import local_jobs
 from .local_jobs import LocalJobs
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
@@ -14,9 +13,6 @@ from .service import GuardianService
 
 @asynccontextmanager
 async def lifespan(app):
-    # Development only (run_dev.py sets RADD_LOCAL_JOBS=1). The deployed API
-    # service leaves it unset and a managed scheduler calls /internal/maintenance
-    # instead -- see local_jobs.py.
     jobs = LocalJobs() if os.getenv('RADD_LOCAL_JOBS') == '1' else None
     if jobs:
         jobs.start()
@@ -41,30 +37,16 @@ async def limits(request: Request, call_next):
             if len(body) > 11_300_000:
                 return JSONResponse(status_code=413, content={"detail": "request_too_large"})
         request._body = bytes(body)
+    request_id = request.headers.get('x-radd-request-id', '')
+    if not re.fullmatch(r'[0-9]{1,20}-[0-9]{1,8}', request_id):
+        request_id = '-'
+    logging.getLogger('uvicorn.error').info('Radd request %s T1 received epoch_ms=%d', request_id, time.time()*1000)
     started = time.monotonic()
     response = await call_next(request)
     route = request.scope.get("route")
-    # T1 (request received) to response, in ms -- the whole server-side share
-    # of the integration timeline for this request, path template only.
-    logging.getLogger("uvicorn.error").info("Radd API: %s %s -> %s (%d ms)", request.method,
-        getattr(route, "path", "/unknown"), response.status_code, int((time.monotonic() - started) * 1000))
+    logging.getLogger("uvicorn.error").info("Radd request %s API: %s %s -> %s (%d ms)", request_id, request.method, getattr(route, "path", "/unknown"), response.status_code, (time.monotonic() - started) * 1000)
     response.headers["Cache-Control"] = "no-store"
     return response
-
-@app.post("/internal/maintenance", include_in_schema=False)
-def maintenance(request: Request):
-    # The boundary a managed scheduler (Cloud Scheduler on Cloud Run) calls
-    # every minute instead of the local in-process thread: one run of the
-    # reconciliation + retention jobs (local_jobs.run_once). Only exists when
-    # RADD_MAINTENANCE_TOKEN is configured for the service, and only for a
-    # caller presenting it -- never a user-facing or Firebase-authenticated
-    # route, never enabled implicitly.
-    expected = os.getenv("RADD_MAINTENANCE_TOKEN")
-    presented = request.headers.get("x-radd-maintenance-token", "")
-    if not expected or not secrets.compare_digest(presented, expected):
-        raise HTTPException(404)
-    local_jobs.run_once()
-    return {"ran": True}
 
 @app.exception_handler(RequestValidationError)
 async def invalid(request, error):

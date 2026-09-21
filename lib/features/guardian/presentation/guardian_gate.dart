@@ -4,7 +4,6 @@ import '../../../app/app_services.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../auth/presentation/session_screen.dart';
 import '../../auth/presentation/auth_screen.dart';
-import '../data/guardian_case_events.dart';
 import '../data/guardian_push_service.dart';
 import '../data/guardian_repository.dart';
 
@@ -17,6 +16,30 @@ class GuardianGate extends StatefulWidget {
 }
 
 class _GuardianGateState extends State<GuardianGate> {
+  @override
+  void initState() {
+    super.initState();
+    GuardianPushRefresh.instance.addListener(_handleNotificationTap);
+  }
+
+  void _handleNotificationTap() {
+    if (!mounted ||
+        !_pushInitStarted ||
+        ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
+    final caseId = GuardianPushRouter.consumePendingCaseId();
+    if (caseId != null && AppServices.of(context).auth.signedIn) {
+      Navigator.of(context).pushNamed(AppRoutes.caseStatus, arguments: caseId);
+    }
+  }
+
+  @override
+  void dispose() {
+    GuardianPushRefresh.instance.removeListener(_handleNotificationTap);
+    super.dispose();
+  }
+
   Future<GuardianProfile>? _profile;
   bool _pushInitStarted = false;
   bool _hadAuthenticatedSession = false;
@@ -58,9 +81,6 @@ class _GuardianGateState extends State<GuardianGate> {
             // ever blocks or replaces rendering `widget.child` below --
             // both are fire-and-forget.
             final locale = Localizations.localeOf(context).languageCode;
-            // Returning to the foreground triggers an authoritative recovery
-            // refetch on every open Guardian screen (idempotent attach).
-            GuardianCaseEvents.instance.ensureLifecycle();
             if (!_pushInitStarted) {
               _pushInitStarted = true;
               GuardianPushService.initialize(services.guardian, locale).then((
