@@ -119,7 +119,15 @@ def _deliver_guardian(guardian_uid, *, kind, status, case_id, event_id):
         if not pairs:
             return
         logging.getLogger('uvicorn.error').info('Radd Guardian event %s T4 fcm_start epoch_ms=%d', notification.id, time.time()*1000)
-        batch = messaging.send_each([message for _, message in pairs], app=firebase_app())
+        try:
+            batch = messaging.send_each([message for _, message in pairs], app=firebase_app())
+        except Exception:
+            for doc, _ in pairs:
+                try:
+                    notification.collection('deliveries').document(doc.id).delete()
+                except Exception as error:
+                    logging.getLogger('uvicorn.error').warning('Lease cleanup pending expiry (%s)', type(error).__name__)
+            raise
         for (doc, _), result in zip(pairs, batch.responses):
             receipt = notification.collection('deliveries').document(doc.id)
             if result.success:

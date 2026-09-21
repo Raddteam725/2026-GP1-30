@@ -7,6 +7,7 @@ import '../../../shared/widgets/feature_page.dart';
 import '../../../core/theme/app_colors.dart';
 import 'guardian_components.dart';
 import '../data/guardian_push_service.dart';
+import '../data/coalesced_refresh.dart';
 import '../data/guardian_repository.dart';
 import 'individual_widgets.dart';
 import 'case_widgets.dart';
@@ -32,7 +33,10 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
   }
 
   int _eventGeneration = 0;
-  Future<void> _recover() async {
+  final _eventRefresh = CoalescedRefresh();
+  Future<void> _recover() => _eventRefresh.run(_recoverOnce);
+  Future<void> _recoverOnce() async {
+    if (!mounted) return;
     final generation = ++_eventGeneration;
     try {
       final data = await _load();

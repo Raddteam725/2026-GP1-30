@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../domain/volunteer_models.dart';
+import '../domain/volunteer_notification_event.dart';
 import 'volunteer_repository.dart';
 
 /// Unsupported found/AI/verification operations retain fail-closed behavior.
@@ -311,19 +312,29 @@ class ApiVolunteerRepository extends VolunteerRepository {
           }),
         attempt(() async {
           final response = await _request('GET', '/notifications');
+          final seen = <String>{};
           final alerts = (jsonDecode(response.body) as List)
+              .where(
+                (row) =>
+                    VolunteerNotificationEvent.parseKind(
+                      row['kind'],
+                      row['status'],
+                    ) !=
+                    null,
+              )
+              .where(
+                (row) => seen.add(
+                  '${row['case_id']}|${VolunteerNotificationEvent.parseKind(row['kind'], row['status'])!.name}',
+                ),
+              )
               .map(
                 (row) => VolunteerAlert(
                   id: row['id'] as String,
                   caseId: row['case_id'] as String,
-                  kind: switch (row['kind']) {
-                    'priority' => AlertKind.priority,
-                    'status_update' => AlertKind.statusUpdate,
-                    'cancelled' => AlertKind.cancelled,
-                    'resolved' => AlertKind.resolved,
-                    'reunited' => AlertKind.reunited,
-                    _ => AlertKind.newCase,
-                  },
+                  kind: VolunteerNotificationEvent.parseKind(
+                    row['kind'],
+                    row['status'],
+                  )!,
                   status: _status(row['status'] as String?),
                   at: DateTime.parse(row['created_at'] as String),
                   readAt: row['read_at'] == null

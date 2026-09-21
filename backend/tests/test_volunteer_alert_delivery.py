@@ -254,3 +254,14 @@ def test_session_validation_failure_fails_closed_and_retries(db, sends, monkeypa
         SimpleNamespace(disabled=False,tokens_valid_after_timestamp=0))
     volunteer_alerts.dispatch(db,identifier)
     assert sends.call_count==1
+
+@pytest.mark.parametrize('outcome', ['cancelled', 'resolved'])
+def test_confirmed_only_recipient_without_history_or_device_is_not_lost(db, sends, outcome):
+    guardian, identifier = case()
+    for note in list(vol('one').user.collection('volunteer_notifications').stream()):
+        note.reference.delete()
+    db.data['cases/' + identifier].update(confirmed_by='one', joined_by=[])
+    getattr(CaseService(guardian), 'cancel' if outcome == 'cancelled' else 'resolve')(identifier)
+    note = vol('one').user.collection('volunteer_notifications').document(identifier + '-' + outcome).get()
+    assert note.to_dict()['kind'] == outcome
+    assert sends.call_count == 0

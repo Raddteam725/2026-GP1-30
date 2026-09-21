@@ -41,7 +41,57 @@ Future<void> guardianBackgroundMessageHandler(RemoteMessage message) async {
 class GuardianPushRefresh extends ChangeNotifier with WidgetsBindingObserver {
   GuardianPushRefresh._();
   static final instance = GuardianPushRefresh._();
-  void ping() => notifyListeners();
+  String? caseId;
+  final Set<String> _events = {};
+  final Set<String> _ids = {};
+  bool concerns(String id) => caseId == null || caseId == id;
+  static bool valid(Map<String, dynamic> data) {
+    final role = data['role'], id = data['case_id'], status = data['status'];
+    return (role == null || role == 'guardian') &&
+        id is String &&
+        id.isNotEmpty &&
+        !id.contains('/') &&
+        const {
+          'report_received',
+          'search_in_progress',
+          'match_confirmed',
+          'awaiting_guardian_verification',
+          'reunited',
+          'resolved',
+          'cancelled',
+          'transferred_to_authority',
+        }.contains(status);
+  }
+
+  bool acceptPush(Map<String, dynamic> data) {
+    if (!valid(data)) return false;
+    final key = '${data['case_id']}|${data['status']}';
+    final id = data['notification_id'];
+    if (_events.contains(key) || (id is String && _ids.contains(id))) {
+      return false;
+    }
+    _events.add(key);
+    if (_events.length > 256) _events.remove(_events.first);
+    if (id is String && id.isNotEmpty) {
+      _ids.add(id);
+      if (_ids.length > 256) _ids.remove(_ids.first);
+    }
+    caseId = data['case_id'] as String;
+    notifyListeners();
+    return true;
+  }
+
+  void reset() {
+    caseId = null;
+    _events.clear();
+    _ids.clear();
+  }
+
+  void ping() {
+    caseId = null;
+    notifyListeners();
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) ping();
@@ -67,8 +117,8 @@ class GuardianPushRouter {
   }
 
   static void _setPending(RemoteMessage? message) {
-    if (message?.data['role'] == 'volunteer') return;
-    final caseId = message?.data['case_id'];
+    if (message == null || !GuardianPushRefresh.valid(message.data)) return;
+    final caseId = message.data['case_id'];
     if (caseId is String && caseId.isNotEmpty) _pendingCaseId = caseId;
   }
 }
@@ -84,19 +134,16 @@ class GuardianPushService {
   static String? _pendingToken;
   static String? _lastSyncedLocale;
   static StreamSubscription<User?>? _authSub;
-  static final Set<String> _seen = {};
   static int _generation = 0;
   static bool _observing = false;
   static void _receive(RemoteMessage message) {
-    if (message.data['role'] == 'volunteer') return;
+    if (!GuardianPushRefresh.instance.acceptPush(message.data)) return;
     final id = message.data['notification_id'] ?? message.messageId;
-    if (id != null && !_seen.add(id.toString())) return;
     if (kDebugMode) {
       debugPrint(
         'Radd Guardian FCM $id T6/T7 ${DateTime.now().toUtc().toIso8601String()}',
       );
     }
-    GuardianPushRefresh.instance.ping();
   }
 
   // FirebaseMessaging.instance is a device-level singleton that is never
@@ -140,14 +187,15 @@ class GuardianPushService {
       // stray leftover subscription must never be possible, so clear any
       // before attaching fresh ones.
       await _cancelSubscriptions();
-      final messaging = FirebaseMessaging.instance;
       WidgetsBinding.instance.addObserver(GuardianPushRefresh.instance);
       _observing = true;
+      final messaging = FirebaseMessaging.instance;
       // Install listeners before permission, token retrieval or upload.
       _onMessageSub = FirebaseMessaging.onMessage.listen(_receive);
       _onMessageOpenedSub = FirebaseMessaging.onMessageOpenedApp.listen((
         message,
       ) {
+        if (!GuardianPushRefresh.valid(message.data)) return;
         GuardianPushRouter._setPending(message);
         GuardianPushRefresh.instance.ping();
       });
@@ -256,7 +304,7 @@ class GuardianPushService {
   /// is not the only safeguard against a stale cross-account registration.
   static Future<void> handleLogout(GuardianRepository guardian) async {
     ++_generation;
-    _seen.clear();
+    GuardianPushRefresh.instance.reset();
     if (_observing) {
       WidgetsBinding.instance.removeObserver(GuardianPushRefresh.instance);
       _observing = false;
@@ -304,7 +352,7 @@ class GuardianPushService {
     // Not awaited (this stays synchronous for use in a plain `setUp`), but
     // still requested so a test-seeded subscription doesn't dangle.
     ++_generation;
-    _seen.clear();
+    GuardianPushRefresh.instance.reset();
     unawaited(_authSub?.cancel());
     _authSub = null;
     unawaited(_tokenRefreshSub?.cancel());

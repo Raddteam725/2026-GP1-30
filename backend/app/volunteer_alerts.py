@@ -112,7 +112,7 @@ def dispatch(db, case_id, *, matched=False, recipient=None):
             continue
         if not terminal and matched and (user.id not in cd.get('joined_by', []) or user.id == cd.get('confirmed_by')):
             continue
-        if terminal and user.id not in cd.get('joined_by', []):
+        if terminal and user.id not in cd.get('joined_by', []) and user.id != cd.get('confirmed_by'):
             previous = user.reference.collection('volunteer_notifications').where(filter=FieldFilter('case_id', '==', case.id)).limit(1)
             if not list(previous.stream()):
                 continue

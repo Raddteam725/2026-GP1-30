@@ -50,6 +50,61 @@ void main() {
     headers: {'content-type': 'application/json; charset=utf-8'},
   );
 
+  test('Closure history compatibility preserves read document IDs and suppresses aliases', () async {
+    final writes = <String>[];
+    final rows = <Map<String, dynamic>>[
+      {
+        'id': 'original-cancel',
+        'case_id': 'one',
+        'kind': 'case_closed',
+        'status': 'cancelled',
+      },
+      {
+        'id': 'canonical-cancel',
+        'case_id': 'one',
+        'kind': 'cancelled',
+        'status': 'cancelled',
+      },
+      {
+        'id': 'original-resolve',
+        'case_id': 'two',
+        'kind': 'case_closed',
+        'status': 'resolved',
+      },
+      {
+        'id': 'invalid',
+        'case_id': 'three',
+        'kind': 'case_closed',
+        'status': 'unknown',
+      },
+    ].map((r) => {...r, 'created_at': '2026-09-01T08:00:00Z'}).toList();
+    final repo = ApiVolunteerRepository(
+      token: () async => 'test-token',
+      baseUrl: 'http://localhost',
+      client: MockClient((request) async {
+        if (request.method == 'PUT') {
+          writes.add(request.url.path);
+          return json({});
+        }
+        if (request.url.path == '/v1/volunteer') return json(profile());
+        if (request.url.path.endsWith('/notifications')) return json(rows);
+        return json([]);
+      }),
+    );
+    addTearDown(repo.dispose);
+    await repo.refresh();
+    final alerts = repo.alertsFor('server-uid');
+    expect(
+      alerts.map((a) => a.kind),
+      containsAll([AlertKind.cancelled, AlertKind.resolved]),
+    );
+    expect(alerts.length, 2);
+    await repo.markRead(
+      alerts.singleWhere((a) => a.kind == AlertKind.cancelled),
+    );
+    expect(writes, ['/v1/volunteer/notifications/original-cancel/read']);
+  });
+
   testWidgets(
     'Resume performs immediate authoritative recovery without polling',
     (tester) async {

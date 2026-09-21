@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../data/guardian_push_service.dart';
+import '../data/coalesced_refresh.dart';
 
 import '../../../app/app_services.dart';
 import '../../../core/localization/generated/app_localizations.dart';
@@ -149,7 +150,10 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
     GuardianPushRefresh.instance.addListener(_recoverCases);
   }
 
-  Future<void> _recoverCases() async {
+  final _eventRefresh = CoalescedRefresh();
+  Future<void> _recoverCases() => _eventRefresh.run(_recoverCasesOnce);
+  Future<void> _recoverCasesOnce() async {
+    if (!mounted) return;
     try {
       await _loadCases();
     } catch (error) {

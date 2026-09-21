@@ -29,6 +29,7 @@ void main() {
         'role': 'guardian',
         'notification_id': 'case-search',
         'case_id': 'case',
+        'status': 'search_in_progress',
       },
     );
     GuardianPushService.debugReceive(event);

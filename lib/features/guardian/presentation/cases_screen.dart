@@ -8,6 +8,7 @@ import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/feature_page.dart';
 import '../data/guardian_push_service.dart';
+import '../data/coalesced_refresh.dart';
 import '../data/guardian_repository.dart';
 import 'case_widgets.dart';
 import 'guardian_components.dart';
@@ -34,7 +35,10 @@ class _CasesScreenState extends State<CasesScreen> {
   }
 
   int _eventGeneration = 0;
-  Future<void> _recover() async {
+  final _eventRefresh = CoalescedRefresh();
+  Future<void> _recover() => _eventRefresh.run(_recoverOnce);
+  Future<void> _recoverOnce() async {
+    if (!mounted) return;
     final generation = ++_eventGeneration;
     try {
       final data = await AppServices.of(context).guardian.cases();
@@ -236,7 +240,7 @@ class CaseStatusScreen extends StatefulWidget {
 // through the REST API (no direct Firestore listener on the client), so a
 // foreground FCM/resume event refreshes immediately. This poll is recovery
 // only, for a missed signal or a temporary transport failure.
-const _liveStatusPollInterval = Duration(seconds: 8);
+const _liveStatusPollInterval = Duration(seconds: 30);
 
 class _CaseStatusScreenState extends State<CaseStatusScreen> {
   Future<MissingCase>? _data;
@@ -250,7 +254,7 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
     // A foreground push is a hint only -- this reuses the same silent
     // background refresh the 8-second poll already does; it never trusts
     // the push payload itself for status/case data.
-    GuardianPushRefresh.instance.addListener(_pollOnce);
+    GuardianPushRefresh.instance.addListener(_onCaseEvent);
   }
 
   @override
@@ -280,7 +284,19 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
   }
 
   int _liveGeneration = 0;
-  Future<void> _pollOnce() async {
+  final _caseRefresh = CoalescedRefresh();
+  void _onCaseEvent() {
+    if (GuardianPushRefresh.instance.concerns(widget.id)) {
+      _poll?.cancel();
+      _poll = null;
+      _startPolling();
+      _pollOnce();
+    }
+  }
+
+  Future<void> _pollOnce() => _caseRefresh.run(_fetchCase);
+  Future<void> _fetchCase() async {
+    if (!mounted) return;
     if (_busy) return; // Never race a Guardian-initiated action's own reload.
     final generation = ++_liveGeneration;
     try {
@@ -307,7 +323,7 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
   @override
   void dispose() {
     _poll?.cancel();
-    GuardianPushRefresh.instance.removeListener(_pollOnce);
+    GuardianPushRefresh.instance.removeListener(_onCaseEvent);
     super.dispose();
   }
 

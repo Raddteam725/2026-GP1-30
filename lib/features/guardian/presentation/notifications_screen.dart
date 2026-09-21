@@ -5,6 +5,7 @@ import '../../../core/localization/generated/app_localizations.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../shared/widgets/feature_page.dart';
 import '../data/guardian_push_service.dart';
+import '../data/coalesced_refresh.dart';
 import '../data/guardian_repository.dart';
 import 'case_widgets.dart';
 import 'guardian_components.dart';
@@ -17,7 +18,10 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   int _eventGeneration = 0;
-  Future<void> _recover() async {
+  final _eventRefresh = CoalescedRefresh();
+  Future<void> _recover() => _eventRefresh.run(_recoverOnce);
+  Future<void> _recoverOnce() async {
+    if (!mounted) return;
     final generation = ++_eventGeneration;
     try {
       final data = await AppServices.of(context).guardian.notifications();

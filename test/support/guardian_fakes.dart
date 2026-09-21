@@ -52,6 +52,8 @@ class TestRepository implements GuardianRepository {
   final List<Individual> records = [];
   final List<MissingCase> caseRecords = [];
   final List<GuardianNotification> notificationRecords = [];
+  int caseFetches = 0;
+  bool failNextMissingCase = false;
   int _caseCounter = 0;
   @override
   Future<GuardianProfile> profile() async => person;
@@ -103,8 +105,15 @@ class TestRepository implements GuardianRepository {
   @override
   Future<List<MissingCase>> cases() async => List.of(caseRecords);
   @override
-  Future<MissingCase> missingCase(String id) async =>
-      caseRecords.singleWhere((c) => c.id == id);
+  Future<MissingCase> missingCase(String id) async {
+    caseFetches++;
+    if (failNextMissingCase) {
+      failNextMissingCase = false;
+      throw const AppFailure('unavailable');
+    }
+    return caseRecords.singleWhere((c) => c.id == id);
+  }
+
   @override
   Future<MissingCase> reportMissing(String individualId) async {
     final p = records.singleWhere((i) => i.id == individualId);
