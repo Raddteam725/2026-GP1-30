@@ -89,10 +89,15 @@ class IndividualAvatar extends StatelessWidget {
   const IndividualAvatar({
     super.key,
     required this.individual,
+    this.activeCase,
     this.size = 64,
     this.revision = 0,
   });
   final Individual individual;
+
+  /// The individual's active case, when known -- the badge takes that
+  /// case's semantic status colour.
+  final MissingCase? activeCase;
   final double size;
   final int revision;
   @override
@@ -108,7 +113,9 @@ class IndividualAvatar extends StatelessWidget {
             width: 16,
             height: 16,
             decoration: BoxDecoration(
-              color: AppColors.accent,
+              color: activeCase == null
+                  ? AppColors.primary
+                  : caseStatusColor(activeCase!.status),
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 2.5),
             ),
@@ -151,6 +158,7 @@ class IndividualCard extends StatelessWidget {
                 children: [
                   IndividualAvatar(
                     individual: individual,
+                    activeCase: activeCase,
                     size: 64,
                     revision: revision,
                   ),
@@ -232,6 +240,7 @@ class HomeIndividualCard extends StatelessWidget {
             children: [
               IndividualAvatar(
                 individual: individual,
+                activeCase: activeCase,
                 size: 76,
                 revision: revision,
               ),

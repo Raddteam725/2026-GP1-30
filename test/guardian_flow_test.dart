@@ -113,8 +113,8 @@ void main() {
       expect(find.text('This field is required.'), findsNWidgets(2));
       expect(auth.logins, 0);
       await tapText(t, 'Forgot Password?');
-      expect(find.text('Send Reset Instructions'), findsOneWidget);
-      await tapText(t, 'Send Reset Instructions');
+      expect(find.text('Send Reset Email'), findsOneWidget);
+      await tapText(t, 'Send Reset Email');
       expect(find.text('This field is required.'), findsOneWidget);
     },
   );
@@ -138,6 +138,14 @@ void main() {
     expect(auth.registrations, 0);
     await tapText(t, 'Privacy Notice');
     expect(find.byType(PrivacyScreen), findsOneWidget);
+    // The final notice in the selected language, never the old placeholder;
+    // the 18+ declaration stays a separate checkbox, not part of the notice.
+    await scrollToText(t, 'Information We Collect and Use');
+    expect(find.text('Information We Collect and Use'), findsOneWidget);
+    await scrollToText(t, 'Your Agreement');
+    expect(find.text('Your Agreement'), findsOneWidget);
+    expect(find.textContaining('pending approval'), findsNothing);
+    expect(find.textContaining('18 years'), findsNothing);
     Navigator.pop(t.element(find.byType(PrivacyScreen)));
     await t.pumpAndSettle();
     await t.ensureVisible(find.byType(CheckboxListTile).last);
@@ -293,12 +301,27 @@ void main() {
     await route(t, AppRoutes.guardian);
     await tapText(t, 'Profile');
     await tapText(t, 'Language');
+    // A bottom sheet with both languages, the current one ticked.
+    expect(find.byKey(const ValueKey('language-ar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('language-en')), findsOneWidget);
+    expect(find.byIcon(Icons.check), findsOneWidget);
     await tapText(t, 'العربية');
-    await tapText(t, 'متابعة');
+    // Applied in place: still signed in, still on the Guardian Profile --
+    // never bounced through the startup language screen or login.
     expect(find.byType(GuardianHomeScreen), findsOneWidget);
+    expect(find.byType(LanguageSelectionScreen), findsNothing);
+    expect(auth.active, isTrue);
     expect(
       Directionality.of(t.element(find.byType(GuardianHomeScreen))),
       TextDirection.rtl,
+    );
+    expect(find.text('الملف الشخصي'), findsWidgets);
+    await tapText(t, 'اللغة');
+    await tapText(t, 'English');
+    expect(find.byType(GuardianHomeScreen), findsOneWidget);
+    expect(
+      Directionality.of(t.element(find.byType(GuardianHomeScreen))),
+      TextDirection.ltr,
     );
   });
 
@@ -643,21 +666,21 @@ void main() {
     await start(t);
     await route(t, AppRoutes.forgotPassword);
     await t.enterText(find.byType(TextFormField).first, 'someone@example.test');
-    await tapText(t, 'Send Reset Instructions');
+    await tapText(t, 'Send Reset Email');
     // The request actually reached the authentication service...
     expect(auth.resetRequests, ['someone@example.test']);
     // ...and the confirmation never reveals whether that email is registered.
     expect(find.text('Check your email'), findsOneWidget);
     expect(
       find.text(
-        'If an account exists for this email, password reset instructions will be sent.',
+        "If an account is associated with this email address, you'll receive a password reset email.",
       ),
       findsOneWidget,
     );
-    expect(find.text('Send Reset Instructions'), findsNothing);
+    expect(find.text('Send Reset Email'), findsNothing);
     await tapText(t, 'Send again');
-    expect(find.text('Send Reset Instructions'), findsOneWidget);
-    await tapText(t, 'Send Reset Instructions');
+    expect(find.text('Send Reset Email'), findsOneWidget);
+    await tapText(t, 'Send Reset Email');
     expect(auth.resetRequests, hasLength(2));
     await tapText(t, 'Back to Log In');
     expect(find.byType(AuthScreen), findsNothing);

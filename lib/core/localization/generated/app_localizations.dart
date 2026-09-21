@@ -299,19 +299,19 @@ abstract class AppLocalizations {
   /// No description provided for @resetHint.
   ///
   /// In en, this message translates to:
-  /// **'Enter your email to request password reset instructions.'**
+  /// **'Enter your email address to receive a password reset email.'**
   String get resetHint;
 
   /// No description provided for @sendReset.
   ///
   /// In en, this message translates to:
-  /// **'Send Reset Instructions'**
+  /// **'Send Reset Email'**
   String get sendReset;
 
   /// No description provided for @resetSent.
   ///
   /// In en, this message translates to:
-  /// **'If an account exists for this email, password reset instructions will be sent.'**
+  /// **'If an account is associated with this email address, you\'ll receive a password reset email.'**
   String get resetSent;
 
   /// No description provided for @noAccount.
@@ -335,7 +335,7 @@ abstract class AppLocalizations {
   /// No description provided for @privacyConfirm.
   ///
   /// In en, this message translates to:
-  /// **'I have read and agree to the Privacy Notice.'**
+  /// **'I have read and agree to Radd\'s Privacy Notice.'**
   String get privacyConfirm;
 
   /// No description provided for @privacyTitle.
@@ -344,11 +344,119 @@ abstract class AppLocalizations {
   /// **'Privacy Notice'**
   String get privacyTitle;
 
-  /// No description provided for @privacyBody.
+  /// No description provided for @privacyIntro.
   ///
   /// In en, this message translates to:
-  /// **'Project information — final notice pending approval.\n\nRadd processes information and photographs for event-specific reunification. Access is intended to follow system roles. Identifiable records and photographs are subject to the project\'s retention and deletion rules; anonymized aggregate information may be retained under the project design.\n\nThis interim notice will be replaced with the team\'s approved wording.'**
-  String get privacyBody;
+  /// **'At Radd, we respect your privacy and the privacy of individuals registered under your care. The data processed by the system may include personal information and photographs relating to children, older adults, or other individuals who may require assistance if they become separated during an event.\n\nThis notice explains what information Radd uses, why and how it is used during the search, identification, and reunification process, who may access it, how long it is retained, and when it is deleted.'**
+  String get privacyIntro;
+
+  /// No description provided for @privacyInfoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Information We Collect and Use'**
+  String get privacyInfoTitle;
+
+  /// No description provided for @privacyInfoBody.
+  ///
+  /// In en, this message translates to:
+  /// **'When you create a Guardian account and use Radd, the system processes information required to create and use your account, as well as information you provide about individuals registered under your care, including their identifying information and photographs.\n\nWhen a missing-person report is submitted, Radd may also process case-related information, such as details about the missing individual, descriptive information provided to support the search, and last-seen information. If you choose to use your device location as the last-seen location and grant location permission, location coordinates may be used for this purpose.\n\nThis information is used to support registration, reporting, searching, identification, verification, and reunification during the event.'**
+  String get privacyInfoBody;
+
+  /// No description provided for @privacyRegisteredPhotosTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Registered Individuals\' Photographs'**
+  String get privacyRegisteredPhotosTitle;
+
+  /// No description provided for @privacyRegisteredPhotosBody.
+  ///
+  /// In en, this message translates to:
+  /// **'When an individual is registered under your care, their photograph is captured through the Radd application to provide a recent image that can be used for identification when needed.\n\nThe registered photograph may be used within the identification and reunification process, including to support face matching and the review of potential matches by authorized users. A potential match produced by the system is not treated as a final identification without human review and completion of the required verification steps.\n\nThe registered photograph is automatically deleted 24 hours after capture. After deletion, a new photograph must be captured through the application before the Guardian can submit a missing-person report for that individual.'**
+  String get privacyRegisteredPhotosBody;
+
+  /// No description provided for @privacyVolunteerPhotosTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Photographs Captured by Volunteers'**
+  String get privacyVolunteerPhotosTitle;
+
+  /// No description provided for @privacyVolunteerPhotosBody.
+  ///
+  /// In en, this message translates to:
+  /// **'When a person is found or becomes separated, an authorized Volunteer may capture their photograph through Radd solely within the identification and reunification workflow.\n\nThe photograph may be used for identification, including comparison against eligible registered profiles to assist in identifying potential matches. Photograph capture is restricted to authorized Volunteers while assisting a found or separated individual.\n\nA photograph captured by a Volunteer is deleted when the identification attempt concludes, whether or not a match is confirmed.'**
+  String get privacyVolunteerPhotosBody;
+
+  /// No description provided for @privacyLocationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Location Information'**
+  String get privacyLocationTitle;
+
+  /// No description provided for @privacyLocationBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Radd may use location information to support the search process and proximity-based alerts related to a reported last-seen location.\n\nFor a missing-person report, if the Guardian confirms that they are at the location where the individual was last seen and grants the application permission to access the device location, the available location may be recorded as the case\'s reported last-seen location. If permission is not granted or the location cannot be obtained, the device location is not used for this purpose. A textual description of the location may instead be provided as part of the case information.\n\nRadd also uses a Volunteer\'s location, when the required permission is granted, to determine whether the Volunteer is near a reported last-seen location and qualifies for a priority alert. The Volunteer\'s location may be updated while the application is running in the background when the required permission is available.'**
+  String get privacyLocationBody;
+
+  /// No description provided for @privacyUsageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How Information Is Used During Search and Identification'**
+  String get privacyUsageTitle;
+
+  /// No description provided for @privacyUsageBody.
+  ///
+  /// In en, this message translates to:
+  /// **'While a case is active, registered information, photographs, and case details may be used to assist authorized Volunteers in searching for the individual and reviewing potential matches.\n\nRadd uses AI-assisted face matching to help compare a photograph of a found individual against eligible registered profiles and may return potential matches for review. When face matching is insufficient, available case information and photographs may also be used for manual review.\n\nMatching results are an aid to identification and are not an automatic final identification. Human review and Guardian verification remain part of the reunification process.'**
+  String get privacyUsageBody;
+
+  /// No description provided for @privacyAccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Access to and Protection of Information'**
+  String get privacyAccessTitle;
+
+  /// No description provided for @privacyAccessBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Photographs and personal information are not available for unrestricted public browsing. Access to protected information is limited to authorized users according to their roles and only to the extent required to perform their functions within the search, identification, verification, and reunification process.\n\nAuthorization is enforced for requests that access or modify protected data rather than relying only on the visibility of interface controls.'**
+  String get privacyAccessBody;
+
+  /// No description provided for @privacyRetentionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Retention and Deletion of Photographs and Case Data'**
+  String get privacyRetentionTitle;
+
+  /// No description provided for @privacyRetentionBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Radd applies different retention periods depending on the type of data:\n\n• Registered photograph: Deleted 24 hours after capture. A new photograph must be captured before a new missing-person report can be submitted for that individual after the previous photograph has been deleted.\n\n• Photograph captured by a Volunteer during identification: Deleted when the identification attempt concludes, whether or not a match is confirmed.\n\n• Identifiable personal and case data: Automatically deleted 24 hours after the associated case reaches a terminal status.\n\nRadd therefore does not retain identifiable personal or facial data associated with cases beyond the defined retention periods.'**
+  String get privacyRetentionBody;
+
+  /// No description provided for @privacyStatisticsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Data Retained for Statistics and Reporting'**
+  String get privacyStatisticsTitle;
+
+  /// No description provided for @privacyStatisticsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'After the case retention period ends and identifiable personal data is deleted, Radd retains only the minimum data required for statistical reporting.\n\nThis retained data includes the case identifier, final status, timestamps, age group, and the Volunteer reference required for per-Volunteer reunification statistics.\n\nThe retained data does not include names, photographs, contact information, facial data, or precise location.'**
+  String get privacyStatisticsBody;
+
+  /// No description provided for @privacyAgreementTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your Agreement'**
+  String get privacyAgreementTitle;
+
+  /// No description provided for @privacyAgreementBody.
+  ///
+  /// In en, this message translates to:
+  /// **'By accepting this Privacy Notice, you confirm that you have read this notice and agree to the collection, use, access, retention, and deletion of information and photographs as described above.'**
+  String get privacyAgreementBody;
 
   /// No description provided for @requiredField.
   ///

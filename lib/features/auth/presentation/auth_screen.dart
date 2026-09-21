@@ -404,14 +404,47 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 }
 
+/// The final Privacy Notice, in the app's currently selected language (the
+/// localization system supplies Arabic/RTL or English/LTR -- there is no
+/// language selector here). Read-only; agreement is the separate required
+/// checkbox on the registration form.
 class PrivacyScreen extends StatelessWidget {
   const PrivacyScreen({super.key});
   @override
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
+    final sections = [
+      (s.privacyInfoTitle, s.privacyInfoBody),
+      (s.privacyRegisteredPhotosTitle, s.privacyRegisteredPhotosBody),
+      (s.privacyVolunteerPhotosTitle, s.privacyVolunteerPhotosBody),
+      (s.privacyLocationTitle, s.privacyLocationBody),
+      (s.privacyUsageTitle, s.privacyUsageBody),
+      (s.privacyAccessTitle, s.privacyAccessBody),
+      (s.privacyRetentionTitle, s.privacyRetentionBody),
+      (s.privacyStatisticsTitle, s.privacyStatisticsBody),
+      (s.privacyAgreementTitle, s.privacyAgreementBody),
+    ];
+    const body = TextStyle(fontSize: 15, height: 1.7, color: AppColors.text);
     return FeaturePage(
       title: s.privacyTitle,
-      children: [Text(s.privacyBody, style: const TextStyle(height: 1.7))],
+      children: [
+        Text(s.privacyIntro, style: body),
+        for (final (title, text) in sections) ...[
+          const SizedBox(height: 24),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: AppColors.primary,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(text, style: body),
+        ],
+        const SizedBox(height: 16),
+      ],
     );
   }
 }

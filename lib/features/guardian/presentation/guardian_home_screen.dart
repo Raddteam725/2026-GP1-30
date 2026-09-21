@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/app_locale_scope.dart';
 import '../../../app/app_services.dart';
 import '../../../core/localization/generated/app_localizations.dart';
 import '../../../core/routing/app_routes.dart';
@@ -79,10 +80,7 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
       await GuardianPushService.handleLogout(guardian);
       await auth.logout();
       if (navigator.mounted) {
-        navigator.pushNamedAndRemoveUntil(
-          AppRoutes.auth,
-          (_) => false,
-        );
+        navigator.pushNamedAndRemoveUntil(AppRoutes.auth, (_) => false);
       }
     } catch (e) {
       if (mounted) setState(() => _logoutError = e);
@@ -90,6 +88,54 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
       if (mounted) setState(() => _loggingOut = false);
     }
   }
+
+  /// Language switch for a signed-in Guardian: a bottom sheet over the
+  /// Profile tab (same pattern as the Volunteer profile). The new locale is
+  /// applied and persisted by AppLocaleScope in place -- the session and
+  /// this screen stay exactly where they are; the startup language screen
+  /// is never involved.
+  Future<void> _chooseLanguage() => showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    backgroundColor: Colors.white,
+    builder: (context) {
+      final s = AppLocalizations.of(context)!;
+      final current = Localizations.localeOf(context).languageCode;
+      return SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+              child: Text(
+                s.language,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+            for (final language in ['ar', 'en'])
+              ListTile(
+                key: ValueKey('language-$language'),
+                title: Text(language == 'ar' ? 'العربية' : 'English'),
+                trailing: current == language
+                    ? const Icon(Icons.check, color: AppColors.primary)
+                    : null,
+                selected: current == language,
+                onTap: () {
+                  AppLocaleScope.of(context).setLocale(Locale(language));
+                  Navigator.pop(context);
+                },
+              ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      );
+    },
+  );
 
   /// The greeting shows the Guardian's first name, large -- per the approved
   /// Home design -- never a fixture or placeholder name.
@@ -471,7 +517,7 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
           size: 16,
           color: AppColors.secondary,
         ),
-        onTap: () => _open(AppRoutes.languageSelection, arguments: true),
+        onTap: _chooseLanguage,
       ),
     ),
     const SizedBox(height: 32),

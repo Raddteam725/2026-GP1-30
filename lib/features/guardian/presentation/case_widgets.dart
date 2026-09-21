@@ -58,12 +58,32 @@ int? caseStageNumber(String status) {
 }
 
 const mutedText = Color(0xFF718096);
-const _amberBackground = Color(0xFFFFF4D6);
-const _amberText = Color(0xFF9A6700);
 const _greyBackground = Color(0xFFEDF2F7);
 
-/// Amber for every in-progress stage, teal for a reunification, grey for the
-/// other terminal outcomes -- the one status vocabulary used on every screen.
+/// The ONE semantic colour per canonical backend case status, used by every
+/// Guardian status chip, badge, card and timeline indicator. Keyed on the
+/// backend identifier, never on a translated label.
+const caseStatusColors = <String, Color>{
+  'report_received': Color(0xFF2563EB),
+  'search_in_progress': Color(0xFFF59E0B),
+  'match_confirmed': Color(0xFF7C3AED),
+  'awaiting_guardian_verification': Color(0xFF0D9488),
+  'reunited': Color(0xFF16A34A),
+  'resolved': Color(0xFF15803D),
+  'cancelled': Color(0xFF64748B),
+  'transferred_to_authority': Color(0xFFEA580C),
+};
+Color caseStatusColor(String status) => caseStatusColors[status] ?? mutedText;
+
+/// Light tint of a status colour for chip/badge backgrounds.
+Color caseStatusTint(String status) =>
+    caseStatusColor(status).withValues(alpha: .12);
+
+/// "Report Missing" is an ACTION, not a status: always this red.
+const reportMissingColor = Color(0xFFDC2626);
+
+/// The one status vocabulary used on every screen, coloured by
+/// [caseStatusColor] from the canonical status.
 class StatusChip extends StatelessWidget {
   const StatusChip({
     super.key,
@@ -75,14 +95,7 @@ class StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
-    final (background, foreground) = switch (status) {
-      'reunited' => (
-        AppColors.secondary.withValues(alpha: .12),
-        AppColors.secondary,
-      ),
-      _ when terminalStatuses.contains(status) => (_greyBackground, mutedText),
-      _ => (_amberBackground, _amberText),
-    };
+    final color = caseStatusColor(status);
     final stage = caseStageNumber(status);
     final label = withStageNumber && stage != null
         ? s.stageStatus('$stage', caseStatusLabel(status, s))
@@ -90,17 +103,14 @@ class StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: background,
+        color: caseStatusTint(status),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           DecoratedBox(
-            decoration: BoxDecoration(
-              color: foreground == mutedText ? mutedText : AppColors.accent,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             child: const SizedBox.square(dimension: 7),
           ),
           const SizedBox(width: 6),
@@ -110,7 +120,7 @@ class StatusChip extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: foreground,
+                color: color,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -446,7 +456,10 @@ class _ReportMissingActionState extends State<ReportMissingAction> {
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  _ActiveCaseChip(label: s.activeCase),
+                  _ActiveCaseChip(
+                    label: s.activeCase,
+                    status: widget.activeCase?.status,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text.rich(
@@ -502,7 +515,7 @@ class _ReportMissingActionState extends State<ReportMissingAction> {
               width: profile ? double.infinity : null,
               child: FilledButton.icon(
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.error,
+                  backgroundColor: reportMissingColor,
                   minimumSize: Size(0, profile ? 52 : 44),
                   padding: const EdgeInsets.symmetric(horizontal: 18),
                 ),
@@ -527,11 +540,14 @@ class _ReportMissingActionState extends State<ReportMissingAction> {
       return InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: () => _openCase(activeId),
-        child: _ActiveCaseChip(label: s.activeCase),
+        child: _ActiveCaseChip(
+          label: s.activeCase,
+          status: widget.activeCase?.status,
+        ),
       );
     }
     final expired = widget.individual.photoExpired;
-    final color = expired ? AppColors.error : AppColors.secondary;
+    final color = expired ? AppColors.error : reportMissingColor;
     return Semantics(
       button: true,
       child: InkWell(
@@ -563,36 +579,39 @@ class _ReportMissingActionState extends State<ReportMissingAction> {
   }
 }
 
+/// "Active Case" indicator on an individual's card, coloured by that case's
+/// canonical status (navy when the status is not loaded on this screen).
 class _ActiveCaseChip extends StatelessWidget {
-  const _ActiveCaseChip({required this.label});
+  const _ActiveCaseChip({required this.label, this.status});
   final String label;
+  final String? status;
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-    decoration: BoxDecoration(
-      color: _amberBackground,
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            color: AppColors.accent,
-            shape: BoxShape.circle,
+  Widget build(BuildContext context) {
+    final color = status == null ? AppColors.primary : caseStatusColor(status!);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            child: const SizedBox.square(dimension: 7),
           ),
-          child: SizedBox.square(dimension: 7),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: const TextStyle(
-            color: _amberText,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }

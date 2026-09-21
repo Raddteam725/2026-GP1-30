@@ -490,6 +490,7 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
           for (var index = 0; index < caseStages.length; index++)
             _TimelineStep(
               number: index + 1,
+              color: caseStatusColor(caseStages[index]),
               title: caseStatusLabel(caseStages[index], s),
               state:
                   value.stages.containsKey(caseStages[index]) &&
@@ -514,6 +515,7 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
           if (outcome)
             _TimelineStep(
               number: null,
+              color: caseStatusColor(value.status),
               title: caseStatusLabel(value.status, s),
               state: _StepState.outcome,
               timestamp: caseDate(context, value.updatedAt),
@@ -595,6 +597,7 @@ enum _StepState { completed, current, upcoming, outcome }
 class _TimelineStep extends StatelessWidget {
   const _TimelineStep({
     required this.number,
+    required this.color,
     required this.title,
     required this.state,
     required this.timestamp,
@@ -602,6 +605,10 @@ class _TimelineStep extends StatelessWidget {
     required this.isLast,
   });
   final int? number;
+
+  /// The stage's own semantic status colour (see caseStatusColor); only
+  /// reached steps paint with it, upcoming steps stay muted.
+  final Color color;
   final String title;
   final _StepState state;
   final String? timestamp;
@@ -614,7 +621,7 @@ class _TimelineStep extends StatelessWidget {
     final completed = state == _StepState.completed;
     final outcome = state == _StepState.outcome;
     final reached = completed || current || outcome;
-    final lineColor = completed ? AppColors.secondary : AppColors.border;
+    final lineColor = completed ? color : AppColors.border;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -626,19 +633,9 @@ class _TimelineStep extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: completed
-                    ? AppColors.secondary
-                    : current
-                    ? AppColors.primary
-                    : Colors.white,
+                color: completed || current ? color : Colors.white,
                 border: Border.all(
-                  color: completed
-                      ? AppColors.secondary
-                      : current
-                      ? AppColors.primary
-                      : outcome
-                      ? mutedText
-                      : const Color(0xFFCBD5E1),
+                  color: reached ? color : const Color(0xFFCBD5E1),
                   width: 2,
                 ),
               ),
@@ -653,7 +650,7 @@ class _TimelineStep extends StatelessWidget {
                       child: SizedBox.square(dimension: 10),
                     )
                   : outcome
-                  ? const Icon(Icons.flag_outlined, size: 14, color: mutedText)
+                  ? Icon(Icons.flag_outlined, size: 14, color: color)
                   : const DecoratedBox(
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
@@ -694,13 +691,13 @@ class _TimelineStep extends StatelessWidget {
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFFF4D6),
+                          color: color.withValues(alpha: .12),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           s.activeLabel,
-                          style: const TextStyle(
-                            color: Color(0xFF9A6700),
+                          style: TextStyle(
+                            color: color,
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                           ),
