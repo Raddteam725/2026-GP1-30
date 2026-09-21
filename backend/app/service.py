@@ -149,7 +149,8 @@ class GuardianService:
         @firestore.transactional
         def upsert(tx):
             existing = ref.get(transaction=tx)
-            data = {"token": token, "locale": locale, "updated_at": firestore.SERVER_TIMESTAMP}
+            data = {"token": token, "locale": locale, "updated_at": firestore.SERVER_TIMESTAMP,
+                "session_expires_at": self.token.get("exp", 0), "session_auth_time": self.token.get("auth_time", 0)}
             if not existing.exists:
                 data["created_at"] = firestore.SERVER_TIMESTAMP
             tx.set(ref, data, merge=True)

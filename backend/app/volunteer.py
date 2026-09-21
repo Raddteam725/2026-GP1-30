@@ -11,6 +11,9 @@ from .models import FcmRegistration, FcmUnregister
 from .volunteer_alerts import safe_dispatch
 from pydantic import BaseModel, Field, ConfigDict
 import hashlib
+import time
+import logging
+from datetime import datetime, timedelta, timezone
 from .volunteer_workflow import VolunteerWorkflow, register_workflow, key
 
 JOINABLE = STAGES[:2]
@@ -39,14 +42,23 @@ class VolunteerService(VolunteerWorkflow):
     def register_device(self, value):
         self.profile()
         event = active_event(self.db)
-        GuardianService.register_fcm_token(self, value.token, value.locale)
         ref = self.user.collection('fcm_registrations').document(hashlib.sha256(value.token.encode()).hexdigest())
+        previous = ref.get().to_dict() or {}
+        if not previous:
+            # Cross-account token cleanup is required on registration, not on
+            # every foreground location heartbeat for the same owned device.
+            GuardianService.register_fcm_token(self, value.token, value.locale)
         location = None
         if value.latitude is not None and value.longitude is not None:
             location = {'latitude': value.latitude, 'longitude': value.longitude, 'at': firestore.SERVER_TIMESTAMP}
-        ref.update({'event_id': event.id, 'session_expires_at': self.token.get('exp', 0), 'location': location})
-        for case in self.cases.where(filter=FieldFilter('event_id', '==', event.id)).stream():
-            safe_dispatch(self.db, case.id, matched=case.to_dict().get('status') == 'match_confirmed')
+        ref.update({'locale': value.locale, 'updated_at': firestore.SERVER_TIMESTAMP, 'event_id': event.id, 'session_expires_at': self.token.get('exp', 0), 'session_auth_time': self.token.get('auth_time', 0), 'location': location})
+        old_location = previous.get('location') or {}
+        changed = not previous or previous.get('event_id') != event.id or previous.get('session_expires_at', 0) <= time.time() or previous.get('session_auth_time') != self.token.get('auth_time', 0) or (
+            value.latitude is not None and value.longitude is not None and
+            (old_location.get('latitude'), old_location.get('longitude')) != (value.latitude, value.longitude))
+        if changed:
+            for case in self.cases.where(filter=FieldFilter('event_id', '==', event.id)).stream():
+                safe_dispatch(self.db, case.id, matched=case.to_dict().get('status') in STAGES[2:], recipient=self.uid)
         return {'registered': True}
 
     def unregister_device(self, value):
@@ -68,7 +80,7 @@ class VolunteerService(VolunteerWorkflow):
             person_doc = self.db.collection('users').document(guardian_id).collection('individuals').document(person_id).get()
             person = person_doc.to_dict() or {}
         # No contact information, private paths, other volunteers' identities or QR challenges.
-        return {'id': doc.id, 'profile_id': key(person_doc) if person else None, 'gender': person.get('gender'), **{k: data.get(k) for k in (
+        return {'id': doc.id, 'photo_available': bool(person.get('photo_path')) and not photo_expired(person), 'profile_id': key(person_doc) if person else None, 'gender': person.get('gender'), **{k: data.get(k) for k in (
             'individual_id', 'individual_name', 'age', 'status', 'created_at',
             'updated_at', 'stage_timestamps', 'guided_report')},
             'joined': self.uid in data.get('joined_by', []),
@@ -98,6 +110,24 @@ class VolunteerService(VolunteerWorkflow):
             raise HTTPException(404, detail='not_found')
         return doc
 
+    def case_state(self, case_id):
+        """Minimal authoritative outcome; closure never grants private detail access."""
+        self.profile(require_active=True)
+        event = active_event(self.db)
+        if not case_id or '/' in case_id:
+            raise HTTPException(404, detail='not_found')
+        data = self.cases.document(case_id).get().to_dict() or {}
+        closed = data.get('closed_at')
+        if (data.get('event_id') != event.id or data.get('scrubbed_at') or
+                (isinstance(closed, datetime) and datetime.now(timezone.utc) - closed >= timedelta(hours=24))):
+            raise HTTPException(404, detail='not_found')
+        if not self.visible(data) and self.uid not in data.get('joined_by', []):
+            history = self.user.collection('volunteer_notifications').where(
+                filter=FieldFilter('case_id', '==', case_id)).limit(1)
+            if not list(history.stream()):
+                raise HTTPException(404, detail='not_found')
+        return {'id': case_id, 'status': data['status']}
+
     def start_search(self, case_id):
         push = {}
         @firestore.transactional
@@ -126,6 +156,7 @@ class VolunteerService(VolunteerWorkflow):
             tx.update(doc.reference, update)
         join(self.db.transaction())
         if push:
+            logging.getLogger('uvicorn.error').info('Radd event %s-search_in_progress T2 committed epoch_ms=%d', case_id, time.time()*1000)
             try:
                 notify_guardian(push['guardian_id'], kind='status_update', status='search_in_progress',
                     case_id=case_id, event_id=push['event_id'])
@@ -178,5 +209,9 @@ def start_search(case_id: str, s=Depends(service)):
 @router.get('/cases/{case_id}/photo')
 def photo(case_id: str, s=Depends(service)):
     return Response(content=s.photo(case_id), media_type='image/jpeg', headers={'Cache-Control': 'no-store'})
+
+@router.get('/cases/{case_id}/state')
+def case_state(case_id: str, s=Depends(service)):
+    return s.case_state(case_id)
 
 register_workflow(router, service)

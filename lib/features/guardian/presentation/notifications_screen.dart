@@ -16,6 +16,31 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
+  int _eventGeneration = 0;
+  Future<void> _recover() async {
+    final generation = ++_eventGeneration;
+    try {
+      final data = await AppServices.of(context).guardian.notifications();
+      if (!mounted || generation != _eventGeneration) return;
+      setState(() {
+        _data = Future.value(data);
+      });
+      assert(() {
+        debugPrint(
+          'Radd Guardian authoritative refresh T8/T9 ${DateTime.now().toUtc().toIso8601String()}',
+        );
+        return true;
+      }());
+    } catch (error) {
+      assert(() {
+        debugPrint(
+          'Radd Guardian background refresh failed (${error.runtimeType})',
+        );
+        return true;
+      }());
+    }
+  }
+
   Future<List<GuardianNotification>>? _data;
   Object? _error;
   @override
@@ -24,12 +49,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     // A foreground push is only ever a hint that server state may have
     // changed -- this always re-fetches from the authenticated backend
     // rather than trusting anything from the push payload itself.
-    GuardianPushRefresh.instance.addListener(_reload);
+    GuardianPushRefresh.instance.addListener(_recover);
   }
 
   @override
   void dispose() {
-    GuardianPushRefresh.instance.removeListener(_reload);
+    GuardianPushRefresh.instance.removeListener(_recover);
     super.dispose();
   }
 

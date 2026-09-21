@@ -34,7 +34,7 @@ def photo():
     return base64.b64encode(output.getvalue()).decode()
 
 def guardian_with_individual(uid):
-    s = service.GuardianService({"uid": uid, "email": uid + "@example.test"})
+    s = service.GuardianService({"uid": uid, "email": uid + "@example.test", "exp": 9999999999, "auth_time": 1})
     s.save_profile(ProfileCreate(full_name="Test Guardian", phone="+966500000001", age_confirmed=True, privacy_accepted=True), create=True)
     individual = s.save(IndividualInput(full_name="Missing Person", age=7, gender="female", relationship="child", photo_base64=photo()))
     return s, individual["id"]

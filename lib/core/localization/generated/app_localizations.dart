@@ -2291,7 +2291,7 @@ abstract class AppLocalizations {
   /// No description provided for @vLoadFailed.
   ///
   /// In en, this message translates to:
-  /// **'Unable to load current data. Tap to try again.'**
+  /// **'Couldn’t load right now. Tap to try again.'**
   String get vLoadFailed;
 
   /// No description provided for @vContinueReport.
@@ -2731,6 +2731,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Location could not be recorded. You can continue; the general alert remains active.'**
   String get locationNotRecorded;
+
+  /// No description provided for @vCancelledAlert.
+  ///
+  /// In en, this message translates to:
+  /// **'Case Cancelled'**
+  String get vCancelledAlert;
+
+  /// No description provided for @vResolvedAlert.
+  ///
+  /// In en, this message translates to:
+  /// **'Person Found'**
+  String get vResolvedAlert;
+
+  /// No description provided for @vNewAlertMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'A new missing-person case has been reported.'**
+  String get vNewAlertMessage;
+
+  /// No description provided for @vPriorityAlertMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'A missing-person case has been reported within 500 meters of your available location.'**
+  String get vPriorityAlertMessage;
+
+  /// No description provided for @vMatchAlertMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'A match was confirmed for a case you joined. Guardian verification and handover are still required.'**
+  String get vMatchAlertMessage;
+
+  /// No description provided for @vCancelledAlertMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The guardian cancelled this missing-person case.'**
+  String get vCancelledAlertMessage;
+
+  /// No description provided for @vResolvedAlertMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The guardian found the individual and resolved this case.'**
+  String get vResolvedAlertMessage;
+
+  /// No description provided for @vReunitedAlertMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The individual has been reunited with their guardian after verification.'**
+  String get vReunitedAlertMessage;
+
+  /// No description provided for @vLocationSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Settings'**
+  String get vLocationSettings;
+
+  /// No description provided for @vLocationDeniedForever.
+  ///
+  /// In en, this message translates to:
+  /// **'Location permission is disabled. Enable it in Settings to receive nearby alerts. General alerts remain available.'**
+  String get vLocationDeniedForever;
+
+  /// No description provided for @vLocationServicesDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on device location services to receive nearby alerts.'**
+  String get vLocationServicesDisabled;
+
+  /// No description provided for @vNotificationCaseUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This case is no longer available for an active search. Notifications and cases have been refreshed.'**
+  String get vNotificationCaseUnavailable;
 }
 
 class _AppLocalizationsDelegate

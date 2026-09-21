@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../data/guardian_push_service.dart';
+
 import '../../../app/app_services.dart';
 import '../../../core/localization/generated/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
@@ -140,6 +142,24 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
   bool _busy = false;
   Timer? _expiry;
   int _request = 0;
+  int _caseRequest = 0;
+  @override
+  void initState() {
+    super.initState();
+    GuardianPushRefresh.instance.addListener(_recoverCases);
+  }
+
+  Future<void> _recoverCases() async {
+    try {
+      await _loadCases();
+    } catch (error) {
+      assert(() {
+        debugPrint('Radd Guardian QR refresh failed (${error.runtimeType})');
+        return true;
+      }());
+    }
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -148,6 +168,7 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
   }
 
   Future<List<MissingCase>> _loadCases() async {
+    final generation = ++_caseRequest;
     final all = await AppServices.of(context).guardian.cases();
     // Most relevant first: the case currently awaiting this Guardian's
     // verification, then the furthest-progressed, then the most recent.
@@ -161,7 +182,7 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
           a.updatedAt ?? DateTime(0),
         );
       });
-    if (mounted) {
+    if (mounted && generation == _caseRequest) {
       setState(() {
         _active = active;
         if (!active.any((c) => c.id == _selectedId)) {
@@ -217,6 +238,7 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
 
   @override
   void dispose() {
+    GuardianPushRefresh.instance.removeListener(_recoverCases);
     _expiry?.cancel();
     super.dispose();
   }

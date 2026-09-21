@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/widgets.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:radd/features/guardian/data/guardian_push_service.dart';
 
@@ -15,6 +18,33 @@ import 'support/guardian_fakes.dart';
 /// test suite (test_fcm.py), since that's where registration ownership is
 /// actually enforced.
 void main() {
+  test('Foreground stable events deduplicate and resume triggers recovery', () {
+    GuardianPushService.resetForTesting();
+    var refreshes = 0;
+    void listener() => refreshes++;
+    GuardianPushRefresh.instance.addListener(listener);
+    addTearDown(() => GuardianPushRefresh.instance.removeListener(listener));
+    const event = RemoteMessage(
+      data: {
+        'role': 'guardian',
+        'notification_id': 'case-search',
+        'case_id': 'case',
+      },
+    );
+    GuardianPushService.debugReceive(event);
+    GuardianPushService.debugReceive(event);
+    expect(refreshes, 1);
+    GuardianPushService.debugReceive(
+      const RemoteMessage(
+        data: {'role': 'volunteer', 'notification_id': 'other'},
+      ),
+    );
+    expect(refreshes, 1);
+    GuardianPushRefresh.instance.didChangeAppLifecycleState(
+      AppLifecycleState.resumed,
+    );
+    expect(refreshes, 2);
+  });
   late TestRepository repo;
   setUp(() {
     repo = TestRepository();

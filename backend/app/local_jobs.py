@@ -9,6 +9,7 @@ import threading
 from . import cleanup
 from .firebase import database
 from .volunteer_alerts import dispatch
+from .push import retry_guardian_alerts
 from .case_models import STAGES
 from google.cloud.firestore_v1.base_query import FieldFilter
 
@@ -19,7 +20,7 @@ def retry_alerts():
     for event in db.collection('events').where(filter=FieldFilter('active', '==', True)).stream():
         for case in db.collection('cases').where(filter=FieldFilter('event_id', '==', event.id)).stream():
             status = case.to_dict().get('status')
-            if status in STAGES:
+            if status in (*STAGES, 'cancelled', 'resolved'):
                 try:
                     dispatch(db, case.id, matched=status in STAGES[2:])
                 except Exception as error:
@@ -27,7 +28,7 @@ def retry_alerts():
 
 def run_once():
     for job in (cleanup.run, cleanup.expire_photos, cleanup.scrub_terminal_cases,
-                cleanup.delete_finished_found_photos, retry_alerts):
+                cleanup.delete_finished_found_photos, retry_alerts, retry_guardian_alerts):
         try:
             job()
         except Exception as error:

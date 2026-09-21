@@ -1,6 +1,6 @@
 # Manual Firebase Admin setup for local Radd verification
 
-The backend needs a server identity for the existing **radd-32eb6** project. Android's `android/app/google-services.json` is client configuration, not an Admin credential. No private key was created, downloaded, read, or committed during this implementation. Live Auth/Firestore/Storage/FCM verification has not been performed.
+The backend needs a server identity for the existing **radd-32eb6** project. Android's `android/app/google-services.json` is client configuration, not an Admin credential. No private key was created, downloaded, read, or committed during this implementation. For the latest live results and remaining device checks, see [the runtime integration report](volunteer-realtime-report.md).
 
 ## Preferred setup: keyless local ADC
 
@@ -45,7 +45,18 @@ A successful `/health` response only proves the HTTP server is running. It does 
 
 Use real development accounts in this same project: one Guardian and two enabled Volunteers with matching `users/{uid}` profiles and one active event. Do not paste passwords or Firebase ID tokens into chat. Do not bootstrap a new event over the team's existing event. The existing `backend/scripts/provision_volunteer.py` documents the profile setup for an already-created Firebase Auth UID.
 
-On an Android device or Google Play-enabled emulator, point the Flutter app at the local API (`http://10.0.2.2:8000` is the Android emulator debug default). A physical device needs a working device-to-host connection, for example USB `adb reverse tcp:8000 tcp:8000` with the debug API URL set to `http://127.0.0.1:8000`. Release API URLs must use HTTPS.
+For this local Pixel 7 development setup, use the existing configurable API URL through ADB. Live diagnosis found intermittent requests taking more than 31 seconds to reach FastAPI through the emulator's `10.0.2.2` bridge. The same backend responds through the ADB route without that bridge. This does not change Firebase, authentication or either role's API routes.
+
+```bash
+~/Library/Android/sdk/platform-tools/adb -s emulator-5554 reverse tcp:8000 tcp:8000
+flutter run -d emulator-5554 --dart-define=RADD_API_URL=http://127.0.0.1:8000
+```
+
+Use the actual device serial from `adb devices` if different. Repeat `adb reverse` after restarting the emulator/device. The installed debug APK retains its compiled API URL, but a later plain `flutter run` without the define builds with the existing `10.0.2.2` default again. A USB-connected physical device can use the same forwarding technique with its serial. Release URLs must still use HTTPS.
+
+As confirmed on 2026-09-21, Volunteer FCM delivery requires an unexpired registered Firebase ID token and a non-disabled, non-revoked Firebase Auth session. The app listens to Firebase ID-token changes and automatically renews the device/session association during legitimate signed-in use; normal refresh does not require notification permission to be enabled again. Logout closes registration and deletes the local FCM token. A new login registers again. While the app cannot run to renew an expired registration, pushes remain stopped; history remains available, and eligible pending events are retried after authenticated renewal. The backend checks the server-verified `auth_time` against Firebase Auth's revocation boundary before sending. It fails closed if that check is unavailable.
+
+For the reported two-user delay, effective backend addresses, T0–T9 logging and the controlled create/cancel/resolve protocol, see [realtime-controlled-test.md](realtime-controlled-test.md). A separate emulator's `10.0.2.2` points to its own host, not automatically to this Mac.
 
 Verify real login/reset email, Guardian case creation, both Volunteer joins, foreground and background FCM delivery, notification taps, camera preview/retake/use, real manual review, contact access, immediate photo deletion after match, QR/alternative verification and handover. Test denied location separately: general alerts remain available, priority is absent. Verify priority with actual permitted device location within 500 m of the Guardian-confirmed last-seen coordinates. Do not use simulated positions as proof of physical-device behavior.
 

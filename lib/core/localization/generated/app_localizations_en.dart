@@ -1178,7 +1178,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get close => 'Close';
 
   @override
-  String get vLoadFailed => 'Unable to load current data. Tap to try again.';
+  String get vLoadFailed => 'Couldn’t load right now. Tap to try again.';
 
   @override
   String get vContinueReport => 'Continue report';
@@ -1433,4 +1433,48 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get locationNotRecorded =>
       'Location could not be recorded. You can continue; the general alert remains active.';
+
+  @override
+  String get vCancelledAlert => 'Case Cancelled';
+
+  @override
+  String get vResolvedAlert => 'Person Found';
+
+  @override
+  String get vNewAlertMessage => 'A new missing-person case has been reported.';
+
+  @override
+  String get vPriorityAlertMessage =>
+      'A missing-person case has been reported within 500 meters of your available location.';
+
+  @override
+  String get vMatchAlertMessage =>
+      'A match was confirmed for a case you joined. Guardian verification and handover are still required.';
+
+  @override
+  String get vCancelledAlertMessage =>
+      'The guardian cancelled this missing-person case.';
+
+  @override
+  String get vResolvedAlertMessage =>
+      'The guardian found the individual and resolved this case.';
+
+  @override
+  String get vReunitedAlertMessage =>
+      'The individual has been reunited with their guardian after verification.';
+
+  @override
+  String get vLocationSettings => 'Open Settings';
+
+  @override
+  String get vLocationDeniedForever =>
+      'Location permission is disabled. Enable it in Settings to receive nearby alerts. General alerts remain available.';
+
+  @override
+  String get vLocationServicesDisabled =>
+      'Turn on device location services to receive nearby alerts.';
+
+  @override
+  String get vNotificationCaseUnavailable =>
+      'This case is no longer available for an active search. Notifications and cases have been refreshed.';
 }

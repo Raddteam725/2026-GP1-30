@@ -1,5 +1,7 @@
 """Ownership-scoped Guardian operations on the shared top-level cases collection."""
 import hashlib
+import logging
+import time
 from datetime import datetime, timedelta, timezone
 import secrets
 from fastapi import HTTPException
@@ -87,6 +89,7 @@ class CaseService:
             return ref.id
         result = public_case(self.owned(create(self.db.transaction())))
         if created_new:
+            logging.getLogger("uvicorn.error").info("Radd event %s-new T2 committed epoch_ms=%d", result["id"], time.time()*1000)
             safe_dispatch(self.db, result['id'])
             # Push is an ADDITIONAL channel alongside the notification doc
             # already written above -- never a replacement for it, and never
@@ -134,6 +137,8 @@ class CaseService:
                 "event_id": data["event_id"], "case_id": case_id, "kind": "status_changed",
                 "status": outcome, "created_at": firestore.SERVER_TIMESTAMP, "read_at": None})
         terminate(self.db.transaction())
+        logging.getLogger("uvicorn.error").info("Radd event %s-%s T2 committed epoch_ms=%d", case_id, outcome, time.time()*1000)
+        safe_dispatch(self.db, case_id)
         result = public_case(self.owned(case_id))
         try:
             notify_guardian(self.uid, kind="status_changed", status=outcome,

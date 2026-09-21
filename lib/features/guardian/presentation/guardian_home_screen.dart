@@ -19,6 +19,43 @@ class GuardianHomeScreen extends StatefulWidget {
 }
 
 class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    GuardianPushRefresh.instance.addListener(_recover);
+  }
+
+  @override
+  void dispose() {
+    GuardianPushRefresh.instance.removeListener(_recover);
+    super.dispose();
+  }
+
+  int _eventGeneration = 0;
+  Future<void> _recover() async {
+    final generation = ++_eventGeneration;
+    try {
+      final data = await _load();
+      if (!mounted || generation != _eventGeneration) return;
+      setState(() {
+        _data = Future.value(data);
+      });
+      assert(() {
+        debugPrint(
+          'Radd Guardian authoritative refresh T8/T9 ${DateTime.now().toUtc().toIso8601String()}',
+        );
+        return true;
+      }());
+    } catch (error) {
+      assert(() {
+        debugPrint(
+          'Radd Guardian background refresh failed (${error.runtimeType})',
+        );
+        return true;
+      }());
+    }
+  }
+
   late int _tab = widget.initialTab;
   int _revision = 0;
   Future<(GuardianProfile, List<Individual>, bool, List<MissingCase>)>? _data;
@@ -49,6 +86,7 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
   }
 
   void _refresh() => setState(() {
+    ++_eventGeneration;
     _revision++;
     _data = _load();
   });
@@ -79,10 +117,7 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
       await GuardianPushService.handleLogout(guardian);
       await auth.logout();
       if (navigator.mounted) {
-        navigator.pushNamedAndRemoveUntil(
-          AppRoutes.auth,
-          (_) => false,
-        );
+        navigator.pushNamedAndRemoveUntil(AppRoutes.auth, (_) => false);
       }
     } catch (e) {
       if (mounted) setState(() => _logoutError = e);

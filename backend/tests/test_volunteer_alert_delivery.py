@@ -3,6 +3,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
+from types import SimpleNamespace
 import pytest
 from app import volunteer_alerts
 from app.volunteer import VolunteerDevice
@@ -15,11 +16,28 @@ def sends(monkeypatch):
     send = Mock(return_value='message-id')
     monkeypatch.setattr(volunteer_alerts.messaging, 'send', send)
     monkeypatch.setattr(volunteer_alerts, 'firebase_app', lambda: None)
+    monkeypatch.setattr(volunteer_alerts.auth, 'get_user', lambda *args, **kwargs: SimpleNamespace(disabled=False, tokens_valid_after_timestamp=0))
     return send
 
 def device(uid, **kwargs):
     return vol(uid, exp=(datetime.now(timezone.utc)+timedelta(hours=1)).timestamp()).register_device(
         VolunteerDevice(token='device-'+uid, locale='ar', **kwargs))
+
+def test_history_committed_before_async_send_and_logout_before_worker_blocks_delivery(db, sends, monkeypatch):
+    from app import delivery_queue
+    device('one')
+    pending = []
+    monkeypatch.setattr(delivery_queue, 'submit', lambda key, operation: pending.append(operation))
+    _, identifier = case()
+    assert pending
+    assert db.collection('cases').document(identifier).get().exists
+    assert db.collection('users').document('one').collection('volunteer_notifications').document(identifier + '-new').get().exists
+    assert sends.call_count == 0
+    for ref in list(db.collection('users').document('one').collection('fcm_registrations').stream()):
+        ref.reference.delete()
+    for send in pending:
+        send()
+    assert sends.call_count == 0
 
 def test_general_and_priority_use_real_case_and_do_not_duplicate_on_retry(db, sends):
     device('one', latitude=24.7, longitude=46.7)
@@ -102,3 +120,137 @@ def test_stale_or_cleared_location_cannot_trigger_priority(db, sends):
     device('one')
     volunteer_alerts.dispatch(db, identifier)
     assert sends.call_count == 1
+
+@pytest.mark.parametrize('outcome', ['cancelled', 'resolved'])
+def test_guardian_closure_notifies_received_and_joined_once_and_keeps_history(db, sends, outcome):
+    device('one')
+    device('two')
+    guardian, identifier = case()
+    vol('two').start_search(identifier)
+    # An unrelated account created after the report did not receive/join it.
+    db.collection('users').document('unrelated').set({'role': 'volunteer', 'active': True})
+    sends.reset_mock()
+    getattr(CaseService(guardian), 'cancel' if outcome == 'cancelled' else 'resolve')(identifier)
+    assert sends.call_count == 2
+    for call in sends.call_args_list:
+        message = call.args[0]
+        assert message.data['kind'] == outcome
+        assert message.data['notification_id'] == identifier + '-' + outcome
+        assert message.android.priority == 'high'
+        assert message.android.notification.tag == message.data['notification_id']
+    volunteer_alerts.dispatch(db, identifier)
+    assert sends.call_count == 2
+    for uid in ('one', 'two'):
+        history = vol(uid).notifications_list()
+        assert {row['kind'] for row in history} == {'new_case', outcome}
+        assert vol(uid).list() == vol(uid).list(True) == []
+    assert not list(db.collection('users').document('unrelated').collection('volunteer_notifications').stream())
+
+
+def test_history_does_not_depend_on_fcm_permission_or_device(db, sends):
+    guardian, identifier = case()
+    assert sends.call_count == 0
+    assert vol().notifications_list()[0]['id'] == identifier + '-new'
+    CaseService(guardian).cancel(identifier)
+    assert sends.call_count == 0
+    assert vol().notifications_list()[0]['kind'] == 'cancelled'
+
+
+def test_closure_delivery_retries_and_does_not_recreate_expired_history(db, sends):
+    device('one')
+    guardian, identifier = case()
+    sends.side_effect = OSError('temporary offline')
+    CaseService(guardian).resolve(identifier)
+    note = db.collection('users').document('one').collection('volunteer_notifications').document(identifier + '-resolved')
+    assert note.get().exists
+    assert not list(note.collection('deliveries').stream())
+    sends.side_effect = None
+    volunteer_alerts.dispatch(db, identifier)
+    assert list(note.collection('deliveries').stream())
+    sends.reset_mock()
+    db.data['cases/' + identifier]['closed_at'] = datetime.now(timezone.utc) - timedelta(hours=24)
+    note.delete()
+    volunteer_alerts.dispatch(db, identifier)
+    assert not note.get().exists
+    assert sends.call_count == 0
+
+
+def test_unchanged_device_heartbeat_does_not_redispatch_all_cases(db, sends, monkeypatch):
+    from app import volunteer
+    device('one', latitude=24.7, longitude=46.7)
+    case()
+    dispatch = Mock()
+    monkeypatch.setattr(volunteer, 'safe_dispatch', dispatch)
+    device('one', latitude=24.7, longitude=46.7)
+    dispatch.assert_not_called()
+    device('one', latitude=24.8, longitude=46.7)
+    dispatch.assert_called_once()
+    assert dispatch.call_args.kwargs['recipient'] == 'one'
+
+
+def test_reunited_delivery_uses_successful_qr_handover_and_stable_history(db, sends, monkeypatch):
+    from test_volunteer_workflow import matching
+    from app import volunteer_workflow, service
+    monkeypatch.setattr(volunteer_workflow, 'bucket', service.bucket)
+    device('one')
+    device('two')
+    guardian, identifier, report = matching()
+    vol().begin_verification(report['id'])
+    qr = guardian.account_verification()
+    assert vol().verify_guardian(report['id'], qr['payload'])['verified']
+    sends.reset_mock()
+    vol().handover_found(report['id'])
+    assert sends.call_count == 2
+    assert all(call.args[0].data['kind'] == 'reunited' for call in sends.call_args_list)
+    assert vol('two').notifications_list()[0]['id'] == identifier + '-reunited'
+    vol().handover_found(report['id'])
+    assert sends.call_count == 2
+
+
+def test_approved_id_token_expiry_stops_push_but_preserves_real_history(db, sends):
+    device('one')
+    for path, data in db.data.items():
+        if '/fcm_registrations/' in path:
+            data['session_expires_at'] = 0
+    guardian, identifier = case()
+    assert sends.call_count == 0
+    assert vol().profile()['active'] is True
+    assert vol().notifications_list()[0]['id'] == identifier + '-new'
+    CaseService(guardian).cancel(identifier)
+    assert sends.call_count == 0
+    assert vol().notifications_list()[0]['kind'] == 'cancelled'
+
+
+@pytest.mark.parametrize('disabled,valid_after', [(True, 0), (False, 2000000)])
+def test_revoked_or_disabled_auth_session_never_receives_push(db, sends, monkeypatch, disabled, valid_after):
+    monkeypatch.setattr(volunteer_alerts.auth, 'get_user', lambda *args, **kwargs:
+        SimpleNamespace(disabled=disabled, tokens_valid_after_timestamp=valid_after))
+    vol('one', exp=9999999999, auth_time=1000).register_device(VolunteerDevice(token='session-device'))
+    _, identifier = case()
+    assert sends.call_count == 0
+    assert vol().notifications_list()[0]['id'] == identifier + '-new'
+
+
+def test_normal_id_token_renewal_extends_same_device_without_duplicate_registration(db, sends):
+    vol('one', exp=1, auth_time=1000).register_device(VolunteerDevice(token='session-device'))
+    case()
+    assert sends.call_count == 0
+    vol('one', exp=9999999999, auth_time=1000).register_device(VolunteerDevice(token='session-device'))
+    registrations=list(vol().user.collection('fcm_registrations').stream())
+    assert len(registrations)==1
+    assert registrations[0].to_dict()['session_expires_at']==9999999999
+    assert registrations[0].to_dict()['session_auth_time']==1000
+    assert sends.call_count==1
+    vol('one', exp=9999999999, auth_time=1000).register_device(VolunteerDevice(token='session-device'))
+    assert sends.call_count==1
+
+
+def test_session_validation_failure_fails_closed_and_retries(db, sends, monkeypatch):
+    device('one')
+    monkeypatch.setattr(volunteer_alerts.auth, 'get_user', Mock(side_effect=OSError('offline')))
+    _, identifier = case()
+    assert sends.call_count==0
+    monkeypatch.setattr(volunteer_alerts.auth, 'get_user', lambda *args, **kwargs:
+        SimpleNamespace(disabled=False,tokens_valid_after_timestamp=0))
+    volunteer_alerts.dispatch(db,identifier)
+    assert sends.call_count==1

@@ -1,4 +1,6 @@
 import logging
+import time
+import re
 import os
 from contextlib import asynccontextmanager
 from .local_jobs import LocalJobs
@@ -35,9 +37,14 @@ async def limits(request: Request, call_next):
             if len(body) > 11_300_000:
                 return JSONResponse(status_code=413, content={"detail": "request_too_large"})
         request._body = bytes(body)
+    request_id = request.headers.get('x-radd-request-id', '')
+    if not re.fullmatch(r'[0-9]{1,20}-[0-9]{1,8}', request_id):
+        request_id = '-'
+    logging.getLogger('uvicorn.error').info('Radd request %s T1 received epoch_ms=%d', request_id, time.time()*1000)
+    started = time.monotonic()
     response = await call_next(request)
     route = request.scope.get("route")
-    logging.getLogger("uvicorn.error").info("Radd API: %s %s -> %s", request.method, getattr(route, "path", "/unknown"), response.status_code)
+    logging.getLogger("uvicorn.error").info("Radd request %s API: %s %s -> %s (%d ms)", request_id, request.method, getattr(route, "path", "/unknown"), response.status_code, (time.monotonic() - started) * 1000)
     response.headers["Cache-Control"] = "no-store"
     return response
 

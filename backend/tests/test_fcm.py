@@ -12,6 +12,7 @@ it deletes it from the module for the rest of the test process. monkeypatch
 guarantees the original is restored after each test regardless of outcome.
 """
 import sys
+from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import pytest
@@ -32,10 +33,27 @@ def storage(monkeypatch):
     monkeypatch.setattr(service.firestore, "transactional", lambda f: f)
     monkeypatch.setattr(push, "database", lambda: db)
     monkeypatch.setattr(push, "firebase_app", lambda: None)
+    monkeypatch.setattr(push.auth, "get_user", lambda *a, **k: SimpleNamespace(disabled=False, tokens_valid_after_timestamp=0))
     return db, bucket
 
 def registrations_path(uid):
     return f"users/{uid}/fcm_registrations"
+
+@pytest.mark.parametrize('revoked', [False, True])
+def test_guardian_expired_or_revoked_session_does_not_receive_push(storage, monkeypatch, revoked):
+    db, _ = storage
+    guardian, _ = guardian_with_individual('owner')
+    guardian.register_fcm_token('device')
+    calls = []
+    monkeypatch.setattr(push.messaging, 'send_each', lambda *a, **k: calls.append(a))
+    if revoked:
+        monkeypatch.setattr(push.auth, 'get_user', lambda *a, **k: SimpleNamespace(disabled=False, tokens_valid_after_timestamp=2000))
+    else:
+        for data in registration_docs(db, 'owner').values():
+            data['session_expires_at'] = 0
+    push.notify_guardian('owner', kind='status_update', status='reunited', case_id='isolated-case', event_id='test-event')
+    assert calls == []
+    assert db.collection('users').document('owner').collection('notifications').document('isolated-case-reunited').get().exists
 
 def registration_docs(db, uid):
     return {k: v for k, v in db.data.items() if k.startswith(registrations_path(uid) + "/")}
@@ -302,7 +320,7 @@ def test_push_payload_contains_only_minimal_navigation_fields(storage, monkeypat
     created = CaseService(s).create(CaseCreate(individual_id=individual_id))
     assert len(sender.calls) == 1
     (message,) = sender.calls[0]
-    assert set(message.data.keys()) == {"kind", "status", "case_id", "event_id"}
+    assert set(message.data.keys()) == {"kind", "status", "case_id", "event_id", "role", "notification_id"}
     assert message.data["case_id"] == created["id"]
     assert message.data["status"] == "report_received"
     # No name, age, photo, guided-report, location, contact info, or token.

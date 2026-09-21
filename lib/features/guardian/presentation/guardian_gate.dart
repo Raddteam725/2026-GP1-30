@@ -16,6 +16,30 @@ class GuardianGate extends StatefulWidget {
 }
 
 class _GuardianGateState extends State<GuardianGate> {
+  @override
+  void initState() {
+    super.initState();
+    GuardianPushRefresh.instance.addListener(_handleNotificationTap);
+  }
+
+  void _handleNotificationTap() {
+    if (!mounted ||
+        !_pushInitStarted ||
+        ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
+    final caseId = GuardianPushRouter.consumePendingCaseId();
+    if (caseId != null && AppServices.of(context).auth.signedIn) {
+      Navigator.of(context).pushNamed(AppRoutes.caseStatus, arguments: caseId);
+    }
+  }
+
+  @override
+  void dispose() {
+    GuardianPushRefresh.instance.removeListener(_handleNotificationTap);
+    super.dispose();
+  }
+
   Future<GuardianProfile>? _profile;
   bool _pushInitStarted = false;
   bool _hadAuthenticatedSession = false;

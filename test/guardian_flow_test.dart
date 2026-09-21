@@ -415,6 +415,29 @@ void main() {
     await t.pumpAndSettle();
     expect(t.takeException(), isNull);
   });
+  for (final destination in [AppRoutes.guardian, AppRoutes.cases]) {
+    testWidgets('Guardian event refreshes $destination immediately', (t) async {
+      await start(t);
+      auth.active = true;
+      repo.records.add(
+        const Individual(
+          id: 'live-test',
+          fullName: 'Event Person',
+          age: 7,
+          gender: 'female',
+          relationship: 'child',
+        ),
+      );
+      await route(t, destination);
+      expect(find.text('Report Received'), findsNothing);
+      await repo.reportMissing('live-test');
+      GuardianPushRefresh.instance.ping();
+      await t.pumpAndSettle();
+      await scrollToText(t, 'Report Received');
+      expect(find.text('Report Received'), findsWidgets);
+      expect(t.takeException(), isNull);
+    });
+  }
   testWidgets('Refresh on Notifications never passes a Future to setState', (
     t,
   ) async {

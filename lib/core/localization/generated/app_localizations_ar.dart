@@ -1165,8 +1165,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get close => 'إغلاق';
 
   @override
-  String get vLoadFailed =>
-      'تعذّر تحميل البيانات الحالية. اضغط للمحاولة مجددًا.';
+  String get vLoadFailed => 'تعذّر التحميل الآن. اضغط للمحاولة مجددًا.';
 
   @override
   String get vContinueReport => 'متابعة البلاغ';
@@ -1414,4 +1413,46 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get locationNotRecorded =>
       'تعذّر تسجيل الموقع. يمكنك المتابعة؛ يبقى التنبيه العام نشطًا.';
+
+  @override
+  String get vCancelledAlert => 'إلغاء الحالة';
+
+  @override
+  String get vResolvedAlert => 'العثور على الشخص';
+
+  @override
+  String get vNewAlertMessage => 'تم تقديم بلاغ فقدان جديد.';
+
+  @override
+  String get vPriorityAlertMessage =>
+      'تم تقديم بلاغ فقدان ضمن ٥٠٠ متر من موقعك المتاح.';
+
+  @override
+  String get vMatchAlertMessage =>
+      'تم تأكيد تطابق لحالة انضممت للبحث عنها. لا يزال التحقق من ولي الأمر والتسليم مطلوبين.';
+
+  @override
+  String get vCancelledAlertMessage =>
+      'ألغى ولي الأمر بلاغ الفقدان لهذه الحالة.';
+
+  @override
+  String get vResolvedAlertMessage => 'عثر ولي الأمر على الشخص وأغلق الحالة.';
+
+  @override
+  String get vReunitedAlertMessage => 'تم تسليم الشخص إلى ولي أمره بعد التحقق.';
+
+  @override
+  String get vLocationSettings => 'فتح الإعدادات';
+
+  @override
+  String get vLocationDeniedForever =>
+      'إذن الموقع معطّل. فعّله من الإعدادات لتلقي تنبيهات الحالات القريبة. تظل التنبيهات العامة متاحة.';
+
+  @override
+  String get vLocationServicesDisabled =>
+      'شغّل خدمات الموقع في الجهاز لتلقي تنبيهات الحالات القريبة.';
+
+  @override
+  String get vNotificationCaseUnavailable =>
+      'لم تعد هذه الحالة متاحة للبحث النشط. تم تحديث التنبيهات والحالات.';
 }

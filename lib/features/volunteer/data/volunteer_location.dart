@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/volunteer_models.dart';
 
@@ -13,19 +14,52 @@ class VolunteerLocation extends ChangeNotifier with WidgetsBindingObserver {
   StreamSubscription<Position>? _subscription;
   Coordinates? coordinates;
   bool unavailable = false, requesting = false;
+  bool permanentlyDenied = false, servicesDisabled = false;
+  Future<void> initialize() async {
+    try {
+      final permission = await Geolocator.checkPermission();
+      if (_disposed) return;
+      if (permission == LocationPermission.whileInUse ||
+          permission == LocationPermission.always) {
+        await request(askPermission: false);
+        return;
+      }
+      final prefs = await SharedPreferences.getInstance();
+      if (_disposed) return;
+      final asked = prefs.getBool('volunteer_location_requested') ?? false;
+      if (!asked) await prefs.setBool('volunteer_location_requested', true);
+      if (!_disposed) await request(askPermission: !asked);
+    } catch (_) {
+      if (!_disposed) {
+        unavailable = true;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> openSettings() async {
+    if (servicesDisabled) {
+      await Geolocator.openLocationSettings();
+    } else {
+      await Geolocator.openAppSettings();
+    }
+  }
+
   bool _allowed = false, _disposed = false;
-  Future<void> request() async {
+  Future<void> request({bool askPermission = true}) async {
     if (requesting || _disposed) return;
     requesting = true;
     notifyListeners();
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
+      servicesDisabled = !await Geolocator.isLocationServiceEnabled();
+      if (servicesDisabled) {
         throw StateError('location-disabled');
       }
       var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
+      if (permission == LocationPermission.denied && askPermission) {
         permission = await Geolocator.requestPermission();
       }
+      permanentlyDenied = permission == LocationPermission.deniedForever;
       if (permission != LocationPermission.always &&
           permission != LocationPermission.whileInUse) {
         throw StateError('location-denied');
@@ -38,6 +72,7 @@ class VolunteerLocation extends ChangeNotifier with WidgetsBindingObserver {
       }
     } catch (_) {
       if (!_disposed) {
+        _allowed = false;
         unavailable = true;
         coordinates = null;
       }
@@ -88,8 +123,8 @@ class VolunteerLocation extends ChangeNotifier with WidgetsBindingObserver {
       _subscription = null;
       coordinates = null;
       if (!_disposed) notifyListeners();
-    } else if (_allowed) {
-      request();
+    } else if (_allowed || permanentlyDenied || servicesDisabled) {
+      request(askPermission: false);
     }
   }
 

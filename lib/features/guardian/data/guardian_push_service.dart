@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/widgets.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
@@ -36,10 +38,14 @@ Future<void> guardianBackgroundMessageHandler(RemoteMessage message) async {
 /// changed, without this module needing to know which screens exist or how
 /// they fetch data. A screen reacts by re-running its OWN existing reload --
 /// this never carries data itself, only a "something changed, go check" tick.
-class GuardianPushRefresh extends ChangeNotifier {
+class GuardianPushRefresh extends ChangeNotifier with WidgetsBindingObserver {
   GuardianPushRefresh._();
   static final instance = GuardianPushRefresh._();
   void ping() => notifyListeners();
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) ping();
+  }
 }
 
 /// Holds a case id from a notification the Guardian tapped (from the
@@ -61,6 +67,7 @@ class GuardianPushRouter {
   }
 
   static void _setPending(RemoteMessage? message) {
+    if (message?.data['role'] == 'volunteer') return;
     final caseId = message?.data['case_id'];
     if (caseId is String && caseId.isNotEmpty) _pendingCaseId = caseId;
   }
@@ -74,7 +81,23 @@ class GuardianPushService {
   // further FirebaseMessaging platform call (and makes both testable without
   // one). Cleared on logout so a later Guardian's session starts clean.
   static String? _lastKnownToken;
+  static String? _pendingToken;
   static String? _lastSyncedLocale;
+  static StreamSubscription<User?>? _authSub;
+  static final Set<String> _seen = {};
+  static int _generation = 0;
+  static bool _observing = false;
+  static void _receive(RemoteMessage message) {
+    if (message.data['role'] == 'volunteer') return;
+    final id = message.data['notification_id'] ?? message.messageId;
+    if (id != null && !_seen.add(id.toString())) return;
+    if (kDebugMode) {
+      debugPrint(
+        'Radd Guardian FCM $id T6/T7 ${DateTime.now().toUtc().toIso8601String()}',
+      );
+    }
+    GuardianPushRefresh.instance.ping();
+  }
 
   // FirebaseMessaging.instance is a device-level singleton that is never
   // itself torn down or reinitialized across a Guardian logging out and a
@@ -109,6 +132,7 @@ class GuardianPushService {
   ) async {
     if (_initialized) return;
     _initialized = true;
+    final generation = ++_generation;
     try {
       // Defensive: the _initialized guard above already prevents a second
       // concurrent initialize() from reaching here, and handleLogout()
@@ -117,35 +141,49 @@ class GuardianPushService {
       // before attaching fresh ones.
       await _cancelSubscriptions();
       final messaging = FirebaseMessaging.instance;
+      WidgetsBinding.instance.addObserver(GuardianPushRefresh.instance);
+      _observing = true;
+      // Install listeners before permission, token retrieval or upload.
+      _onMessageSub = FirebaseMessaging.onMessage.listen(_receive);
+      _onMessageOpenedSub = FirebaseMessaging.onMessageOpenedApp.listen((
+        message,
+      ) {
+        GuardianPushRouter._setPending(message);
+        GuardianPushRefresh.instance.ping();
+      });
+      GuardianPushRouter._setPending(await messaging.getInitialMessage());
+      if (generation != _generation) return;
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      _authSub = FirebaseAuth.instance.idTokenChanges().listen((user) {
+        if (generation != _generation) return;
+        if (user == null || user.uid != uid) {
+          unawaited(handleLogout(guardian));
+        } else if ((_lastKnownToken ?? _pendingToken) != null) {
+          unawaited(
+            _upload(
+              guardian,
+              _pendingToken ?? _lastKnownToken!,
+              _lastSyncedLocale ?? locale,
+            ),
+          );
+        }
+      });
       final settings = await messaging.requestPermission();
-      if (settings.authorizationStatus == AuthorizationStatus.denied) {
-        return; // Denied: no registration, no listeners. Normal, not an error.
+      if (generation != _generation ||
+          settings.authorizationStatus == AuthorizationStatus.denied) {
+        return;
       }
       final token = await messaging.getToken();
-      if (token != null) await _upload(guardian, token, locale);
-      // Prefer whatever locale most recently synced successfully over the
-      // one captured at startup, so a refreshed token is never uploaded
-      // under a language the Guardian has since moved away from. Exactly
-      // one of these exists for the active session -- see handleLogout.
+      if (generation != _generation) return;
+      if (token != null) unawaited(_upload(guardian, token, locale));
       _tokenRefreshSub = messaging.onTokenRefresh.listen(
         (refreshed) =>
             _upload(guardian, refreshed, _lastSyncedLocale ?? locale),
       );
-
-      // Foreground: the push is only a signal to refresh, never itself the data.
-      _onMessageSub = FirebaseMessaging.onMessage.listen(
-        (_) => GuardianPushRefresh.instance.ping(),
-      );
-
-      // Tapped from background, or app launched fresh by tapping a
-      // (terminated-state) notification -- either way this only records
-      // WHICH case to navigate to; GuardianGate/Home resolve it once
-      // authenticated state is actually available.
-      _onMessageOpenedSub = FirebaseMessaging.onMessageOpenedApp.listen(
-        GuardianPushRouter._setPending,
-      );
-      GuardianPushRouter._setPending(await messaging.getInitialMessage());
-    } catch (_) {
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Radd Guardian FCM setup failed (${error.runtimeType})');
+      }
       // Any Firebase Messaging failure here (unsupported platform, transient
       // service failure, ...) must never affect the rest of the app.
     }
@@ -171,15 +209,27 @@ class GuardianPushService {
     String token,
     String locale,
   ) async {
+    final generation = _generation;
+    _pendingToken = token;
     try {
       await guardian.registerFcmToken(token, locale);
+      if (generation != _generation) {
+        await guardian.unregisterFcmToken(token);
+        return;
+      }
       // Only recorded on success: a failed attempt (e.g. offline) leaves
       // these as they were, so the next opportunity -- another syncLocale
       // check, an onTokenRefresh, or the next app start -- retries with the
       // current locale instead of wrongly assuming it already matches.
       _lastKnownToken = token;
       _lastSyncedLocale = locale;
-    } catch (_) {
+      if (_pendingToken == token) _pendingToken = null;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          'Radd Guardian FCM registration failed (${error.runtimeType})',
+        );
+      }
       // Never surfaced to the Guardian and never a reason to fail anything else.
     }
   }
@@ -205,12 +255,22 @@ class GuardianPushService {
   /// registers it (see service.register_fcm_token), so a missed cleanup here
   /// is not the only safeguard against a stale cross-account registration.
   static Future<void> handleLogout(GuardianRepository guardian) async {
-    final token = _lastKnownToken;
+    ++_generation;
+    _seen.clear();
+    if (_observing) {
+      WidgetsBinding.instance.removeObserver(GuardianPushRefresh.instance);
+      _observing = false;
+    }
+    final token = _pendingToken ?? _lastKnownToken;
     await _cancelSubscriptions();
     _initialized = false;
     _lastKnownToken = null;
+    _pendingToken = null;
     _lastSyncedLocale = null;
     if (token == null) return;
+    try {
+      await FirebaseMessaging.instance.deleteToken();
+    } catch (_) {}
     try {
       await guardian
           .unregisterFcmToken(token)
@@ -225,6 +285,8 @@ class GuardianPushService {
   }
 
   static Future<void> _cancelSubscriptions() async {
+    await _authSub?.cancel();
+    _authSub = null;
     await _tokenRefreshSub?.cancel();
     await _onMessageSub?.cancel();
     await _onMessageOpenedSub?.cancel();
@@ -235,13 +297,22 @@ class GuardianPushService {
 
   @visibleForTesting
   static void resetForTesting() {
+    if (_observing) {
+      WidgetsBinding.instance.removeObserver(GuardianPushRefresh.instance);
+      _observing = false;
+    }
     // Not awaited (this stays synchronous for use in a plain `setUp`), but
     // still requested so a test-seeded subscription doesn't dangle.
+    ++_generation;
+    _seen.clear();
+    unawaited(_authSub?.cancel());
+    _authSub = null;
     unawaited(_tokenRefreshSub?.cancel());
     unawaited(_onMessageSub?.cancel());
     unawaited(_onMessageOpenedSub?.cancel());
     _initialized = false;
     _lastKnownToken = null;
+    _pendingToken = null;
     _lastSyncedLocale = null;
     _tokenRefreshSub = null;
     _onMessageSub = null;
@@ -276,4 +347,7 @@ class GuardianPushService {
   @visibleForTesting
   static bool get debugHasActiveTokenRefreshSubscription =>
       _tokenRefreshSub != null;
+
+  @visibleForTesting
+  static void debugReceive(RemoteMessage message) => _receive(message);
 }

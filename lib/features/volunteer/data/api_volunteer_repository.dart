@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -26,13 +27,17 @@ class ApiVolunteerRepository extends VolunteerRepository {
   Future<void> Function()? closeSession;
   void clearProtectedData() {
     _accessLost = true;
+    ++_dataVersion;
     for (final report in _reports) {
       report.photoBytes = null;
     }
+    hasLoadedCases = false;
+    hasLoadedNotifications = false;
     _cases = [];
     _profiles = [];
     _reports = [];
     _alerts = [];
+    caseStates.clear();
     account = null;
   }
 
@@ -43,6 +48,7 @@ class ApiVolunteerRepository extends VolunteerRepository {
   List<RegisteredPerson> _profiles = [];
   List<FoundReport> _reports = [];
   List<VolunteerAlert> _alerts = [];
+  final Map<String, String> caseStates = {};
   Coordinates? proximityLocation;
   @override
   bool get isPreview => false;
@@ -81,7 +87,10 @@ class ApiVolunteerRepository extends VolunteerRepository {
 
   bool _disposed = false, _joining = false;
   Future<void>? _pendingRefresh;
+  Future<void>? _eventRefresh;
+  int _dataVersion = 0, _requestSequence = 0;
   String? error;
+  bool hasLoadedCases = false, hasLoadedNotifications = false;
   @override
   bool get connected => account != null && error == null;
   @override
@@ -97,10 +106,22 @@ class ApiVolunteerRepository extends VolunteerRepository {
     }
     if (_base.isEmpty) throw StateError('backend-unavailable');
     final uri = Uri.parse('$_base/v1/volunteer$path');
+    if (kDebugMode && _requestSequence == 0) {
+      debugPrint(
+        'Radd Volunteer backend ${uri.scheme}://${uri.host}:${uri.port}',
+      );
+    }
     if (!kDebugMode && uri.scheme != 'https') {
       throw StateError('backend-unavailable');
     }
-    final jwt = await token();
+    final timer = Stopwatch()..start();
+    if (kDebugMode && method != 'GET') {
+      debugPrint(
+        'Radd Volunteer action T0 ${DateTime.now().toUtc().toIso8601String()}',
+      );
+    }
+    final jwt = await token().timeout(const Duration(seconds: 30));
+    final tokenMs = timer.elapsedMilliseconds;
     if (jwt == null) {
       clearProtectedData();
       if (onAccessLost != null) await onAccessLost!('unauthorized');
@@ -108,16 +129,46 @@ class ApiVolunteerRepository extends VolunteerRepository {
     }
     final request = http.Request(method, uri)
       ..headers['Authorization'] = 'Bearer $jwt';
+    final requestId =
+        '${DateTime.now().millisecondsSinceEpoch}-${++_requestSequence}';
+    if (kDebugMode) request.headers['X-Radd-Request-ID'] = requestId;
     if (body != null) {
       request.headers['Content-Type'] = 'application/json';
       request.body = jsonEncode(body);
     }
-    final response = await _client
-        .send(request)
-        .then(http.Response.fromStream)
-        .timeout(const Duration(seconds: 30));
-    if (kDebugMode && path.isEmpty) {
-      debugPrint('Radd Volunteer profile HTTP ${response.statusCode}');
+    late http.Response response;
+    // Route templates only: no UID, JWT, FCM token, report body or contact data.
+    final route = path.replaceAllMapped(
+      RegExp(
+        r'/(cases|found-reports|profiles|notifications)/(?!available(?:/|$)|mine(?:/|$))[^/]+',
+      ),
+      (match) => '/${match[1]}/{id}',
+    );
+    try {
+      if (kDebugMode) debugPrint('Radd request $requestId sent');
+      response = await _client
+          .send(request)
+          .then((stream) {
+            if (kDebugMode) {
+              debugPrint(
+                'Radd request $requestId headers ${timer.elapsedMilliseconds}ms',
+              );
+            }
+            return http.Response.fromStream(stream);
+          })
+          .timeout(const Duration(seconds: 30));
+      if (kDebugMode) {
+        debugPrint(
+          'Radd request $requestId Volunteer $method $route HTTP ${response.statusCode}: token=${tokenMs}ms total=${timer.elapsedMilliseconds}ms',
+        );
+      }
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          'Radd request $requestId Volunteer $method $route ${error.runtimeType}: token=${tokenMs}ms total=${timer.elapsedMilliseconds}ms',
+        );
+      }
+      rethrow;
     }
     if (response.statusCode == 401 || response.statusCode == 403) {
       String? detail;
@@ -142,6 +193,7 @@ class ApiVolunteerRepository extends VolunteerRepository {
       throw StateError(switch (response.statusCode) {
         401 => 'unauthorized',
         403 => 'volunteer-required',
+        404 => 'not-found',
         _ => 'backend-unavailable',
       });
     }
@@ -171,89 +223,185 @@ class ApiVolunteerRepository extends VolunteerRepository {
 
   Future<void> refresh() {
     if (_disposed || _joining) return Future.value();
+    if (_eventRefresh != null) return _eventRefresh!;
     return _pendingRefresh ??= _refresh().whenComplete(
       () => _pendingRefresh = null,
     );
   }
 
-  Future<void> _refresh() async {
+  // Events do not queue behind profile/report/photo refreshes. Advancing the
+  // generation prevents an older full refresh from overwriting this response.
+  Future<void> refreshEvent({String? caseId}) {
+    if (_disposed || _accessLost) return Future.value();
+    ++_dataVersion;
+    final operation = _refresh(eventOnly: true, caseId: caseId);
+    _eventRefresh = operation;
+    return operation.whenComplete(() {
+      if (identical(_eventRefresh, operation)) _eventRefresh = null;
+    });
+  }
+
+  Future<void> _refresh({bool eventOnly = false, String? caseId}) async {
+    final version = _dataVersion;
+    bool current() => !_disposed && !_accessLost && version == _dataVersion;
+    Object? failure;
+    Future<void> attempt(Future<void> Function() action) async {
+      try {
+        await action();
+      } catch (e) {
+        failure ??= e;
+      }
+    }
+
     try {
-      final user = await loadProfile();
-      final next = <String, VolunteerCase>{};
-      final raw = <String, Map<String, dynamic>>{};
-      if (user.active) {
-        for (final path in ['/cases/available', '/cases/mine']) {
-          final rows = jsonDecode((await _request('GET', path)).body) as List;
-          for (final row in rows) {
-            final data = row as Map<String, dynamic>;
-            raw[data['id'] as String] = data;
-          }
-        }
-        // Authenticated bytes only; no public Storage URLs or private paths.
-        await Future.wait(
-          raw.values.map((data) async {
-            Uint8List? photo;
+      final user = eventOnly ? account! : await loadProfile();
+      if (!current()) return;
+      // Independent resources publish independently. Photos and FCM registration
+      // must never hold case lists or navigation behind their network round trips.
+      await Future.wait([
+        if (caseId != null)
+          attempt(() async {
+            late http.Response response;
             try {
-              photo = (await _request(
+              response = await _request(
                 'GET',
-                '/cases/${Uri.encodeComponent(data['id'] as String)}/photo',
-              )).bodyBytes;
-            } catch (_) {
-              /* A missing photo never substitutes a fixture image. */
+                '/cases/${Uri.encodeComponent(caseId)}/state',
+              );
+            } on StateError catch (e) {
+              // Expired history or an event outside the current authorization
+              // scope cannot reveal case state. Lists/history still reconcile.
+              if (e.message == 'not-found') return;
+              rethrow;
             }
-            final item = _parse(data, user.uid, photo: photo);
-            next[item.id] = item;
+            final state = jsonDecode(response.body) as Map<String, dynamic>;
+            if (!current()) return;
+            caseStates[caseId] = state['status'] as String;
+            notifyListeners();
           }),
-        );
-      }
-      final reports = user.active
-          ? (jsonDecode((await _request('GET', '/found-reports')).body) as List)
+        attempt(() async {
+          final responses = await Future.wait([
+            _request('GET', '/cases/available'),
+            _request('GET', '/cases/mine'),
+          ]);
+          final next = <String, VolunteerCase>{};
+          final withoutPhoto = <String>{};
+          for (final response in responses) {
+            for (final row in jsonDecode(response.body) as List) {
+              final item = _parse(row as Map<String, dynamic>, user.uid);
+              next[item.id] = item;
+              if (row['photo_available'] == false) withoutPhoto.add(item.id);
+            }
+          }
+          if (!current()) return;
+          hasLoadedCases = true;
+          _cases = next.values.toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          notifyListeners();
+          unawaited(_loadCasePhotos(next, version, withoutPhoto: withoutPhoto));
+        }),
+        if (!eventOnly)
+          attempt(() async {
+            final response = await _request('GET', '/found-reports');
+            final reports = (jsonDecode(response.body) as List)
                 .map((row) => _found(row as Map<String, dynamic>))
-                .toList()
-          : <FoundReport>[];
-      final alerts = user.active
-          ? (jsonDecode((await _request('GET', '/notifications')).body) as List)
-                .map(
-                  (row) => VolunteerAlert(
-                    id: row['id'] as String,
-                    caseId: row['case_id'] as String,
-                    kind: row['kind'] == 'priority'
-                        ? AlertKind.priority
-                        : row['kind'] == 'status_update'
-                        ? AlertKind.statusUpdate
-                        : AlertKind.newCase,
-                    status: _status(row['status'] as String?),
-                    at: DateTime.parse(row['created_at'] as String),
-                    readAt: row['read_at'] == null
-                        ? null
-                        : DateTime.parse(row['read_at'] as String),
-                  ),
-                )
-                .toList()
-          : <VolunteerAlert>[];
-      if (!_disposed && !_accessLost) {
-        _reports = reports;
-        _alerts = alerts..sort((a, b) => b.at.compareTo(a.at));
-        if (!user.active) _profiles = [];
-        _cases = next.values.toList()
-          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        error = null;
-      }
+                .toList();
+            if (!current()) return;
+            _reports = reports;
+            notifyListeners();
+          }),
+        attempt(() async {
+          final response = await _request('GET', '/notifications');
+          final alerts = (jsonDecode(response.body) as List)
+              .map(
+                (row) => VolunteerAlert(
+                  id: row['id'] as String,
+                  caseId: row['case_id'] as String,
+                  kind: switch (row['kind']) {
+                    'priority' => AlertKind.priority,
+                    'status_update' => AlertKind.statusUpdate,
+                    'cancelled' => AlertKind.cancelled,
+                    'resolved' => AlertKind.resolved,
+                    'reunited' => AlertKind.reunited,
+                    _ => AlertKind.newCase,
+                  },
+                  status: _status(row['status'] as String?),
+                  at: DateTime.parse(row['created_at'] as String),
+                  readAt: row['read_at'] == null
+                      ? null
+                      : DateTime.parse(row['read_at'] as String),
+                ),
+              )
+              .toList();
+          if (!current()) return;
+          hasLoadedNotifications = true;
+          _alerts = alerts..sort((a, b) => b.at.compareTo(a.at));
+          notifyListeners();
+        }),
+      ]);
+      if (failure != null) throw failure!;
+      if (current()) error = null;
     } catch (e, stack) {
       if (kDebugMode) {
-        debugPrint('Radd Volunteer refresh failed (${e.runtimeType})\n$stack');
+        debugPrint('Radd refresh failed (${e.runtimeType})\n$stack');
       }
-      if (!_disposed && !_accessLost) {
-        _cases = [];
-        _reports = [];
-        _alerts = [];
-        _profiles = [];
-        error = 'backend-unavailable';
-      }
+      if (current()) error = 'backend-unavailable';
+      // Preserve last successful, current-session data on transient failure.
+      // Authentication loss still clears every protected resource in _request.
       rethrow;
     } finally {
       if (!_disposed) notifyListeners();
     }
+  }
+
+  Future<void> _loadCasePhotos(
+    Map<String, VolunteerCase> cases,
+    int version, {
+    Set<String> withoutPhoto = const {},
+  }) async {
+    await Future.wait(
+      cases.values.where((item) => !withoutPhoto.contains(item.id)).map((
+        item,
+      ) async {
+        try {
+          final response = await _request(
+            'GET',
+            '/cases/${Uri.encodeComponent(item.id)}/photo',
+          );
+          if (_disposed ||
+              _accessLost ||
+              version != _dataVersion ||
+              !identical(caseById(item.id), item)) {
+            return;
+          }
+          final person = item.person;
+          item.person = RegisteredPerson(
+            id: person.id,
+            name: person.name,
+            age: person.age,
+            gender: person.gender,
+            guardian: person.guardian,
+            information: person.information,
+            photoBytes: response.bodyBytes,
+          );
+          notifyListeners();
+        } catch (_) {
+          // Missing/expired photos never block lists or substitute fixture images.
+        }
+      }),
+    );
+  }
+
+  void _refreshAfterAction() {
+    unawaited(() async {
+      try {
+        await _pendingRefresh;
+      } catch (_) {}
+      if (!_disposed && !_accessLost) {
+        try {
+          await refresh();
+        } catch (_) {}
+      }
+    }());
   }
 
   VolunteerCase _parse(
@@ -319,7 +467,7 @@ class ApiVolunteerRepository extends VolunteerRepository {
   @override
   Future<void> startSearch(VolunteerAccount account, VolunteerCase item) async {
     // Do not let an older in-flight list response undo a successful join locally.
-    await _pendingRefresh;
+    ++_dataVersion;
     if (_disposed) throw StateError('backend-unavailable');
     _joining = true;
     try {
@@ -341,18 +489,20 @@ class ApiVolunteerRepository extends VolunteerRepository {
       if (!_disposed) notifyListeners();
     } finally {
       _joining = false;
+      _refreshAfterAction();
     }
   }
 
   CaseStatus? _status(String? value) {
     if (value == null) return null;
-    return CaseStatus.values[const [
+    final index = const [
       'report_received',
       'search_in_progress',
       'match_confirmed',
       'awaiting_guardian_verification',
       'reunited',
-    ].indexOf(value)];
+    ].indexOf(value);
+    return index < 0 ? null : CaseStatus.values[index];
   }
 
   LocalizedData _text(dynamic value) =>
@@ -453,6 +603,14 @@ class ApiVolunteerRepository extends VolunteerRepository {
     target.verification = value.verification;
     target.handedOverBy = value.handedOverBy;
     target.handedOverAt = value.handedOverAt;
+    final item = caseById(value.caseId ?? '');
+    if (item != null && value.status != null) {
+      item.status = value.status!;
+      if (value.status!.index >= CaseStatus.matchConfirmed.index) {
+        item.confirmedBy = account?.uid;
+      }
+    }
+    if (!_disposed && !_accessLost) notifyListeners();
   }
 
   Future<FoundReport> loadReport(String id) async {
@@ -526,21 +684,23 @@ class ApiVolunteerRepository extends VolunteerRepository {
         '/notifications/${Uri.encodeComponent(alert.id!)}/read',
       );
     }
-    await refresh();
+    _refreshAfterAction();
   }
 
   Future<VolunteerCase> loadCase(String id) async {
     final row = jsonDecode(
       (await _request('GET', '/cases/${Uri.encodeComponent(id)}')).body,
     ) as Map<String, dynamic>;
-    Uint8List? photo;
-    try {
-      photo = (await _request(
-        'GET',
-        '/cases/${Uri.encodeComponent(id)}/photo',
-      )).bodyBytes;
-    } catch (_) {}
-    return _parse(row, account!.uid, photo: photo);
+    if (_disposed || _accessLost) throw StateError('unauthorized');
+    final item = _parse(row, account!.uid);
+    final version = ++_dataVersion;
+    _cases = [item, ..._cases.where((value) => value.id != id)];
+    notifyListeners();
+    if (row['photo_available'] != false) {
+      unawaited(_loadCasePhotos({id: item}, version));
+    }
+    _refreshAfterAction();
+    return item;
   }
 
   @override
@@ -579,7 +739,7 @@ class ApiVolunteerRepository extends VolunteerRepository {
     String action, {
     Object? body,
   }) async {
-    await _pendingRefresh;
+    ++_dataVersion;
     _joining = true;
     try {
       final data = jsonDecode(
@@ -599,9 +759,8 @@ class ApiVolunteerRepository extends VolunteerRepository {
       rethrow;
     } finally {
       _joining = false;
+      _refreshAfterAction();
     }
-
-    await refresh();
   }
 
   @override
@@ -669,6 +828,7 @@ class ApiVolunteerRepository extends VolunteerRepository {
   @override
   void dispose() {
     _disposed = true;
+    caseStates.clear();
     _client.close();
     _cases = [];
     super.dispose();

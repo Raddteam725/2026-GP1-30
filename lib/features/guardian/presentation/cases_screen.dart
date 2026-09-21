@@ -21,6 +21,43 @@ class CasesScreen extends StatefulWidget {
 }
 
 class _CasesScreenState extends State<CasesScreen> {
+  @override
+  void initState() {
+    super.initState();
+    GuardianPushRefresh.instance.addListener(_recover);
+  }
+
+  @override
+  void dispose() {
+    GuardianPushRefresh.instance.removeListener(_recover);
+    super.dispose();
+  }
+
+  int _eventGeneration = 0;
+  Future<void> _recover() async {
+    final generation = ++_eventGeneration;
+    try {
+      final data = await AppServices.of(context).guardian.cases();
+      if (!mounted || generation != _eventGeneration) return;
+      setState(() {
+        _data = Future.value(data);
+      });
+      assert(() {
+        debugPrint(
+          'Radd Guardian authoritative refresh T8/T9 ${DateTime.now().toUtc().toIso8601String()}',
+        );
+        return true;
+      }());
+    } catch (error) {
+      assert(() {
+        debugPrint(
+          'Radd Guardian background refresh failed (${error.runtimeType})',
+        );
+        return true;
+      }());
+    }
+  }
+
   Future<List<MissingCase>>? _data;
   @override
   void didChangeDependencies() {
@@ -29,6 +66,7 @@ class _CasesScreenState extends State<CasesScreen> {
   }
 
   void _reload() => setState(() {
+    ++_eventGeneration;
     _data = AppServices.of(context).guardian.cases();
   });
 
@@ -196,8 +234,8 @@ class CaseStatusScreen extends StatefulWidget {
 // still active and this screen is on-screen, per the "status updates
 // automatically" requirement. Radd talks to the Business Logic Layer only
 // through the REST API (no direct Firestore listener on the client), so a
-// short poll is the contract-compliant way to approximate real-time here; a
-// foreground FCM push additionally triggers the same refresh immediately.
+// foreground FCM/resume event refreshes immediately. This poll is recovery
+// only, for a missed signal or a temporary transport failure.
 const _liveStatusPollInterval = Duration(seconds: 8);
 
 class _CaseStatusScreenState extends State<CaseStatusScreen> {
@@ -218,8 +256,17 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _data ??= AppServices.of(context).guardian.missingCase(widget.id)
-      ..then(_onLoaded);
+    _data ??= _loadCurrent();
+  }
+
+  Future<MissingCase> _loadCurrent() {
+    final generation = ++_liveGeneration;
+    return AppServices.of(context).guardian
+        .missingCase(widget.id)
+        .then((value) {
+          if (generation == _liveGeneration) _onLoaded(value);
+          return value;
+        });
   }
 
   void _onLoaded(MissingCase value) {
@@ -232,23 +279,29 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
     _poll ??= Timer.periodic(_liveStatusPollInterval, (_) => _pollOnce());
   }
 
+  int _liveGeneration = 0;
   Future<void> _pollOnce() async {
     if (_busy) return; // Never race a Guardian-initiated action's own reload.
+    final generation = ++_liveGeneration;
     try {
       final value = await AppServices.of(context).guardian
           .missingCase(widget.id);
-      if (!mounted) return;
+      if (!mounted || generation != _liveGeneration) return;
       setState(() => _live = value);
+      if (value.active) _startPolling();
       if (!value.active) _poll?.cancel(); // Terminal: nothing left to watch.
-    } catch (_) {
+    } catch (error) {
+      assert(() {
+        debugPrint('Radd Guardian case refresh failed (${error.runtimeType})');
+        return true;
+      }());
       // A transient failure here must not surface as an error banner over an
       // otherwise-fine screen; the next tick (or manual refresh) retries.
     }
   }
 
   void _reload() => setState(() {
-    _data = AppServices.of(context).guardian.missingCase(widget.id)
-      ..then(_onLoaded);
+    _data = _loadCurrent();
   });
 
   @override

@@ -30,13 +30,23 @@ class GuardianApi implements GuardianRepository {
   final Future<String?> Function() token;
   final http.Client _client;
   final String _base;
+  int _sequence = 0;
   Future<http.Response> _request(
     String method,
     String path, {
     Object? body,
   }) async {
     if (_base.isEmpty) throw const AppFailure('service');
+    final requestId = '${DateTime.now().millisecondsSinceEpoch}-${++_sequence}';
+    if (kDebugMode && method == 'POST') {
+      debugPrint(
+        'Radd Guardian $requestId T0 $method ${path.replaceAll(RegExp(r"/cases/[^/]+"), "/cases/{id}")} ${DateTime.now().toUtc().toIso8601String()}',
+      );
+    }
     final uri = Uri.parse('$_base/v1$path');
+    if (kDebugMode && _sequence == 1) {
+      debugPrint('Radd Guardian backend ${uri.scheme}://${uri.host}:${uri.port}');
+    }
     if (!kDebugMode && uri.scheme != 'https') throw const AppFailure('service');
     try {
       return await (() async {
@@ -46,6 +56,7 @@ class GuardianApi implements GuardianRepository {
           ..headers.addAll({
             'Authorization': 'Bearer $jwt',
             'Content-Type': 'application/json',
+            if (kDebugMode) 'X-Radd-Request-ID': requestId,
           });
         if (body != null) request.body = jsonEncode(body);
         final response = await http.Response.fromStream(

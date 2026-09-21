@@ -1,6 +1,8 @@
 """Persistent, event-scoped Volunteer workflow on shared Guardian registrations/cases."""
 import hashlib
 import secrets
+import logging
+import time
 from datetime import datetime, timezone
 from fastapi import HTTPException, Depends, Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -292,6 +294,8 @@ class VolunteerWorkflow:
                 {'case_id': ref.id, 'event_id': rd['event_id'], 'kind': 'status_update', 'status': 'match_confirmed', 'created_at': now, 'read_at': None})
             push.update(guardian_id=pd['guardian_id'], case_id=ref.id, event_id=rd['event_id'])
         confirm(self.db.transaction())
+        if push:
+            logging.getLogger('uvicorn.error').info('Radd event %s-match_confirmed T2 committed epoch_ms=%d', push['case_id'], time.time()*1000)
         self.delete_found_photo(report_id)
         if push:
             safe_dispatch(self.db, push['case_id'], matched=True)
@@ -334,6 +338,7 @@ class VolunteerWorkflow:
             push.update(guardian_id=cd['guardian_id'], case_id=case.id, event_id=cd['event_id'])
         begin(self.db.transaction())
         if push:
+            logging.getLogger('uvicorn.error').info('Radd event %s-awaiting_guardian_verification T2 committed epoch_ms=%d', push['case_id'], time.time()*1000)
             try:
                 notify_guardian(push['guardian_id'], kind='status_update', status='awaiting_guardian_verification',
                     case_id=push['case_id'], event_id=push['event_id'])
@@ -431,6 +436,8 @@ class VolunteerWorkflow:
             push.update(guardian_id=cd['guardian_id'], case_id=case.id, event_id=cd['event_id'])
         handover(self.db.transaction())
         if push:
+            logging.getLogger('uvicorn.error').info('Radd event %s-reunited T2 committed epoch_ms=%d', push['case_id'], time.time()*1000)
+            safe_dispatch(self.db, push['case_id'])
             try:
                 notify_guardian(push['guardian_id'], kind='status_update', status='reunited',
                     case_id=push['case_id'], event_id=push['event_id'])
@@ -442,12 +449,17 @@ class VolunteerWorkflow:
         self.profile(require_active=True)
         event = active_event(self.db)
         collection = self.user.collection('volunteer_notifications')
+        existing = {doc.id for doc in collection.stream()}
         # Materialize actual event case notifications lazily, using stable IDs and
         # transactional create-if-absent. No fake records, no Guardian changes.
         for case in self.cases.where(filter=FieldFilter('event_id', '==', event.id)).stream():
             if case.to_dict().get('status') not in STAGES[:2]:
                 continue
             ref = collection.document(case.id + '-new')
+            # Polling must not open a transaction for every historical alert.
+            # Missing alerts still use the authoritative transactional checks.
+            if ref.id in existing:
+                continue
             @firestore.transactional
             def create(tx):
                 self.profile(tx, require_active=True)
@@ -458,7 +470,8 @@ class VolunteerWorkflow:
                 tx.set(ref, {'case_id': case.id, 'event_id': event.id, 'kind': 'new_case',
                     'status': current.to_dict()['status'], 'created_at': firestore.SERVER_TIMESTAMP, 'read_at': None})
             create(self.db.transaction())
-        return [{'id': d.id, **d.to_dict()} for d in collection.stream() if d.to_dict().get('event_id') == event.id]
+        return sorted([{'id': d.id, **d.to_dict()} for d in collection.stream() if d.to_dict().get('event_id') == event.id],
+            key=lambda row: str(row.get('created_at', '')), reverse=True)
 
     def notification_read(self, notification_id):
         self.profile(require_active=True)
