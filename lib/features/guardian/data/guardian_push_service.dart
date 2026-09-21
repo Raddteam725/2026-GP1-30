@@ -5,15 +5,18 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../firebase_options.dart';
+import 'guardian_case_events.dart';
 import 'guardian_repository.dart';
 
-/// FCM is an ADDITIONAL delivery channel for Guardian notifications -- the
+/// FCM is the immediate SIGNAL channel for Guardian notifications -- the
 /// existing Firestore notification records (fetched via the authenticated
 /// REST API) remain the durable, authoritative in-app history. Nothing here
 /// ever treats a push payload as authoritative case/status data: every
-/// received message only triggers a refetch from the backend, or (for a
-/// tapped notification) navigation to the right screen so the backend can be
-/// asked directly.
+/// received message only triggers an authoritative refetch from the backend
+/// (through GuardianCaseEvents, which also validates the message against the
+/// Radd update contract and drops duplicate deliveries), or (for a tapped
+/// notification) navigation to the right screen so the backend can be asked
+/// directly.
 ///
 /// This must keep working correctly with no FCM at all: permission denied,
 /// no registration, offline, or Firebase Messaging failing outright are all
@@ -32,14 +35,14 @@ Future<void> guardianBackgroundMessageHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 }
 
-/// Notifies any listening, currently-open screen that server state may have
-/// changed, without this module needing to know which screens exist or how
-/// they fetch data. A screen reacts by re-running its OWN existing reload --
-/// this never carries data itself, only a "something changed, go check" tick.
-class GuardianPushRefresh extends ChangeNotifier {
+/// Generic "server state may have changed, go check" tick with no case
+/// context -- kept for callers that only want that; it is delivered through
+/// [GuardianCaseEvents] like every other signal, so screens have exactly one
+/// thing to listen to.
+class GuardianPushRefresh {
   GuardianPushRefresh._();
   static final instance = GuardianPushRefresh._();
-  void ping() => notifyListeners();
+  void ping() => GuardianCaseEvents.instance.signal();
 }
 
 /// Holds a case id from a notification the Guardian tapped (from the
@@ -61,6 +64,9 @@ class GuardianPushRouter {
   }
 
   static void _setPending(RemoteMessage? message) {
+    // Only a message from the Guardian update contract can route anywhere.
+    final role = message?.data['role'];
+    if (role != null && role != 'guardian') return;
     final caseId = message?.data['case_id'];
     if (caseId is String && caseId.isNotEmpty) _pendingCaseId = caseId;
   }
@@ -109,6 +115,10 @@ class GuardianPushService {
   ) async {
     if (_initialized) return;
     _initialized = true;
+    // App resume is the recovery signal for anything missed while suspended
+    // -- attached before anything Firebase-related, so it exists even when
+    // push itself is denied or unsupported.
+    GuardianCaseEvents.instance.ensureLifecycle();
     try {
       // Defensive: the _initialized guard above already prevents a second
       // concurrent initialize() from reaching here, and handleLogout()
@@ -132,9 +142,12 @@ class GuardianPushService {
             _upload(guardian, refreshed, _lastSyncedLocale ?? locale),
       );
 
-      // Foreground: the push is only a signal to refresh, never itself the data.
+      // Foreground: the push is only a signal to refresh, never itself the
+      // data. The `notification` block is ignored entirely (no duplicate
+      // banner is built from it); `data` is validated, de-duplicated and
+      // turned into a case event that makes the open screens refetch.
       _onMessageSub = FirebaseMessaging.onMessage.listen(
-        (_) => GuardianPushRefresh.instance.ping(),
+        (message) => GuardianCaseEvents.instance.acceptPush(message.data),
       );
 
       // Tapped from background, or app launched fresh by tapping a
@@ -210,6 +223,9 @@ class GuardianPushService {
     _initialized = false;
     _lastKnownToken = null;
     _lastSyncedLocale = null;
+    // Processed-event memory and the resume observer belong to the session
+    // that is ending, never to whoever signs in next.
+    GuardianCaseEvents.instance.reset();
     if (token == null) return;
     try {
       await guardian
@@ -246,6 +262,7 @@ class GuardianPushService {
     _tokenRefreshSub = null;
     _onMessageSub = null;
     _onMessageOpenedSub = null;
+    GuardianCaseEvents.instance.reset();
   }
 
   @visibleForTesting

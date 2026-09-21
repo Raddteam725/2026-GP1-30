@@ -4,7 +4,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 import pytest
-from app import volunteer_alerts
+from firebase_admin import messaging
+from app import volunteer_alerts, delivery, sessions
 from app.volunteer import VolunteerDevice
 from app.cases import CaseService
 from app.case_models import GuidedReport
@@ -12,9 +13,24 @@ from test_volunteer import db, vol, case
 
 @pytest.fixture
 def sends(monkeypatch):
+    # Delivery is one messaging.send_each batch per notification (app.delivery);
+    # `send` still records every individual message so assertions can look
+    # at one message at a time, and its side_effect fails them one by one.
     send = Mock(return_value='message-id')
-    monkeypatch.setattr(volunteer_alerts.messaging, 'send', send)
+    def send_each(messages, app=None):
+        responses = []
+        for message in messages:
+            try:
+                send(message)
+                responses.append(messaging.SendResponse({'name': 'message-id'}, None))
+            except Exception as error:
+                responses.append(messaging.SendResponse(None, error))
+        return messaging.BatchResponse(responses)
+    monkeypatch.setattr(delivery.messaging, 'send_each', send_each)
     monkeypatch.setattr(volunteer_alerts, 'firebase_app', lambda: None)
+    # A registration past its trusted window is re-confirmed with Firebase
+    # Auth (app.sessions); these tests treat an unconfirmable one as ended.
+    monkeypatch.setattr(sessions, 'verify_session', lambda uid, registration: 'revoked')
     return send
 
 def device(uid, **kwargs):

@@ -9,9 +9,16 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 @lru_cache
 def firebase_app():
     # Application Default Credentials; never load keys from the repository.
+    # On Cloud Run this resolves to the service's own identity with no key
+    # file at all; locally run_dev.py points ADC at a key kept OUTSIDE the repo.
     return firebase_admin.initialize_app(options={
         "projectId": os.getenv("FIREBASE_PROJECT_ID", "radd-32eb6"),
         "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET", "radd-32eb6.firebasestorage.app"),
+        # Bounds EVERY Firebase Admin HTTP call (FCM sends, Auth lookups): an
+        # already-committed case transition can be delayed by a stalled push
+        # network path by at most this long before the API responds, and is
+        # never hung by it. Firestore uses its own gRPC channel, unaffected.
+        "httpTimeout": float(os.getenv("FIREBASE_HTTP_TIMEOUT_SECONDS", "10")),
     }, name="radd-backend")
 
 def database():

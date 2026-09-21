@@ -25,9 +25,11 @@ void main() {
   setUp(() {
     auth = TestAuth();
     repo = TestRepository();
+    GuardianPushService.resetForTesting();
   });
   tearDown(() async {
     await auth.events.close();
+    GuardianPushService.resetForTesting();
   });
   Future<void> start(WidgetTester t, {String locale = 'en'}) async {
     await t.pumpWidget(
@@ -538,7 +540,9 @@ void main() {
             },
           ),
         );
-      await t.pump(const Duration(seconds: 9));
+      // No push arrived (simulating a missed FCM): the slow FALLBACK poll
+      // still picks the change up -- 30 s, deliberately not the normal path.
+      await t.pump(const Duration(seconds: 31));
       await t.pump();
       expect(find.text('Search in Progress'), findsWidgets);
       Navigator.pop(t.element(find.byType(CaseStatusScreen)));

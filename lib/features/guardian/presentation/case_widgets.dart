@@ -615,3 +615,46 @@ class _ActiveCaseChip extends StatelessWidget {
     );
   }
 }
+
+/// The in-app notice for a case update that arrived (by push) while the
+/// Guardian is using Radd: the status in Radd's own words plus the case
+/// identifier -- the same status vocabulary as everywhere else, never a
+/// technical or Firebase message. Shown only by the screen currently on top
+/// so stacked screens never show it twice; the screen's own authoritative
+/// refetch is what actually changes what is displayed.
+void showCaseUpdateNotice(
+  BuildContext context, {
+  required String caseId,
+  required String status,
+}) {
+  if (ModalRoute.of(context)?.isCurrent != true) return;
+  final s = AppLocalizations.of(context)!;
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        key: const ValueKey('case-update-notice'),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.primary,
+        content: Row(
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: caseStatusColor(status),
+                shape: BoxShape.circle,
+              ),
+              child: const SizedBox.square(dimension: 10),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '${caseStatusLabel(status, s)} · ${caseDisplayIdIsolated(caseId)}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+}

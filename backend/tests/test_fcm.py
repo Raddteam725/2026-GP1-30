@@ -302,7 +302,10 @@ def test_push_payload_contains_only_minimal_navigation_fields(storage, monkeypat
     created = CaseService(s).create(CaseCreate(individual_id=individual_id))
     assert len(sender.calls) == 1
     (message,) = sender.calls[0]
-    assert set(message.data.keys()) == {"kind", "status", "case_id", "event_id"}
+    # `role` lets the client validate that a message belongs to the Guardian
+    # update contract at all (a Volunteer signal must never be acted on).
+    assert set(message.data.keys()) == {"role", "kind", "status", "case_id", "event_id"}
+    assert message.data["role"] == "guardian"
     assert message.data["case_id"] == created["id"]
     assert message.data["status"] == "report_received"
     # No name, age, photo, guided-report, location, contact info, or token.

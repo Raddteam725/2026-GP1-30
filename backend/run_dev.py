@@ -33,7 +33,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--credentials-dir")
     parser.add_argument("--adc", action="store_true", help="Use manually configured keyless service-account ADC; do not discover JSON keys.")
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--port", type=int, default=int(os.getenv("PORT", "8000")))
+    # Loopback by default. For a two-device test on one Wi-Fi network run with
+    # `--host 0.0.0.0` and build BOTH apps with --dart-define=RADD_API_URL=
+    # http://<this PC's LAN address>:8000 -- no address is ever hardcoded here.
+    parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--bootstrap-event", action="store_true")
     args = parser.parse_args()
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -55,10 +59,12 @@ def main():
         from app.events import bootstrap_development_event
         bootstrap_development_event(database())
         print("Current development event is ready.")
-    # Approved local maintenance: retention and alert retries every minute.
+    # Approved LOCAL maintenance thread: retention and push reconciliation
+    # every minute. Development only -- the deployed service leaves this
+    # unset and uses a managed scheduler (see app/local_jobs.py).
     os.environ["RADD_LOCAL_JOBS"] = "1"
     import uvicorn
-    uvicorn.run("app.main:app", host="127.0.0.1", port=args.port, access_log=False)
+    uvicorn.run("app.main:app", host=args.host, port=args.port, access_log=False)
 
 if __name__ == "__main__":
     main()

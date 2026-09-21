@@ -7,6 +7,7 @@ import '../../../core/routing/app_routes.dart';
 import '../../../shared/widgets/feature_page.dart';
 import '../../../core/theme/app_colors.dart';
 import 'guardian_components.dart';
+import '../data/guardian_case_events.dart';
 import '../data/guardian_push_service.dart';
 import '../data/guardian_repository.dart';
 import 'individual_widgets.dart';
@@ -23,12 +24,48 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
   late int _tab = widget.initialTab;
   int _revision = 0;
   Future<(GuardianProfile, List<Individual>, bool, List<MissingCase>)>? _data;
+  // The latest authoritative snapshot from an event-driven (push/resume)
+  // refetch: Home, My Individuals (active-case badges/chips) and the unread
+  // dot update in place, with no loading flash and no navigation; kept as-is
+  // if a background refetch fails.
+  (GuardianProfile, List<Individual>, bool, List<MissingCase>)? _live;
+  final _sync = CoalescedRefresh('home');
   bool _loggingOut = false;
   Object? _logoutError;
+  @override
+  void initState() {
+    super.initState();
+    GuardianCaseEvents.instance.addListener(_onEvent);
+  }
+
+  @override
+  void dispose() {
+    GuardianCaseEvents.instance.removeListener(_onEvent);
+    super.dispose();
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _data ??= _load();
+  }
+
+  void _onEvent() {
+    final event = GuardianCaseEvents.instance.last;
+    if (event == null || !mounted || _loggingOut) return;
+    _sync.run(() async {
+      final value = await _load();
+      if (mounted) setState(() => _live = value);
+    });
+    if (event.source == GuardianEventSource.push &&
+        event.caseId != null &&
+        event.status != null) {
+      showCaseUpdateNotice(
+        context,
+        caseId: event.caseId!,
+        status: event.status!,
+      );
+    }
   }
 
   Future<(GuardianProfile, List<Individual>, bool, List<MissingCase>)>
@@ -51,6 +88,7 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
 
   void _refresh() => setState(() {
     _revision++;
+    _live = null;
     _data = _load();
   });
 
@@ -152,9 +190,10 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
     >(
       future: _data,
       builder: (context, state) {
-        final profile = state.data?.$1, people = state.data?.$2 ?? [];
-        final hasUnread = state.data?.$3 ?? false;
-        final cases = state.data?.$4 ?? const <MissingCase>[];
+        final data = _live ?? state.data;
+        final profile = data?.$1, people = data?.$2 ?? [];
+        final hasUnread = data?.$3 ?? false;
+        final cases = data?.$4 ?? const <MissingCase>[];
         final activeCases = cases.where((c) => c.active).toList();
         final caseByIndividual = {
           for (final c in activeCases) c.individualId: c,
@@ -172,9 +211,9 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
             enabled: !_loggingOut,
           ),
           children: [
-            if (state.connectionState != ConnectionState.done)
+            if (state.connectionState != ConnectionState.done && data == null)
               const Center(child: CircularProgressIndicator())
-            else if (state.hasError) ...[
+            else if (state.hasError && data == null) ...[
               ErrorNotice(
                 message: failureMessage(state.error!, s),
                 onRetry: _refresh,

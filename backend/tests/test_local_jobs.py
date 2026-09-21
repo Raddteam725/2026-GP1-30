@@ -18,8 +18,9 @@ def test_local_jobs_are_one_minute_and_failure_does_not_skip_other_jobs(monkeypa
     monkeypatch.setattr(cleanup, 'scrub_terminal_cases', lambda: calls.append('cases'))
     monkeypatch.setattr(cleanup, 'delete_finished_found_photos', lambda: calls.append('found'))
     monkeypatch.setattr(local_jobs, 'retry_alerts', lambda: calls.append('alerts'))
+    monkeypatch.setattr(local_jobs, 'retry_guardian_pushes', lambda: calls.append('guardian'))
     local_jobs.run_once()
-    assert calls == ['queue', 'photos', 'cases', 'found', 'alerts']
+    assert calls == ['queue', 'photos', 'cases', 'found', 'alerts', 'guardian']
 
 
 def test_finished_photo_retry_does_not_delete_active_attempt_or_change_case(db, monkeypatch, photos):
@@ -44,4 +45,6 @@ def test_retry_dispatches_existing_cases_without_creating_new_records(db, monkey
     dispatch = Mock()
     monkeypatch.setattr(local_jobs, 'dispatch', dispatch)
     local_jobs.retry_alerts()
-    dispatch.assert_called_once_with(db, identifier, matched=False)
+    # The kind to send is derived from the case's CURRENT status inside
+    # dispatch itself, so a retry can never resend a stale kind.
+    dispatch.assert_called_once_with(db, identifier)

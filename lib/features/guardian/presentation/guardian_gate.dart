@@ -4,6 +4,7 @@ import '../../../app/app_services.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../auth/presentation/session_screen.dart';
 import '../../auth/presentation/auth_screen.dart';
+import '../data/guardian_case_events.dart';
 import '../data/guardian_push_service.dart';
 import '../data/guardian_repository.dart';
 
@@ -57,6 +58,9 @@ class _GuardianGateState extends State<GuardianGate> {
             // ever blocks or replaces rendering `widget.child` below --
             // both are fire-and-forget.
             final locale = Localizations.localeOf(context).languageCode;
+            // Returning to the foreground triggers an authoritative recovery
+            // refetch on every open Guardian screen (idempotent attach).
+            GuardianCaseEvents.instance.ensureLifecycle();
             if (!_pushInitStarted) {
               _pushInitStarted = true;
               GuardianPushService.initialize(services.guardian, locale).then((

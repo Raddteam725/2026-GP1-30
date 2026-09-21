@@ -12,13 +12,12 @@ detail, so it is safe for Android to display in the system tray while the app
 is backgrounded or terminated. It is also standard: nothing here builds or
 displays a notification directly (no local-notification package); Android's
 own FCM handling does that automatically for a backgrounded/terminated app.
-`data` remains data-only, minimal -- kind/status/case_id/event_id, nothing
-else. No photo, no exact age, no free text, no location, no contact info, and
-never a registration token. The client treats `data` as a hint to refetch
-authoritative state from the authenticated backend, never as the state
-itself; the foreground handler ignores `notification` entirely (see
-GuardianPushService.initialize on the Flutter side) so no duplicate banner
-is ever built while the app is open.
+`data` remains data-only, minimal -- role/kind/status/case_id/event_id,
+nothing else. No photo, no exact age, no free text, no location, no contact
+info, and never a registration token. The client treats `data` as a hint to
+refetch authoritative state from the authenticated backend, never as the
+state itself; `role` + `case_id` + `status` are what the client validates and
+de-duplicates on (see GuardianCaseEvents on the Flutter side).
 
 Language: chosen per-registration from that installation's own stored
 `locale` (Radd's in-app language selection, set at registration time -- see
@@ -26,14 +25,20 @@ service.register_fcm_token) picking one of exactly two fixed, already-
 translated strings. Never derived from case/individual data, and never a
 reason to add a new sensitive field anywhere.
 
-Registration lifecycle: a token is removed ONLY on messaging.UnregisteredError
--- Firebase's own definitive "this registration no longer exists" signal.
-Every other outcome (network failure, quota, a generic invalid-argument, the
-whole send call raising) is treated as transient and leaves the stored
-registration untouched, to be retried on the next triggering event.
+Delivery, receipts, retry and the registration-removal rule (only on
+messaging.UnregisteredError) are the shared app.delivery contract, identical
+for both roles; which registrations are eligible is the shared app.sessions
+contract. The durable notification document written by the caller
+(`users/{uid}/notifications/{case}-{status}`) is what the delivery receipts
+hang off, so the reconciliation job can retry exactly the pushes FCM never
+accepted (see retry_recent).
 """
+from datetime import datetime, timedelta, timezone
 from firebase_admin import messaging
+from google.cloud.firestore_v1.base_query import FieldFilter
 from .firebase import database, firebase_app
+from .delivery import deliver
+from .sessions import eligible_registrations
 
 # Fixed, generic, privacy-safe: no individual's name, no case detail, no
 # status-specific wording that could hint at sensitive content. Exactly two
@@ -45,47 +50,60 @@ _NOTIFICATION_TEXT = {
     "ar": {"title": "راد", "body": "هناك تحديث على أحد بلاغاتك."},
 }
 
+# How far back the reconciliation job looks for Guardian notifications whose
+# push FCM never accepted. Anything older is covered by the app's own
+# authoritative refetch on open/resume.
+RETRY_WINDOW = timedelta(hours=1)
+
 def _registrations(db, guardian_uid):
     return db.collection("users").document(guardian_uid).collection("fcm_registrations")
 
+def notification_id(case_id, status):
+    # The one id scheme every Guardian notification writer uses
+    # (cases.create/_terminate, volunteer.start_search, volunteer_workflow.*,
+    # scripts/dev_case_state.py), so push receipts always find their record.
+    return case_id + "-" + status
+
 def notify_guardian(guardian_uid, *, kind, status, case_id, event_id):
-    """Best-effort, fire-and-forget. Never raises."""
+    """Best-effort, never raises: immediate push for an already-committed
+    notification record. Returns the delivery summary (see app.delivery)."""
     try:
         db = database()
-        docs = [d for d in _registrations(db, guardian_uid).stream() if (d.to_dict() or {}).get("token")]
-        if not docs:
-            return
-        data = {"kind": kind, "status": status, "case_id": case_id, "event_id": event_id}
-        pairs = []
-        for doc in docs:
-            reg = doc.to_dict()
-            text = _NOTIFICATION_TEXT.get(reg.get("locale"), _NOTIFICATION_TEXT["en"])
+        user = db.collection("users").document(guardian_uid)
+        registrations = eligible_registrations(user, guardian_uid)
+        if not registrations:
+            return None
+        data = {"role": "guardian", "kind": kind, "status": status, "case_id": case_id, "event_id": event_id}
+        def build(registration):
+            text = _NOTIFICATION_TEXT.get(registration.get("locale"), _NOTIFICATION_TEXT["en"])
             # `token=` (not the newer `fid=`) deliberately: this installed
             # firebase-admin flags Message.token as deprecated in favor of a
             # Firebase Installation ID, but the standard FlutterFire
             # `FirebaseMessaging.instance.getToken()` API this project's
             # client uses still returns a classic FCM registration token,
             # not an installation ID -- `fid` is not the value to send.
-            message = messaging.Message(
+            return messaging.Message(
                 notification=messaging.Notification(title=text["title"], body=text["body"]),
                 data=data,
-                token=reg["token"],
+                token=registration["token"],
             )
-            pairs.append((doc, message))
-        batch = messaging.send_each([message for _, message in pairs], app=firebase_app())
-        for (doc, _), result in zip(pairs, batch.responses):
-            if result.success:
-                continue
-            if isinstance(result.exception, messaging.UnregisteredError):
-                # Handled independently per-registration: one invalid device
-                # here never stops (or is affected by) any other registration
-                # in this same batch.
-                try:
-                    doc.reference.delete()
-                except Exception:
-                    pass
-            # Any other exception (transient network/service failure, quota,
-            # a generic invalid-argument not specifically about this being an
-            # unregistered token, ...) is left exactly as-is for the next event.
+        return deliver(db, user.collection("notifications").document(notification_id(case_id, status)),
+                       registrations, build, app=firebase_app())
     except Exception:
-        pass
+        return None
+
+def retry_recent(db=None):
+    """Reconciliation: re-attempt every recent Guardian notification whose
+    push was never accepted (receipts make an accepted one a no-op). Part of
+    the maintenance run -- never the normal path, which is the immediate
+    attempt inside the request that committed the record."""
+    db = db or database()
+    cutoff = datetime.now(timezone.utc) - RETRY_WINDOW
+    for guardian in db.collection("users").where(filter=FieldFilter("role", "==", "guardian")).stream():
+        recent = guardian.reference.collection("notifications").where(filter=FieldFilter("created_at", ">=", cutoff)).stream()
+        for note in recent:
+            data = note.to_dict() or {}
+            if not data.get("case_id") or not data.get("status"):
+                continue
+            notify_guardian(guardian.id, kind=data.get("kind", "status_update"), status=data["status"],
+                            case_id=data["case_id"], event_id=data.get("event_id"))

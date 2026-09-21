@@ -11,6 +11,7 @@ from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 from .firebase import database, bucket
 from .events import active_event
+from . import sessions
 
 Image.MAX_IMAGE_PIXELS = 20_000_000
 
@@ -146,10 +147,14 @@ class GuardianService:
             if stale.exists and stale.to_dict().get("token") == token:
                 stale.reference.delete()
         ref = self.user.collection("fcm_registrations").document(doc_id)
+        # Session association comes from the VERIFIED token this request was
+        # authenticated with (never from the request body) -- see app.sessions
+        # for how it stays valid while the person remains signed in.
+        session = sessions.stamp(self.token)
         @firestore.transactional
         def upsert(tx):
             existing = ref.get(transaction=tx)
-            data = {"token": token, "locale": locale, "updated_at": firestore.SERVER_TIMESTAMP}
+            data = {"token": token, "locale": locale, "updated_at": firestore.SERVER_TIMESTAMP, **session}
             if not existing.exists:
                 data["created_at"] = firestore.SERVER_TIMESTAMP
             tx.set(ref, data, merge=True)
