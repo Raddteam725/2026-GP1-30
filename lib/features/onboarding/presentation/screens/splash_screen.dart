@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../../../../app/app_services.dart';
+import '../../../../app/radd_app.dart';
 import '../../../../core/localization/generated/app_localizations.dart';
 
 import 'package:flutter/material.dart';
@@ -29,33 +30,59 @@ class _SplashScreenState extends State<SplashScreen>
   late final Animation<double> _subtitle = _phase(0.79, 0.87);
   late final Animation<double> _footer = _phase(0.88, 0.96);
   Timer? _navigationTimer;
+  // Set once the splash sequence has played out; navigation then happens as
+  // soon as application startup has also finished (immediately if it has).
+  bool _sequenceDone = false;
   Animation<double> _phase(double start, double end) => _entrance.drive(
     CurveTween(curve: Interval(start, end, curve: Curves.easeOutCubic)),
   );
   @override
   void initState() {
     super.initState();
-    if (!widget.autoNavigate) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // The sequence's clock starts only when the app's first frame has really
+    // been rasterized -- the same moment Android dismisses its launch window
+    // -- so the clean t=0 frame is what the user sees first and the whole
+    // animation plays in view. Starting any earlier would let it run,
+    // unseen, behind the native launch screen.
+    AppStartupScope.splashStartOf(context).then((_) {
       if (!mounted) return;
+      if (!MediaQuery.disableAnimationsOf(context) &&
+          !_entrance.isAnimating &&
+          !_entrance.isCompleted) {
+        _entrance.forward();
+      }
+      if (!widget.autoNavigate) return;
       _navigationTimer = Timer(OnboardingLayout.splashDuration, () {
-        if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
-        Navigator.of(context).pushReplacementNamed(
-          AppServices.maybeOf(context) == null
-              ? AppRoutes.languageSelection
-              : AppRoutes.session,
-        );
+        _sequenceDone = true;
+        _navigateIfReady();
       });
     });
+  }
+
+  /// This splash is the single, continuous branded start of the app: it is
+  /// on screen from the first Flutter frame and stays -- without restarting
+  /// -- until both its own sequence and startup (Firebase, services) are
+  /// done. Startup completing later simply triggers this again via
+  /// didChangeDependencies.
+  void _navigateIfReady() {
+    if (!mounted || !_sequenceDone || AppStartupScope.pendingOf(context)) {
+      return;
+    }
+    if (ModalRoute.of(context)?.isCurrent != true) return;
+    _sequenceDone = false; // Navigate exactly once.
+    Navigator.of(context).pushReplacementNamed(
+      AppServices.maybeOf(context) == null
+          ? AppRoutes.languageSelection
+          : AppRoutes.session,
+    );
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (MediaQuery.disableAnimationsOf(context)) {
-      _entrance.value = 1;
-    } else if (!_entrance.isAnimating && !_entrance.isCompleted) {
-      _entrance.forward();
+    if (MediaQuery.disableAnimationsOf(context)) _entrance.value = 1;
+    if (_sequenceDone) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _navigateIfReady());
     }
   }
 

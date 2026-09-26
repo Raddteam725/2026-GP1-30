@@ -10,7 +10,7 @@ class AppLocalizationsAr extends AppLocalizations {
   AppLocalizationsAr([String locale = 'ar']) : super(locale);
 
   @override
-  String get appTitle => 'راد';
+  String get appTitle => 'رادّ';
 
   @override
   String get loading => 'جارٍ التحميل';
@@ -57,10 +57,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get arabicLanguage => 'اللغة العربية';
 
   @override
-  String get brandFooter => 'راد • نجمع الأحبة من جديد';
+  String get brandFooter => 'رادّ · نردّ الأحبة من جديد';
 
   @override
-  String get joinRadd => 'انضم إلى راد';
+  String get joinRadd => 'انضم إلى رادّ';
 
   @override
   String get roleHint => 'اختر كيف تود المتابعة';
@@ -114,14 +114,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get resetHint =>
-      'أدخل بريدك الإلكتروني لطلب تعليمات استعادة كلمة المرور.';
+      'أدخل بريدك الإلكتروني لتصلك رسالة لإعادة تعيين كلمة المرور.';
 
   @override
-  String get sendReset => 'إرسال تعليمات الاستعادة';
+  String get sendReset => 'إرسال رسالة إعادة التعيين';
 
   @override
   String get resetSent =>
-      'إذا كان هناك حساب مرتبط بهذا البريد، فستُرسل إليه تعليمات استعادة كلمة المرور.';
+      'إذا كان هناك حساب مرتبط بهذا البريد الإلكتروني، فستصلك رسالة لإعادة تعيين كلمة المرور.';
 
   @override
   String get noAccount => 'ليس لديك حساب؟';
@@ -130,17 +130,81 @@ class AppLocalizationsAr extends AppLocalizations {
   String get rememberPassword => 'تذكرت كلمة المرور؟';
 
   @override
-  String get ageConfirm => 'أؤكد أن عمري 18 سنة أو أكثر.';
+  String get ageConfirm => 'أؤكد أن عمري 18 عامًا أو أكثر.';
 
   @override
-  String get privacyConfirm => 'قرأت إشعار الخصوصية وأوافق عليه.';
+  String get privacyConfirm =>
+      'لقد قرأت وأوافق على إشعار الخصوصية الخاص برادّ.';
 
   @override
   String get privacyTitle => 'إشعار الخصوصية';
 
   @override
-  String get privacyBody =>
-      'معلومات عن المشروع — الإشعار النهائي قيد الاعتماد.\n\nيعالج راد المعلومات والصور لغرض لمّ الشمل ضمن الفعالية. يُنظّم الوصول وفق أدوار النظام. تخضع البيانات التعريفية والصور لقواعد الاحتفاظ والحذف الخاصة بالمشروع، وقد تُحتفظ معلومات إحصائية مجهولة الهوية وفق تصميم المشروع.\n\nسيُستبدل هذا الإشعار المؤقت بالنص المعتمد من الفريق.';
+  String get privacyIntro =>
+      'في رادّ، نحترم خصوصيتك وخصوصية الأشخاص المسجلين تحت رعايتك. قد تتضمن البيانات التي يعالجها النظام معلومات شخصية وصورًا لأطفال أو كبار سن أو غيرهم من الأشخاص الذين قد يحتاجون إلى المساعدة عند انفصالهم عن ذويهم خلال الفعالية.\n\nيوضح هذا الإشعار المعلومات التي يستخدمها رادّ، والغرض من استخدامها، وكيف يتم استخدامها أثناء عملية البحث والتعرف وإعادة لمّ الشمل، ومن يمكنه الوصول إليها، ومدة الاحتفاظ بها ومتى يتم حذفها.';
+
+  @override
+  String get privacyInfoTitle => 'المعلومات التي نجمعها ونستخدمها';
+
+  @override
+  String get privacyInfoBody =>
+      'عند إنشاء حساب ولي الأمر واستخدام رادّ، يعالج النظام المعلومات اللازمة لإنشاء حسابك واستخدامه، بالإضافة إلى المعلومات التي تقدمها عن الأشخاص المسجلين تحت رعايتك، بما في ذلك بياناتهم التعريفية وصورهم.\n\nعند تقديم بلاغ فقدان، قد يعالج رادّ أيضًا المعلومات المرتبطة بالحالة، مثل تفاصيل الشخص المفقود، والمعلومات الوصفية التي تقدمها للمساعدة في البحث، ومعلومات آخر مكان شوهد فيه الشخص. وإذا اخترت استخدام موقع جهازك كموقع لآخر مشاهدة وسمحت للتطبيق بالوصول إلى الموقع، فقد يتم استخدام إحداثيات الموقع لهذا الغرض.\n\nتُستخدم هذه المعلومات لدعم عمليات التسجيل، والإبلاغ، والبحث، والتعرف، والتحقق، وإعادة لمّ الشمل ضمن الفعالية.';
+
+  @override
+  String get privacyRegisteredPhotosTitle => 'صور الأشخاص المسجلين';
+
+  @override
+  String get privacyRegisteredPhotosBody =>
+      'عند تسجيل شخص تحت رعايتك، يتم التقاط صورته من خلال تطبيق رادّ لتوفير صورة حديثة يمكن استخدامها عند الحاجة للتعرف عليه.\n\nتُستخدم الصورة المسجلة ضمن عملية التعرف وإعادة لمّ الشمل، بما في ذلك دعم المطابقة بالوجه ومراجعة التطابقات المحتملة من قبل المستخدمين المخولين. ولا يُعامل التطابق المحتمل الناتج عن النظام على أنه تعريف نهائي للشخص دون المراجعة البشرية واستكمال خطوات التحقق المطلوبة.\n\nتُحذف الصورة المسجلة تلقائيًا بعد 24 ساعة من وقت التقاطها. وبعد حذفها، يجب التقاط صورة حديثة من خلال التطبيق قبل أن يتمكن ولي الأمر من تقديم بلاغ فقدان لذلك الشخص.';
+
+  @override
+  String get privacyVolunteerPhotosTitle => 'الصور التي يلتقطها المتطوعون';
+
+  @override
+  String get privacyVolunteerPhotosBody =>
+      'إذا تم العثور على شخص أو انفصل عن ذويه، فقد يقوم متطوع مخوّل بالتقاط صورة له من خلال رادّ، وذلك فقط ضمن سير عمل التعرف وإعادة لمّ الشمل.\n\nقد تُستخدم هذه الصورة في عملية التعرف، بما في ذلك مقارنتها بالملفات المسجلة المؤهلة للمساعدة في إيجاد تطابقات محتملة. ويقتصر التقاط هذه الصور على المتطوعين المخولين أثناء مساعدتهم لشخص تم العثور عليه أو انفصل عن ذويه.\n\nتُحذف الصورة التي يلتقطها المتطوع عند انتهاء محاولة التعرف، سواء تم تأكيد وجود تطابق أم لا.';
+
+  @override
+  String get privacyLocationTitle => 'معلومات الموقع';
+
+  @override
+  String get privacyLocationBody =>
+      'قد يستخدم رادّ معلومات الموقع لدعم البحث والتنبيهات المرتبطة بالقرب من آخر مكان شوهد فيه الشخص.\n\nبالنسبة لبلاغ الفقدان، إذا أكد ولي الأمر أنه موجود في المكان الذي شوهد فيه الشخص آخر مرة وسمح للتطبيق بالوصول إلى موقع الجهاز، يمكن تسجيل الموقع المتاح باعتباره موقع آخر مشاهدة للحالة. وإذا لم يسمح بالوصول إلى الموقع، أو لم يكن الموقع متاحًا، فلا يتم استخدام موقع الجهاز لهذا الغرض. ويمكن بدلًا من ذلك تقديم وصف نصي للموقع ضمن معلومات الحالة.\n\nكما يستخدم رادّ موقع المتطوع، عند منحه الإذن المطلوب، لتحديد ما إذا كان قريبًا من موقع آخر مشاهدة وإرسال تنبيه أولوية عند انطباق شروط القرب. وقد يتم تحديث موقع المتطوع أثناء تشغيل التطبيق في الخلفية عند توفر الإذن المطلوب.';
+
+  @override
+  String get privacyUsageTitle => 'كيف تُستخدم المعلومات أثناء البحث والتعرف';
+
+  @override
+  String get privacyUsageBody =>
+      'عند وجود حالة نشطة، قد تُستخدم المعلومات والصور المسجلة وتفاصيل البلاغ لمساعدة المتطوعين المخولين في البحث ومراجعة التطابقات المحتملة.\n\nيستخدم رادّ المطابقة المدعومة بالذكاء الاصطناعي للمساعدة في مقارنة صورة الشخص الذي تم العثور عليه بالملفات المسجلة المؤهلة، وقد يعرض تطابقات محتملة للمراجعة. وإذا لم تكن المطابقة كافية، يمكن استخدام المراجعة اليدوية للمعلومات والصور المتاحة ضمن الحالة.\n\nنتائج المطابقة هي وسيلة مساعدة لعملية التعرف وليست قرارًا نهائيًا تلقائيًا؛ ويظل تأكيد التطابق والتحقق من ولي الأمر جزءًا من عملية إعادة لمّ الشمل.';
+
+  @override
+  String get privacyAccessTitle => 'الوصول إلى المعلومات وحمايتها';
+
+  @override
+  String get privacyAccessBody =>
+      'لا تكون الصور والمعلومات الشخصية متاحة للتصفح العام. يقتصر الوصول إلى البيانات المحمية على المستخدمين المخولين ووفق أدوارهم، وبالقدر المطلوب لتنفيذ وظائفهم ضمن عملية البحث والتعرف والتحقق وإعادة لمّ الشمل.\n\nويطبق النظام التحقق من الصلاحيات على الطلبات التي تصل إلى البيانات المحمية أو تعدّلها، وليس اعتمادًا على إخفاء عناصر الواجهة فقط.';
+
+  @override
+  String get privacyRetentionTitle => 'الاحتفاظ بالصور وبيانات الحالات وحذفها';
+
+  @override
+  String get privacyRetentionBody =>
+      'يطبق رادّ مدد احتفاظ مختلفة بحسب نوع البيانات:\n\n• صورة الشخص المسجل: تُحذف بعد 24 ساعة من وقت التقاطها، ويجب التقاط صورة حديثة قبل تقديم بلاغ فقدان جديد لذلك الشخص بعد حذف الصورة.\n\n• الصورة التي يلتقطها المتطوع أثناء محاولة التعرف: تُحذف عند انتهاء محاولة التعرف، سواء تم تأكيد تطابق أم لا.\n\n• البيانات الشخصية والتعريفية المرتبطة بالحالة: تُحذف تلقائيًا بعد 24 ساعة من وصول الحالة إلى حالة نهائية.\n\nوبذلك لا يحتفظ رادّ بالمعلومات الشخصية أو بيانات الوجه التعريفية المرتبطة بالحالات بعد مدد الاحتفاظ المحددة لها.';
+
+  @override
+  String get privacyStatisticsTitle => 'البيانات المستخدمة للإحصاءات والتقارير';
+
+  @override
+  String get privacyStatisticsBody =>
+      'بعد انتهاء مدة الاحتفاظ ببيانات الحالة وحذف البيانات الشخصية والتعريفية، يحتفظ رادّ فقط بالحد الأدنى من البيانات اللازمة لإعداد الإحصاءات والتقارير.\n\nوتشمل البيانات المحتفظ بها لهذا الغرض: معرّف الحالة، والحالة النهائية، والأوقات المرتبطة بالحالة، والفئة العمرية، ومرجع المتطوع اللازم لإحصاءات حالات إعادة لمّ الشمل حسب المتطوع.\n\nولا تتضمن البيانات المحتفظ بها لهذا الغرض الأسماء أو الصور أو معلومات الاتصال أو بيانات الوجه أو الموقع الدقيق.';
+
+  @override
+  String get privacyAgreementTitle => 'موافقتك';
+
+  @override
+  String get privacyAgreementBody =>
+      'بالموافقة على إشعار الخصوصية، فإنك تقر بأنك قرأت هذا الإشعار وتوافق على جمع المعلومات والصور واستخدامها والوصول إليها والاحتفاظ بها وحذفها وفق ما هو موضح أعلاه.';
 
   @override
   String get requiredField => 'هذا الحقل مطلوب.';
@@ -156,7 +220,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get passwordHelp =>
-      'استخدم 8 أحرف على الأقل، تتضمن حرفاً لاتينياً كبيراً وصغيراً ورقماً ورمزاً خاصاً.';
+      'يجب أن تتكون كلمة المرور من 8 أحرف على الأقل، وتشمل حرفًا إنجليزيًا كبيرًا، وحرفًا إنجليزيًا صغيرًا، ورقمًا، ورمزًا خاصًا مثل ! أو @ أو # أو \$.';
 
   @override
   String get confirmRequired => 'يجب تأكيد كلا الخيارين.';
@@ -185,7 +249,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get activeCaseError =>
-      'لا يمكن حذف الفرد أثناء وجود حالة نشطة. يجب حل الحالة أو إلغاؤها أولاً.';
+      'لا يمكن تعديل الفرد أو حذفه أثناء وجود حالة نشطة. يجب حل الحالة أو إلغاؤها أولاً.';
 
   @override
   String get retry => 'إعادة المحاولة';
@@ -286,7 +350,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get sibling => 'أخ أو أخت';
 
   @override
-  String get other => 'شخص آخر تحت رعايتي';
+  String get other => 'أخرى';
 
   @override
   String get save => 'حفظ';
@@ -322,10 +386,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get editProfile => 'تعديل الملف الشخصي';
 
   @override
-  String get emailReadOnly =>
-      'يُدار البريد عبر مصادقة Firebase ولا يمكن تعديله هنا.';
-
-  @override
   String get volunteerUnavailable =>
       'دخول المتطوع غير متاح في هذا الإصدار بعد.';
 
@@ -340,7 +400,7 @@ class AppLocalizationsAr extends AppLocalizations {
       'تم تسجيل دخولك. أكمل ملفك أو أعد محاولة حفظه للمتابعة.';
 
   @override
-  String get brandTagline => 'نجمع الأحبة من جديد';
+  String get brandTagline => 'نردّ الأحبة من جديد';
 
   @override
   String get splashSupport => 'غد أكثر أماناً لكل رحلة';
@@ -369,9 +429,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get cases => 'الحالات';
-
-  @override
-  String get comingLater => 'ستتوفر هذه الميزة في مرحلة لاحقة.';
 
   @override
   String get notifications => 'الإشعارات';
@@ -456,7 +513,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get returnToRoles => 'العودة إلى اختيار الدور';
 
   @override
-  String get startupFailed => 'تعذر بدء راد';
+  String get startupFailed => 'تعذر بدء رادّ';
 
   @override
   String get startupFailedHint =>
@@ -1023,4 +1080,443 @@ class AppLocalizationsAr extends AppLocalizations {
   String vSimilarityValue(String value) {
     return 'التشابه $value٪';
   }
+
+  @override
+  String get reportMissing => 'الإبلاغ عن مفقود';
+
+  @override
+  String get reportConfirm => 'هل تريد الإبلاغ عن فقدان هذا الفرد؟';
+
+  @override
+  String get confirm => 'تأكيد';
+
+  @override
+  String get reportReceived => 'تم استلام البلاغ';
+
+  @override
+  String get searchInProgress => 'البحث جارٍ';
+
+  @override
+  String get matchConfirmed => 'تم تأكيد التطابق';
+
+  @override
+  String get awaitingVerification => 'بانتظار تحقق ولي الأمر';
+
+  @override
+  String get reunited => 'تمت إعادة لمّ الشمل';
+
+  @override
+  String get unknownCaseStatus => 'الحالة غير متاحة';
+
+  @override
+  String get caseStatus => 'حالة البلاغ';
+
+  @override
+  String get viewStatus => 'عرض الحالة';
+
+  @override
+  String get trackStatus => 'متابعة الحالة';
+
+  @override
+  String get activeCases => 'البلاغات النشطة';
+
+  @override
+  String get noCases => 'لا توجد بلاغات بعد';
+
+  @override
+  String get noCasesHint => 'ستظهر بلاغاتك عن المفقودين هنا.';
+
+  @override
+  String get reportingAssistant => 'مساعد الإبلاغ';
+
+  @override
+  String get sameLocationQuestion =>
+      'هل موقعك الحالي هو نفس المكان الذي شوهد فيه الفرد المفقود آخر مرة؟';
+
+  @override
+  String get yes => 'نعم';
+
+  @override
+  String get no => 'لا';
+
+  @override
+  String get lastSeenDescription => 'أين شوهد الفرد آخر مرة؟';
+
+  @override
+  String get clothingQuestion =>
+      'ما الملابس التي كان يرتديها الفرد عند رؤيته آخر مرة؟';
+
+  @override
+  String get distinctiveQuestion =>
+      'هل كان الفرد يحمل شيئًا مميزًا، مثل حقيبة أو لعبة؟';
+
+  @override
+  String get distinctiveDescription => 'صف الشيء المميز';
+
+  @override
+  String get additionalQuestion =>
+      'هل توجد معلومات إضافية قد تساعد المتطوعين في العثور على الفرد؟';
+
+  @override
+  String get saveReport => 'حفظ تفاصيل البلاغ';
+
+  @override
+  String get reportSaved => 'تم حفظ تفاصيل البلاغ';
+
+  @override
+  String get locationRequired =>
+      'اسمح بالوصول إلى الموقع لاستخدام موقعك الحالي، أو اختر لا وصف مكان آخر مشاهدة.';
+
+  @override
+  String get locationReady => 'تم تحديد موقعك الحالي لهذا البلاغ';
+
+  @override
+  String get useCurrentLocation => 'استخدام موقعي الحالي';
+
+  @override
+  String get noNotifications => 'لا توجد إشعارات بعد';
+
+  @override
+  String get notificationHint => 'ستظهر هنا التحديثات المتعلقة ببلاغاتك.';
+
+  @override
+  String get guardianVerification => 'رمز تحقق ولي الأمر';
+
+  @override
+  String get verificationExplanation =>
+      'اعرض هذا الرمز لمتطوع مخوّل للتحقق من ارتباطك بهذا البلاغ. الرمز لا يحدد هوية الفرد المفقود.';
+
+  @override
+  String get noEligibleCases => 'لا توجد بلاغات بانتظار تحقق ولي الأمر.';
+
+  @override
+  String get verificationExpired =>
+      'انتهت صلاحية الرمز. أنشئ رمزًا جديدًا للمتابعة.';
+
+  @override
+  String get refreshCode => 'إنشاء رمز جديد';
+
+  @override
+  String get showCaseIdentifier => 'عرض معرّف البلاغ';
+
+  @override
+  String get caseIdentifier => 'معرّف البلاغ';
+
+  @override
+  String get caseIdentifierHint =>
+      'شارك هذا المرجع مع أحد أعضاء الفريق المخوّلين. المرجع وحده لا يثبت هويتك.';
+
+  @override
+  String get eventUnavailable =>
+      'الإبلاغ غير متاح مؤقتًا لأن الفعالية الحالية لم تُفعّل. يرجى المحاولة لاحقًا.';
+
+  @override
+  String get guidedDetails => 'تفاصيل البلاغ';
+
+  @override
+  String get lastUpdated => 'آخر تحديث';
+
+  @override
+  String get requiredAnswer => 'يرجى إكمال هذه الإجابة.';
+
+  @override
+  String get activeCase => 'بلاغ نشط';
+
+  @override
+  String get verificationExpires => 'صالح حتى';
+
+  @override
+  String get close => 'إغلاق';
+
+  @override
+  String get vLoadFailed => 'تعذّر التحميل الآن. اضغط للمحاولة مجددًا.';
+
+  @override
+  String get vContinueReport => 'متابعة البلاغ';
+
+  @override
+  String get vAiUnavailable =>
+      'المطابقة بالذكاء الاصطناعي غير متاحة. تم حفظ البلاغ ويمكنك المتابعة بالمراجعة اليدوية.';
+
+  @override
+  String get vQrRequired =>
+      'اطلب من ولي الأمر عرض رمز QR الخاص بهذه الحالة من حسابه المسجّل في راد. رقم الحالة وحده لا يثبت الهوية.';
+
+  @override
+  String get child => 'ابن/ابنة';
+
+  @override
+  String get specifyRelationship => 'حدد صلة القرابة';
+
+  @override
+  String get casesAwaitingVerification => 'بلاغات بانتظار التحقق';
+
+  @override
+  String get resolved => 'تم الحل';
+
+  @override
+  String get cancelled => 'ملغي';
+
+  @override
+  String get transferredToAuthority => 'تم التحويل للجهة المختصة';
+
+  @override
+  String get casesSubtitle => 'تابع بلاغاتك عن الأفراد المفقودين';
+
+  @override
+  String get resolveReport => 'حل البلاغ';
+
+  @override
+  String get resolveReportConfirm =>
+      'هل تريد حل هذا البلاغ؟ استخدم هذا فقط إذا وجدت الفرد بنفسك خارج رادّ.';
+
+  @override
+  String get cancelReport => 'إلغاء البلاغ';
+
+  @override
+  String get cancelReportConfirm =>
+      'هل تريد إلغاء هذا البلاغ؟ استخدم هذا فقط إذا تم إنشاؤه بالخطأ.';
+
+  @override
+  String get reunitedOutcome => 'تم جمع شمل هذا الفرد مع ولي أمره.';
+
+  @override
+  String get caseClosedNotice =>
+      'هذا البلاغ مغلق ولم يعد جزءًا من عمليات البحث والمطابقة النشطة.';
+
+  @override
+  String get caseDetails => 'تفاصيل الحالة';
+
+  @override
+  String get activeCaseLockNotice =>
+      'التعديل والحذف غير متاحين أثناء وجود حالة نشطة لهذا الفرد.';
+
+  @override
+  String get guidedAssistantRequired =>
+      'يرجى إكمال الأسئلة المطلوبة قبل مغادرة هذه الشاشة.';
+
+  @override
+  String get caseClosedActionError => 'هذا البلاغ مغلق ولا يمكن تغييره.';
+
+  @override
+  String get reportAlreadySubmitted =>
+      'لقد تم تقديم هذا البلاغ مسبقًا ولا يمكن تعديله.';
+
+  @override
+  String get photoExpiredError =>
+      'انتهت صلاحية هذه الصورة ولم تعد قابلة للاستخدام. التقط صورة جديدة للمتابعة.';
+
+  @override
+  String get photoExpiredNotice =>
+      'انتهت صلاحية هذه الصورة ولم تعد قابلة للاستخدام. التقط صورة جديدة قبل الإبلاغ عن فقدان هذا الفرد.';
+
+  @override
+  String get updatePhotoRequired => 'تحديث الصورة';
+
+  @override
+  String get caseId => 'رقم البلاغ';
+
+  @override
+  String get updatedLabel => 'آخر تحديث';
+
+  @override
+  String ageYears(String value) {
+    return '$value سنة';
+  }
+
+  @override
+  String get caseHistory => 'سجل البلاغات';
+
+  @override
+  String get noActiveCasesHint => 'لا توجد بلاغات نشطة حالياً.';
+
+  @override
+  String get progressTimeline => 'مراحل التقدم';
+
+  @override
+  String stageLabel(String number) {
+    return 'المرحلة $number';
+  }
+
+  @override
+  String stageStatus(String number, String status) {
+    return 'المرحلة $number: $status';
+  }
+
+  @override
+  String get activeLabel => 'الحالية';
+
+  @override
+  String get completedLabel => 'مكتملة';
+
+  @override
+  String get statusUpdatesAutomatically => 'تُحدَّث الحالة تلقائياً';
+
+  @override
+  String get reportReceivedDescription =>
+      'تم استلام بلاغك وإشعار المتطوعين النشطين.';
+
+  @override
+  String get searchInProgressDescription => 'يبحث المتطوعون حالياً عن الفرد.';
+
+  @override
+  String get matchConfirmedDescription =>
+      'أكّد أحد المتطوعين وجود تطابق وسينتقل إلى التحقق من ولي الأمر.';
+
+  @override
+  String get awaitingVerificationDescription =>
+      'اعرض رمز تحقق ولي الأمر للمتطوع لتأكيد هويتك.';
+
+  @override
+  String get reunitedDescription => 'تم جمع شمل الفرد معك بأمان.';
+
+  @override
+  String get outcomeLabel => 'النتيجة';
+
+  @override
+  String get lastSeenLocationLabel => 'موقع آخر مشاهدة';
+
+  @override
+  String get currentLocationConfirmed => 'تم تأكيد الموقع الحالي';
+
+  @override
+  String get clothingLabel => 'الملابس';
+
+  @override
+  String get distinctiveLabel => 'شيء مميز';
+
+  @override
+  String get additionalLabel => 'معلومات إضافية';
+
+  @override
+  String get none => 'لا يوجد';
+
+  @override
+  String get detailsPending => 'لم تكتمل تفاصيل البلاغ بعد.';
+
+  @override
+  String get reportedByGuardian => 'بلاغ من ولي الأمر';
+
+  @override
+  String get todayJustNow => 'اليوم • الآن';
+
+  @override
+  String assistantIntro(String name) {
+    return 'تم تقديم بلاغ فقدان $name. سأطرح عليك بعض الأسئلة السريعة لمساعدة المتطوعين في البحث.';
+  }
+
+  @override
+  String get locationHint => 'يُستخدم لتنسيق المتطوعين القريبين.';
+
+  @override
+  String get answersAutoSave => 'تُحفظ الإجابات تلقائياً في البلاغ النشط';
+
+  @override
+  String get typeAnswer => 'اكتب إجابتك…';
+
+  @override
+  String get send => 'إرسال';
+
+  @override
+  String get qrSubtitle => 'اعرض هذا الرمز للمتطوع للتحقق من ولي الأمر';
+
+  @override
+  String get qrVerifiesAccount =>
+      'يتحقق هذا الرمز من أن حساب ولي الأمر المسجّل دخوله مرتبط بهذا البلاغ.';
+
+  @override
+  String get qrVerifiesAccountNoCase =>
+      'يتحقق هذا الرمز من حساب ولي الأمر المسجّل دخوله، ولا يحدد هوية أي فرد مفقود.';
+
+  @override
+  String get selectActiveCase => 'اختر البلاغ النشط';
+
+  @override
+  String get scanInstruction => 'اطلب من المتطوع مسح هذا الرمز باستخدام رادّ.';
+
+  @override
+  String get cannotDisplayQr => 'يتعذر عرض رمز QR؟';
+
+  @override
+  String get caseIdentifierInstruction =>
+      'اعرض هذا المعرّف للمتطوع للتحقق البديل.';
+
+  @override
+  String get caseIdentifierUsage =>
+      'يُستخدم لتحديد البلاغ النشط والتحقق منه عندما يتعذر عرض رمز QR أو مسحه.';
+
+  @override
+  String get activeCaseIdentifier => 'معرّف البلاغ النشط';
+
+  @override
+  String get noActiveCaseQrNote =>
+      'لا توجد لديك بلاغات نشطة حالياً. يبقى رمز ولي الأمر صالحاً للتحقق.';
+
+  @override
+  String get qrRefreshing => 'جارٍ إنشاء رمز جديد…';
+
+  @override
+  String get resetSentTitle => 'تحقق من بريدك الإلكتروني';
+
+  @override
+  String get backToLogin => 'العودة إلى تسجيل الدخول';
+
+  @override
+  String get resendReset => 'إعادة الإرسال';
+
+  @override
+  String get vAccountDeactivated => 'حساب المتطوع غير نشط. تم تسجيل خروجك.';
+
+  @override
+  String get vEndIdentification => 'إنهاء محاولة التعرف';
+
+  @override
+  String get vEndIdentificationHint =>
+      'هل تريد إنهاء محاولة التعرف وحذف الصورة الملتقطة؟ سيستمر بلاغ الفقدان والبحث دون تغيير.';
+
+  @override
+  String get locationNotRecorded =>
+      'تعذّر تسجيل الموقع. يمكنك المتابعة؛ يبقى التنبيه العام نشطًا.';
+
+  @override
+  String get vCancelledAlert => 'إلغاء الحالة';
+
+  @override
+  String get vResolvedAlert => 'العثور على الشخص';
+
+  @override
+  String get vNewAlertMessage => 'تم تقديم بلاغ فقدان جديد.';
+
+  @override
+  String get vPriorityAlertMessage =>
+      'تم تقديم بلاغ فقدان ضمن ٥٠٠ متر من موقعك المتاح.';
+
+  @override
+  String get vMatchAlertMessage =>
+      'تم تأكيد تطابق لحالة انضممت للبحث عنها. لا يزال التحقق من ولي الأمر والتسليم مطلوبين.';
+
+  @override
+  String get vCancelledAlertMessage =>
+      'ألغى ولي الأمر بلاغ الفقدان لهذه الحالة.';
+
+  @override
+  String get vResolvedAlertMessage => 'عثر ولي الأمر على الشخص وأغلق الحالة.';
+
+  @override
+  String get vReunitedAlertMessage => 'تم تسليم الشخص إلى ولي أمره بعد التحقق.';
+
+  @override
+  String get vLocationSettings => 'فتح الإعدادات';
+
+  @override
+  String get vLocationDeniedForever =>
+      'إذن الموقع معطّل. فعّله من الإعدادات لتلقي تنبيهات الحالات القريبة. تظل التنبيهات العامة متاحة.';
+
+  @override
+  String get vLocationServicesDisabled =>
+      'شغّل خدمات الموقع في الجهاز لتلقي تنبيهات الحالات القريبة.';
+
+  @override
+  String get vNotificationCaseUnavailable =>
+      'لم تعد هذه الحالة متاحة للبحث النشط. تم تحديث التنبيهات والحالات.';
 }

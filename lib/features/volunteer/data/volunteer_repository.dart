@@ -9,6 +9,7 @@ abstract class VolunteerRepository extends ChangeNotifier {
   List<VolunteerCase> get cases;
   List<RegisteredPerson> get profiles;
   List<VolunteerAlert> alertsFor(String uid);
+  List<FoundReport> get foundReports => const [];
   List<VolunteerCase> availableFor(String uid) =>
       cases.where((c) => c.joinable && !c.joinedBy.contains(uid)).toList();
   List<VolunteerCase> myCases(String uid) => cases
@@ -16,8 +17,12 @@ abstract class VolunteerRepository extends ChangeNotifier {
         (c) => c.joinable ? c.joinedBy.contains(uid) : c.confirmedBy == uid,
       )
       .toList();
-  List<RegisteredPerson> get reviewableProfiles => profiles.where((person) =>
-      !cases.any((item) => item.person.id == person.id && !item.joinable)).toList();
+  List<RegisteredPerson> get reviewableProfiles => profiles
+      .where(
+        (person) =>
+            !cases.any((item) => item.person.id == person.id && !item.joinable),
+      )
+      .toList();
 
   VolunteerCase? caseForPerson(String personId) {
     for (final item in cases) {
@@ -36,7 +41,11 @@ abstract class VolunteerRepository extends ChangeNotifier {
   }
 
   Future<void> startSearch(VolunteerAccount account, VolunteerCase item);
-  Future<FoundReport> submitFound(VolunteerAccount account);
+  Future<FoundReport> submitFound(
+    VolunteerAccount account, {
+    Uint8List? photo,
+    String? requestId,
+  });
   Future<List<MatchCandidate>> findMatches(FoundReport report);
   Future<void> confirmMatch(
     VolunteerAccount account,
@@ -73,8 +82,11 @@ class UnconnectedVolunteerRepository extends VolunteerRepository {
     VolunteerCase item,
   ) async => _unavailable();
   @override
-  Future<FoundReport> submitFound(VolunteerAccount account) async =>
-      _unavailable();
+  Future<FoundReport> submitFound(
+    VolunteerAccount account, {
+    Uint8List? photo,
+    String? requestId,
+  }) async => _unavailable();
   @override
   Future<List<MatchCandidate>> findMatches(FoundReport report) async =>
       _unavailable();

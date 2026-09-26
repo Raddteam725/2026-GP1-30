@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 enum CaseStatus {
   reportReceived,
@@ -55,11 +56,15 @@ class RegisteredPerson {
     required this.gender,
     required this.guardian,
     this.photo,
+    this.photoBytes,
+    this.information,
   });
   final String id;
   final LocalizedData name;
   final int age;
-  final Gender gender;
+  final Gender? gender;
+  final Uint8List? photoBytes;
+  final CaseInformation? information;
   final GuardianContact guardian;
   final String? photo;
 }
@@ -106,7 +111,7 @@ class VolunteerCase {
     this.confirmedBy,
   }) : joinedBy = {...?joinedBy};
   final String id;
-  final RegisteredPerson person;
+  RegisteredPerson person;
   final DateTime createdAt;
   DateTime updatedAt;
   CaseStatus status;
@@ -131,8 +136,15 @@ class FoundReport {
     required this.id,
     required this.volunteerUid,
     required this.photo,
+    this.photoBytes,
+    this.caseId,
+    this.createdAt,
   });
   final String id, volunteerUid, photo;
+  Uint8List? photoBytes;
+  bool ended = false;
+  String? caseId;
+  DateTime? createdAt;
   RegisteredPerson? matchedPerson;
   CaseStatus? status;
   VerificationReceipt? verification;
@@ -153,7 +165,14 @@ class VerificationReceipt {
   final DateTime at;
 }
 
-enum AlertKind { newCase, priority, statusUpdate }
+enum AlertKind {
+  newCase,
+  priority,
+  statusUpdate,
+  cancelled,
+  resolved,
+  reunited,
+}
 
 class VolunteerAlert {
   const VolunteerAlert({
@@ -161,7 +180,11 @@ class VolunteerAlert {
     required this.kind,
     required this.at,
     this.status,
+    this.id,
+    this.readAt,
   });
+  final String? id;
+  final DateTime? readAt;
   final String caseId;
   final AlertKind kind;
   final DateTime at;

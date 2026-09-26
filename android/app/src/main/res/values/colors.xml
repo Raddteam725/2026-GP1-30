@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Same off-white the Flutter splash Scaffold uses (see SplashScreen), so
+         the native launch window and the first Flutter frame are one surface. -->
+    <color name="radd_splash_background">#F9FBFD</color>
+</resources>

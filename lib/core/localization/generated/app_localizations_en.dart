@@ -57,7 +57,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get arabicLanguage => 'Arabic language';
 
   @override
-  String get brandFooter => 'Radd • Bringing People Back Together';
+  String get brandFooter => 'Radd · Bringing People Back Together';
 
   @override
   String get joinRadd => 'Join Radd';
@@ -114,14 +114,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get resetHint =>
-      'Enter your email to request password reset instructions.';
+      'Enter your email address to receive a password reset email.';
 
   @override
-  String get sendReset => 'Send Reset Instructions';
+  String get sendReset => 'Send Reset Email';
 
   @override
   String get resetSent =>
-      'If an account exists for this email, password reset instructions will be sent.';
+      'If an account is associated with this email address, you\'ll receive a password reset email.';
 
   @override
   String get noAccount => 'Don\'t have an account?';
@@ -133,14 +133,83 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ageConfirm => 'I confirm that I am 18 years of age or older.';
 
   @override
-  String get privacyConfirm => 'I have read and agree to the Privacy Notice.';
+  String get privacyConfirm =>
+      'I have read and agree to Radd\'s Privacy Notice.';
 
   @override
   String get privacyTitle => 'Privacy Notice';
 
   @override
-  String get privacyBody =>
-      'Project information — final notice pending approval.\n\nRadd processes information and photographs for event-specific reunification. Access is intended to follow system roles. Identifiable records and photographs are subject to the project\'s retention and deletion rules; anonymized aggregate information may be retained under the project design.\n\nThis interim notice will be replaced with the team\'s approved wording.';
+  String get privacyIntro =>
+      'At Radd, we respect your privacy and the privacy of individuals registered under your care. The data processed by the system may include personal information and photographs relating to children, older adults, or other individuals who may require assistance if they become separated during an event.\n\nThis notice explains what information Radd uses, why and how it is used during the search, identification, and reunification process, who may access it, how long it is retained, and when it is deleted.';
+
+  @override
+  String get privacyInfoTitle => 'Information We Collect and Use';
+
+  @override
+  String get privacyInfoBody =>
+      'When you create a Guardian account and use Radd, the system processes information required to create and use your account, as well as information you provide about individuals registered under your care, including their identifying information and photographs.\n\nWhen a missing-person report is submitted, Radd may also process case-related information, such as details about the missing individual, descriptive information provided to support the search, and last-seen information. If you choose to use your device location as the last-seen location and grant location permission, location coordinates may be used for this purpose.\n\nThis information is used to support registration, reporting, searching, identification, verification, and reunification during the event.';
+
+  @override
+  String get privacyRegisteredPhotosTitle =>
+      'Registered Individuals\' Photographs';
+
+  @override
+  String get privacyRegisteredPhotosBody =>
+      'When an individual is registered under your care, their photograph is captured through the Radd application to provide a recent image that can be used for identification when needed.\n\nThe registered photograph may be used within the identification and reunification process, including to support face matching and the review of potential matches by authorized users. A potential match produced by the system is not treated as a final identification without human review and completion of the required verification steps.\n\nThe registered photograph is automatically deleted 24 hours after capture. After deletion, a new photograph must be captured through the application before the Guardian can submit a missing-person report for that individual.';
+
+  @override
+  String get privacyVolunteerPhotosTitle =>
+      'Photographs Captured by Volunteers';
+
+  @override
+  String get privacyVolunteerPhotosBody =>
+      'When a person is found or becomes separated, an authorized Volunteer may capture their photograph through Radd solely within the identification and reunification workflow.\n\nThe photograph may be used for identification, including comparison against eligible registered profiles to assist in identifying potential matches. Photograph capture is restricted to authorized Volunteers while assisting a found or separated individual.\n\nA photograph captured by a Volunteer is deleted when the identification attempt concludes, whether or not a match is confirmed.';
+
+  @override
+  String get privacyLocationTitle => 'Location Information';
+
+  @override
+  String get privacyLocationBody =>
+      'Radd may use location information to support the search process and proximity-based alerts related to a reported last-seen location.\n\nFor a missing-person report, if the Guardian confirms that they are at the location where the individual was last seen and grants the application permission to access the device location, the available location may be recorded as the case\'s reported last-seen location. If permission is not granted or the location cannot be obtained, the device location is not used for this purpose. A textual description of the location may instead be provided as part of the case information.\n\nRadd also uses a Volunteer\'s location, when the required permission is granted, to determine whether the Volunteer is near a reported last-seen location and qualifies for a priority alert. The Volunteer\'s location may be updated while the application is running in the background when the required permission is available.';
+
+  @override
+  String get privacyUsageTitle =>
+      'How Information Is Used During Search and Identification';
+
+  @override
+  String get privacyUsageBody =>
+      'While a case is active, registered information, photographs, and case details may be used to assist authorized Volunteers in searching for the individual and reviewing potential matches.\n\nRadd uses AI-assisted face matching to help compare a photograph of a found individual against eligible registered profiles and may return potential matches for review. When face matching is insufficient, available case information and photographs may also be used for manual review.\n\nMatching results are an aid to identification and are not an automatic final identification. Human review and Guardian verification remain part of the reunification process.';
+
+  @override
+  String get privacyAccessTitle => 'Access to and Protection of Information';
+
+  @override
+  String get privacyAccessBody =>
+      'Photographs and personal information are not available for unrestricted public browsing. Access to protected information is limited to authorized users according to their roles and only to the extent required to perform their functions within the search, identification, verification, and reunification process.\n\nAuthorization is enforced for requests that access or modify protected data rather than relying only on the visibility of interface controls.';
+
+  @override
+  String get privacyRetentionTitle =>
+      'Retention and Deletion of Photographs and Case Data';
+
+  @override
+  String get privacyRetentionBody =>
+      'Radd applies different retention periods depending on the type of data:\n\n• Registered photograph: Deleted 24 hours after capture. A new photograph must be captured before a new missing-person report can be submitted for that individual after the previous photograph has been deleted.\n\n• Photograph captured by a Volunteer during identification: Deleted when the identification attempt concludes, whether or not a match is confirmed.\n\n• Identifiable personal and case data: Automatically deleted 24 hours after the associated case reaches a terminal status.\n\nRadd therefore does not retain identifiable personal or facial data associated with cases beyond the defined retention periods.';
+
+  @override
+  String get privacyStatisticsTitle =>
+      'Data Retained for Statistics and Reporting';
+
+  @override
+  String get privacyStatisticsBody =>
+      'After the case retention period ends and identifiable personal data is deleted, Radd retains only the minimum data required for statistical reporting.\n\nThis retained data includes the case identifier, final status, timestamps, age group, and the Volunteer reference required for per-Volunteer reunification statistics.\n\nThe retained data does not include names, photographs, contact information, facial data, or precise location.';
+
+  @override
+  String get privacyAgreementTitle => 'Your Agreement';
+
+  @override
+  String get privacyAgreementBody =>
+      'By accepting this Privacy Notice, you confirm that you have read this notice and agree to the collection, use, access, retention, and deletion of information and photographs as described above.';
 
   @override
   String get requiredField => 'This field is required.';
@@ -157,7 +226,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get passwordHelp =>
-      'Use 8+ characters with uppercase, lowercase, a number and a special character.';
+      'Use at least 8 characters, including an uppercase English letter, a lowercase English letter, a number, and a special character such as !, @, #, or \$.';
 
   @override
   String get confirmRequired => 'Both confirmations are required.';
@@ -187,7 +256,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activeCaseError =>
-      'This individual cannot be deleted while an active case exists. Resolve or cancel the case first.';
+      'This individual cannot be edited or deleted while an active case exists. Resolve or cancel the case first.';
 
   @override
   String get retry => 'Try Again';
@@ -289,7 +358,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sibling => 'Sibling';
 
   @override
-  String get other => 'Other person under my care';
+  String get other => 'Other';
 
   @override
   String get save => 'Save';
@@ -324,10 +393,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get editProfile => 'Edit Profile';
-
-  @override
-  String get emailReadOnly =>
-      'Email is managed by Firebase Authentication and cannot be edited here.';
 
   @override
   String get volunteerUnavailable =>
@@ -373,9 +438,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cases => 'Cases';
-
-  @override
-  String get comingLater => 'This feature will be available in a later sprint.';
 
   @override
   String get notifications => 'Notifications';
@@ -1036,4 +1098,452 @@ class AppLocalizationsEn extends AppLocalizations {
   String vSimilarityValue(String value) {
     return '$value% Similarity';
   }
+
+  @override
+  String get reportMissing => 'Report Missing';
+
+  @override
+  String get reportConfirm => 'Report this individual as missing?';
+
+  @override
+  String get confirm => 'Confirm';
+
+  @override
+  String get reportReceived => 'Report Received';
+
+  @override
+  String get searchInProgress => 'Search in Progress';
+
+  @override
+  String get matchConfirmed => 'Match Confirmed';
+
+  @override
+  String get awaitingVerification => 'Awaiting Guardian Verification';
+
+  @override
+  String get reunited => 'Reunited';
+
+  @override
+  String get unknownCaseStatus => 'Status unavailable';
+
+  @override
+  String get caseStatus => 'Case Status';
+
+  @override
+  String get viewStatus => 'View Status';
+
+  @override
+  String get trackStatus => 'Track Status';
+
+  @override
+  String get activeCases => 'Active Cases';
+
+  @override
+  String get noCases => 'No cases yet';
+
+  @override
+  String get noCasesHint => 'Your missing-person reports will appear here.';
+
+  @override
+  String get reportingAssistant => 'Reporting Assistant';
+
+  @override
+  String get sameLocationQuestion =>
+      'Is your current location the same as where the missing individual was last seen?';
+
+  @override
+  String get yes => 'Yes';
+
+  @override
+  String get no => 'No';
+
+  @override
+  String get lastSeenDescription => 'Where was the individual last seen?';
+
+  @override
+  String get clothingQuestion =>
+      'What clothing was the individual wearing when last seen?';
+
+  @override
+  String get distinctiveQuestion =>
+      'Was the individual carrying anything distinctive, such as a bag or toy?';
+
+  @override
+  String get distinctiveDescription => 'Describe the distinctive item';
+
+  @override
+  String get additionalQuestion =>
+      'Is there any additional information that could help Volunteers find the individual?';
+
+  @override
+  String get saveReport => 'Save report details';
+
+  @override
+  String get reportSaved => 'Report details saved';
+
+  @override
+  String get locationRequired =>
+      'Allow location access to use your current position, or select No and describe the last-seen location.';
+
+  @override
+  String get locationReady => 'Current location captured for this report';
+
+  @override
+  String get useCurrentLocation => 'Use current location';
+
+  @override
+  String get noNotifications => 'No notifications yet';
+
+  @override
+  String get notificationHint => 'Updates about your cases will appear here.';
+
+  @override
+  String get guardianVerification => 'Guardian Verification QR';
+
+  @override
+  String get verificationExplanation =>
+      'Show this code to an authorized Volunteer to verify your connection to this case. It does not identify the missing individual.';
+
+  @override
+  String get noEligibleCases => 'No cases are awaiting Guardian verification.';
+
+  @override
+  String get verificationExpired =>
+      'This code has expired. Generate a new code to continue.';
+
+  @override
+  String get refreshCode => 'Generate new code';
+
+  @override
+  String get showCaseIdentifier => 'Show Case Identifier';
+
+  @override
+  String get caseIdentifier => 'Case Identifier';
+
+  @override
+  String get caseIdentifierHint =>
+      'Share this reference with an authorized team member. The reference alone does not verify your identity.';
+
+  @override
+  String get eventUnavailable =>
+      'Reporting is temporarily unavailable because the current event has not been activated. Please try again later.';
+
+  @override
+  String get guidedDetails => 'Report details';
+
+  @override
+  String get lastUpdated => 'Last updated';
+
+  @override
+  String get requiredAnswer => 'Please complete this answer.';
+
+  @override
+  String get activeCase => 'Active Case';
+
+  @override
+  String get verificationExpires => 'Valid until';
+
+  @override
+  String get close => 'Close';
+
+  @override
+  String get vLoadFailed => 'Couldn’t load right now. Tap to try again.';
+
+  @override
+  String get vContinueReport => 'Continue report';
+
+  @override
+  String get vAiUnavailable =>
+      'AI matching is unavailable. Your report is saved; continue with manual review.';
+
+  @override
+  String get vQrRequired =>
+      'Ask the Guardian to display this case’s QR code in their signed-in Radd account. A case identifier alone cannot verify identity.';
+
+  @override
+  String get child => 'Child';
+
+  @override
+  String get specifyRelationship => 'Specify relationship';
+
+  @override
+  String get casesAwaitingVerification => 'Cases awaiting verification';
+
+  @override
+  String get resolved => 'Resolved';
+
+  @override
+  String get cancelled => 'Cancelled';
+
+  @override
+  String get transferredToAuthority => 'Transferred to Authority';
+
+  @override
+  String get casesSubtitle => 'Track your missing-person cases';
+
+  @override
+  String get resolveReport => 'Resolve Report';
+
+  @override
+  String get resolveReportConfirm =>
+      'Resolve this report? Only do this if you found the individual independently, outside of Radd.';
+
+  @override
+  String get cancelReport => 'Cancel Report';
+
+  @override
+  String get cancelReportConfirm =>
+      'Cancel this report? Use this only if it was created by mistake.';
+
+  @override
+  String get reunitedOutcome =>
+      'This individual has been reunited with their Guardian.';
+
+  @override
+  String get caseClosedNotice =>
+      'This report is closed and is no longer part of active search and matching.';
+
+  @override
+  String get caseDetails => 'Case Details';
+
+  @override
+  String get activeCaseLockNotice =>
+      'Editing and deletion are unavailable while an active case exists for this individual.';
+
+  @override
+  String get guidedAssistantRequired =>
+      'Please finish the required questions before leaving this screen.';
+
+  @override
+  String get caseClosedActionError =>
+      'This report is closed and can no longer be changed.';
+
+  @override
+  String get reportAlreadySubmitted =>
+      'This report has already been submitted and can no longer be edited.';
+
+  @override
+  String get photoExpiredError =>
+      'This photo has expired and can no longer be used. Take a new photo to continue.';
+
+  @override
+  String get photoExpiredNotice =>
+      'This photo has expired and is no longer usable. Take a new photo before reporting this individual missing.';
+
+  @override
+  String get updatePhotoRequired => 'Update Photo';
+
+  @override
+  String get caseId => 'Case ID';
+
+  @override
+  String get updatedLabel => 'Updated';
+
+  @override
+  String ageYears(String value) {
+    return '$value yrs';
+  }
+
+  @override
+  String get caseHistory => 'Case History';
+
+  @override
+  String get noActiveCasesHint => 'No active cases right now.';
+
+  @override
+  String get progressTimeline => 'Progress Timeline';
+
+  @override
+  String stageLabel(String number) {
+    return 'Stage $number';
+  }
+
+  @override
+  String stageStatus(String number, String status) {
+    return 'Stage $number: $status';
+  }
+
+  @override
+  String get activeLabel => 'Active';
+
+  @override
+  String get completedLabel => 'Completed';
+
+  @override
+  String get statusUpdatesAutomatically => 'Status updates automatically';
+
+  @override
+  String get reportReceivedDescription =>
+      'Your report has been received and active Volunteers have been notified.';
+
+  @override
+  String get searchInProgressDescription =>
+      'Volunteers are actively searching for the individual.';
+
+  @override
+  String get matchConfirmedDescription =>
+      'A Volunteer has confirmed a match and will proceed to Guardian verification.';
+
+  @override
+  String get awaitingVerificationDescription =>
+      'Show your Guardian Verification QR to the Volunteer to confirm your identity.';
+
+  @override
+  String get reunitedDescription =>
+      'The individual has been safely reunited with you.';
+
+  @override
+  String get outcomeLabel => 'Outcome';
+
+  @override
+  String get lastSeenLocationLabel => 'Last-seen location';
+
+  @override
+  String get currentLocationConfirmed => 'Current location confirmed';
+
+  @override
+  String get clothingLabel => 'Clothing';
+
+  @override
+  String get distinctiveLabel => 'Distinctive item';
+
+  @override
+  String get additionalLabel => 'Additional information';
+
+  @override
+  String get none => 'None';
+
+  @override
+  String get detailsPending => 'Report details have not been completed yet.';
+
+  @override
+  String get reportedByGuardian => 'Reported by Guardian';
+
+  @override
+  String get todayJustNow => 'Today • Just now';
+
+  @override
+  String assistantIntro(String name) {
+    return 'Your missing-person report for $name has been submitted. I\'ll ask a few quick questions to help Volunteers with the search.';
+  }
+
+  @override
+  String get locationHint => 'Used to coordinate nearby Volunteers.';
+
+  @override
+  String get answersAutoSave => 'Answers save automatically to active case';
+
+  @override
+  String get typeAnswer => 'Type your answer…';
+
+  @override
+  String get send => 'Send';
+
+  @override
+  String get qrSubtitle =>
+      'Show this code to the Volunteer for Guardian verification';
+
+  @override
+  String get qrVerifiesAccount =>
+      'This QR code verifies that your authenticated Guardian account is associated with this case.';
+
+  @override
+  String get qrVerifiesAccountNoCase =>
+      'This QR code verifies your authenticated Guardian account. It does not identify any missing individual.';
+
+  @override
+  String get selectActiveCase => 'Select Active Case';
+
+  @override
+  String get scanInstruction =>
+      'Ask the Volunteer to scan this QR code using Radd.';
+
+  @override
+  String get cannotDisplayQr => 'Can\'t display the QR code?';
+
+  @override
+  String get caseIdentifierInstruction =>
+      'Show this identifier to the Volunteer for alternative verification.';
+
+  @override
+  String get caseIdentifierUsage =>
+      'Used to locate and verify the active case when the QR code cannot be displayed or scanned.';
+
+  @override
+  String get activeCaseIdentifier => 'Active case identifier';
+
+  @override
+  String get noActiveCaseQrNote =>
+      'You have no active cases right now. Your Guardian QR remains valid for verification.';
+
+  @override
+  String get qrRefreshing => 'Generating a new code…';
+
+  @override
+  String get resetSentTitle => 'Check your email';
+
+  @override
+  String get backToLogin => 'Back to Log In';
+
+  @override
+  String get resendReset => 'Send again';
+
+  @override
+  String get vAccountDeactivated =>
+      'Your Volunteer account is inactive. You have been signed out.';
+
+  @override
+  String get vEndIdentification => 'End Identification Attempt';
+
+  @override
+  String get vEndIdentificationHint =>
+      'End this identification attempt and delete the captured photo? The missing-person case and search will continue.';
+
+  @override
+  String get locationNotRecorded =>
+      'Location could not be recorded. You can continue; the general alert remains active.';
+
+  @override
+  String get vCancelledAlert => 'Case Cancelled';
+
+  @override
+  String get vResolvedAlert => 'Person Found';
+
+  @override
+  String get vNewAlertMessage => 'A new missing-person case has been reported.';
+
+  @override
+  String get vPriorityAlertMessage =>
+      'A missing-person case has been reported within 500 meters of your available location.';
+
+  @override
+  String get vMatchAlertMessage =>
+      'A match was confirmed for a case you joined. Guardian verification and handover are still required.';
+
+  @override
+  String get vCancelledAlertMessage =>
+      'The guardian cancelled this missing-person case.';
+
+  @override
+  String get vResolvedAlertMessage =>
+      'The guardian found the individual and resolved this case.';
+
+  @override
+  String get vReunitedAlertMessage =>
+      'The individual has been reunited with their guardian after verification.';
+
+  @override
+  String get vLocationSettings => 'Open Settings';
+
+  @override
+  String get vLocationDeniedForever =>
+      'Location permission is disabled. Enable it in Settings to receive nearby alerts. General alerts remain available.';
+
+  @override
+  String get vLocationServicesDisabled =>
+      'Turn on device location services to receive nearby alerts.';
+
+  @override
+  String get vNotificationCaseUnavailable =>
+      'This case is no longer available for an active search. Notifications and cases have been refreshed.';
 }

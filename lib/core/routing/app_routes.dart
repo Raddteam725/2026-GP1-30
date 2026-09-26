@@ -17,4 +17,9 @@ abstract final class AppRoutes {
   static const editIndividual = '/guardian/individual/edit';
   static const camera = '/guardian/camera';
   static const editGuardianProfile = '/guardian/profile/edit';
+  static const notifications = '/guardian/notifications';
+  static const cases = '/guardian/cases';
+  static const caseStatus = '/guardian/cases/status';
+  static const guidedReport = '/guardian/cases/guided-report';
+  static const qrCode = '/guardian/qr';
 }

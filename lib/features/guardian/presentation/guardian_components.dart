@@ -12,21 +12,28 @@ class GuardianNavigation extends StatelessWidget {
     required this.selected,
     this.onSelected,
     this.enabled = true,
+    this.labels,
+    this.icons,
   });
   final int selected;
   final ValueChanged<int>? onSelected;
   final bool enabled;
+  final List<String>? labels;
+  final List<IconData>? icons;
   @override
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
-    final labels = [s.home, s.myIndividuals, s.qrCode, s.cases, s.profile];
-    const icons = [
-      Icons.home_outlined,
-      Icons.people_outline,
-      Icons.qr_code_2,
-      Icons.folder_outlined,
-      Icons.person_outline,
-    ];
+    final labels =
+        this.labels ?? [s.home, s.myIndividuals, s.qrCode, s.cases, s.profile];
+    final icons =
+        this.icons ??
+        const [
+          Icons.home_outlined,
+          Icons.people_outline,
+          Icons.qr_code_2,
+          Icons.folder_outlined,
+          Icons.person_outline,
+        ];
     return Material(
       color: Colors.white,
       child: SafeArea(
@@ -45,13 +52,29 @@ class GuardianNavigation extends StatelessWidget {
                       selected: selected == i,
                       button: true,
                       child: InkWell(
-                        onTap: !enabled
+                        key: ValueKey('radd-tab-$i'),
+                        onTap:
+                            !enabled || (i == selected && this.labels == null)
                             ? null
                             : () {
+                                if (this.labels != null) {
+                                  onSelected?.call(i);
+                                  return;
+                                }
                                 if (i == 2 || i == 3) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text(s.comingLater)),
-                                  );
+                                  final route = i == 2
+                                      ? AppRoutes.qrCode
+                                      : AppRoutes.cases;
+                                  // QR and Cases are pushed on top of Home.
+                                  // Moving between those two tabs swaps the
+                                  // current one instead of stacking screens,
+                                  // so Back always returns to Home.
+                                  if (selected == 2 || selected == 3) {
+                                    Navigator.of(context)
+                                        .pushReplacementNamed(route);
+                                  } else {
+                                    Navigator.of(context).pushNamed(route);
+                                  }
                                   return;
                                 }
                                 if (onSelected != null) {
@@ -126,15 +149,21 @@ class GuardianPanel extends StatelessWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(20),
+    this.color = Colors.white,
+    this.border,
   });
   final Widget child;
   final EdgeInsetsGeometry padding;
+  final Color color;
+  final Color? border;
   @override
   Widget build(BuildContext context) => Container(
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: color,
       borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: AppColors.border.withValues(alpha: .7)),
+      border: Border.all(
+        color: border ?? AppColors.border.withValues(alpha: .7),
+      ),
       boxShadow: [
         BoxShadow(
           color: AppColors.primary.withValues(alpha: .025),
@@ -148,6 +177,29 @@ class GuardianPanel extends StatelessWidget {
       borderRadius: BorderRadius.circular(20),
       clipBehavior: Clip.antiAlias,
       child: Padding(padding: padding, child: child),
+    ),
+  );
+}
+
+/// Small uppercase section heading ("PROGRESS TIMELINE", "CASE DETAILS").
+class SectionLabel extends StatelessWidget {
+  const SectionLabel(
+    this.label, {
+    super.key,
+    this.color = const Color(0xFF718096),
+    this.fontSize = 12,
+  });
+  final String label;
+  final Color color;
+  final double fontSize;
+  @override
+  Widget build(BuildContext context) => Text(
+    label.toUpperCase(),
+    style: TextStyle(
+      fontSize: fontSize,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 1.2,
+      color: color,
     ),
   );
 }
@@ -180,8 +232,14 @@ class RequiredLabel extends StatelessWidget {
 }
 
 class GuardianSummary extends StatelessWidget {
-  const GuardianSummary({super.key, required this.name});
+  const GuardianSummary({
+    super.key,
+    required this.name,
+    this.role,
+    this.identifier,
+  });
   final String name;
+  final String? role, identifier;
   @override
   Widget build(BuildContext context) => GuardianPanel(
     child: Row(
@@ -215,7 +273,7 @@ class GuardianSummary extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  AppLocalizations.of(context)!.guardianRole,
+                  role ?? AppLocalizations.of(context)!.guardianRole,
                   style: const TextStyle(
                     color: AppColors.secondary,
                     fontSize: 12,
@@ -223,6 +281,17 @@ class GuardianSummary extends StatelessWidget {
                   ),
                 ),
               ),
+              if (identifier != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  identifier!,
+                  textDirection: TextDirection.ltr,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF718096),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

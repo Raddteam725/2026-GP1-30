@@ -19,8 +19,10 @@ class AuthScreen extends StatefulWidget {
     super.key,
     this.mode = AuthMode.login,
     this.volunteer = false,
+    this.notice,
   });
   final bool volunteer;
+  final String? notice;
   final AuthMode mode;
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -82,7 +84,7 @@ class _AuthScreenState extends State<AuthScreen> {
         Navigator.of(context).pushNamedAndRemoveUntil(
           AppRoutes.session,
           (_) => false,
-          arguments: widget.volunteer ? 'volunteer' : 'guardian',
+          arguments: _register ? 'guardian' : null,
         );
       }
     } catch (e) {
@@ -118,6 +120,9 @@ class _AuthScreenState extends State<AuthScreen> {
             ? s.volunteerLogin
             : s.welcomeBack,
         children: [
+          if ((widget.notice == 'volunteer_inactive' ||
+              widget.notice == 'account_disabled'))
+            ErrorNotice(message: s.vAccountDeactivated),
           if (!_register)
             Center(
               child: Image.asset(
@@ -157,199 +162,289 @@ class _AuthScreenState extends State<AuthScreen> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 32),
-          Form(
-            key: _form,
-            child: AutofillGroup(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (_register) ...[
-                    AppTextInput(
-                      label: s.fullName,
-                      prefixIcon: const Icon(Icons.person_outline),
-                      controller: _name,
-                      enabled: !_busy,
-                      validator: (v) => FormValidation.name(v, s),
-                      textInputAction: TextInputAction.next,
-                      autofillHints: const [AutofillHints.name],
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  if (!complete) ...[
-                    AppTextInput(
-                      label: s.email,
-                      hint: s.emailPlaceholder,
-                      prefixIcon: const Icon(Icons.email_outlined),
-                      controller: _email,
-                      enabled: !_busy && !_accountCreated,
-                      validator: (v) => FormValidation.email(v, s),
-                      keyboardType: TextInputType.emailAddress,
-                      textDirection: TextDirection.ltr,
-                      textInputAction: TextInputAction.next,
-                      autofillHints: const [AutofillHints.email],
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  if (_register) ...[
-                    AppTextInput(
-                      label: s.phone,
-                      prefixIcon: const Icon(Icons.phone_outlined),
-                      controller: _phone,
-                      enabled: !_busy,
-                      validator: (v) => FormValidation.phone(v, s),
-                      keyboardType: TextInputType.phone,
-                      textDirection: TextDirection.ltr,
-                      textInputAction: TextInputAction.next,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      s.phoneHelp,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  if (!reset && !complete) ...[
-                    PasswordInput(
-                      label: s.password,
-                      controller: _password,
-                      enabled: !_busy && !_accountCreated,
-                      validator: (v) => _register
-                          ? FormValidation.password(v, s)
-                          : FormValidation.required(v, s),
-                      autofillHints: [
-                        _register
-                            ? AutofillHints.newPassword
-                            : AutofillHints.password,
-                      ],
-                      onFieldSubmitted: (_) => _submit(),
-                    ),
-                    if (_register) ...[
-                      const SizedBox(height: 8),
+          // Password reset: after the real Firebase request has been made,
+          // the same confirmation is shown whether or not an account exists
+          // for the address (no account enumeration).
+          if (reset && _sent)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.secondary.withValues(alpha: .1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.mark_email_read_outlined,
+                          size: 36,
+                          color: AppColors.secondary,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       Text(
-                        s.passwordHelp,
-                        style: Theme.of(context).textTheme.bodySmall,
+                        s.resetSentTitle,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          s.resetSent,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(height: 1.5),
+                        ),
                       ),
                     ],
-                    const SizedBox(height: 16),
-                  ],
-                  if (_register) ...[
-                    CheckboxListTile(
-                      contentPadding: EdgeInsets.zero,
-                      controlAffinity: ListTileControlAffinity.leading,
-                      value: _adult,
-                      onChanged: _busy
-                          ? null
-                          : (v) => setState(() => _adult = v!),
-                      title: Text(s.ageConfirm),
-                    ),
-                    CheckboxListTile(
-                      contentPadding: EdgeInsets.zero,
-                      controlAffinity: ListTileControlAffinity.leading,
-                      value: _privacy,
-                      onChanged: _busy
-                          ? null
-                          : (v) => setState(() => _privacy = v!),
-                      title: Text(s.privacyConfirm),
-                    ),
-                    Align(
-                      alignment: AlignmentDirectional.centerStart,
-                      child: TextButton(
-                        onPressed: () =>
-                            Navigator.of(context).pushNamed(AppRoutes.privacy),
-                        child: Text(s.privacyTitle),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                PrimaryButton(
+                  label: s.backToLogin,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                TextButton(
+                  onPressed: () => setState(() => _sent = false),
+                  child: Text(s.resendReset),
+                ),
+              ],
+            )
+          else
+            Form(
+              key: _form,
+              child: AutofillGroup(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_register) ...[
+                      AppTextInput(
+                        label: s.fullName,
+                        prefixIcon: const Icon(Icons.person_outline),
+                        controller: _name,
+                        enabled: !_busy,
+                        validator: (v) => FormValidation.name(v, s),
+                        textInputAction: TextInputAction.next,
+                        autofillHints: const [AutofillHints.name],
                       ),
+                      const SizedBox(height: 16),
+                    ],
+                    if (!complete) ...[
+                      AppTextInput(
+                        label: s.email,
+                        hint: s.emailPlaceholder,
+                        prefixIcon: const Icon(Icons.email_outlined),
+                        controller: _email,
+                        enabled: !_busy && !_accountCreated,
+                        validator: (v) => FormValidation.email(v, s),
+                        keyboardType: TextInputType.emailAddress,
+                        textDirection: TextDirection.ltr,
+                        textInputAction: TextInputAction.next,
+                        autofillHints: const [AutofillHints.email],
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    if (_register) ...[
+                      AppTextInput(
+                        label: s.phone,
+                        prefixIcon: const Icon(Icons.phone_outlined),
+                        controller: _phone,
+                        enabled: !_busy,
+                        validator: (v) => FormValidation.phone(v, s),
+                        keyboardType: TextInputType.phone,
+                        textDirection: TextDirection.ltr,
+                        textInputAction: TextInputAction.next,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        s.phoneHelp,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    if (!reset && !complete) ...[
+                      PasswordInput(
+                        label: s.password,
+                        controller: _password,
+                        enabled: !_busy && !_accountCreated,
+                        validator: (v) => _register
+                            ? FormValidation.password(v, s)
+                            : FormValidation.required(v, s),
+                        autofillHints: [
+                          _register
+                              ? AutofillHints.newPassword
+                              : AutofillHints.password,
+                        ],
+                        onFieldSubmitted: (_) => _submit(),
+                      ),
+                      if (_register) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          s.passwordHelp,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                    ],
+                    if (_register) ...[
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        value: _adult,
+                        onChanged: _busy
+                            ? null
+                            : (v) => setState(() => _adult = v!),
+                        title: Text(s.ageConfirm),
+                      ),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        value: _privacy,
+                        onChanged: _busy
+                            ? null
+                            : (v) => setState(() => _privacy = v!),
+                        title: Text(s.privacyConfirm),
+                      ),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: TextButton(
+                          onPressed: () =>
+                              Navigator.of(context)
+                                  .pushNamed(AppRoutes.privacy),
+                          child: Text(s.privacyTitle),
+                        ),
+                      ),
+                      if (_confirmError)
+                        ErrorNotice(message: s.confirmRequired),
+                    ],
+                    if (!_register && !reset)
+                      Align(
+                        alignment: AlignmentDirectional.centerEnd,
+                        child: TextButton(
+                          onPressed: _busy
+                              ? null
+                              : () =>
+                                    Navigator.of(context)
+                                        .pushNamed(AppRoutes.forgotPassword),
+                          child: Text(s.forgotPassword),
+                        ),
+                      ),
+                    if (_error != null)
+                      ErrorNotice(message: failureMessage(_error!, s)),
+                    PrimaryButton(
+                      label: reset
+                          ? s.sendReset
+                          : complete || _accountCreated
+                          ? s.save
+                          : _register
+                          ? s.createAccount
+                          : s.login,
+                      onPressed: _submit,
+                      isLoading: _busy,
                     ),
-                    if (_confirmError) ErrorNotice(message: s.confirmRequired),
-                  ],
-                  if (!_register && !reset)
-                    Align(
-                      alignment: AlignmentDirectional.centerEnd,
-                      child: TextButton(
+                    const SizedBox(height: 16),
+                    if (!_register && !reset && !widget.volunteer) ...[
+                      Text(s.noAccount, textAlign: TextAlign.center),
+                      TextButton(
                         onPressed: _busy
                             ? null
                             : () =>
                                   Navigator.of(context)
-                                      .pushNamed(AppRoutes.forgotPassword),
-                        child: Text(s.forgotPassword),
+                                      .pushNamed(AppRoutes.createAccount),
+                        child: Text(s.createAccount),
                       ),
-                    ),
-                  if (_error != null)
-                    ErrorNotice(message: failureMessage(_error!, s)),
-                  if (_sent)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Semantics(
-                        liveRegion: true,
-                        child: Text(s.resetSent),
+                    ],
+                    if (_register && !complete) ...[
+                      Text(s.alreadyAccount, textAlign: TextAlign.center),
+                      TextButton(
+                        onPressed: _busy
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        child: Text(s.login),
                       ),
-                    ),
-                  PrimaryButton(
-                    label: reset
-                        ? s.sendReset
-                        : complete || _accountCreated
-                        ? s.save
-                        : _register
-                        ? s.createAccount
-                        : s.login,
-                    onPressed: _submit,
-                    isLoading: _busy,
-                  ),
-                  const SizedBox(height: 16),
-                  if (!_register && !reset && !widget.volunteer) ...[
-                    Text(s.noAccount, textAlign: TextAlign.center),
-                    TextButton(
-                      onPressed: _busy
-                          ? null
-                          : () =>
-                                Navigator.of(context)
-                                    .pushNamed(AppRoutes.createAccount),
-                      child: Text(s.createAccount),
-                    ),
+                    ],
+                    if (complete || _accountCreated)
+                      TextButton(
+                        onPressed: _busy
+                            ? null
+                            : () => Navigator.of(context)
+                                  .pushNamedAndRemoveUntil(
+                                    AppRoutes.roleSelection,
+                                    (_) => false,
+                                  ),
+                        child: Text(s.returnToRoles),
+                      ),
+                    if (reset)
+                      TextButton(
+                        onPressed: _busy
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        child: Text('${s.rememberPassword} ${s.login}'),
+                      ),
                   ],
-                  if (_register && !complete) ...[
-                    Text(s.alreadyAccount, textAlign: TextAlign.center),
-                    TextButton(
-                      onPressed: _busy
-                          ? null
-                          : () => Navigator.of(context).pop(),
-                      child: Text(s.login),
-                    ),
-                  ],
-                  if (complete || _accountCreated)
-                    TextButton(
-                      onPressed: _busy
-                          ? null
-                          : () => Navigator.of(context).pushNamedAndRemoveUntil(
-                              AppRoutes.roleSelection,
-                              (_) => false,
-                            ),
-                      child: Text(s.returnToRoles),
-                    ),
-                  if (reset)
-                    TextButton(
-                      onPressed: _busy
-                          ? null
-                          : () => Navigator.of(context).pop(),
-                      child: Text('${s.rememberPassword} ${s.login}'),
-                    ),
-                ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
   }
 }
 
+/// The final Privacy Notice, in the app's currently selected language (the
+/// localization system supplies Arabic/RTL or English/LTR -- there is no
+/// language selector here). Read-only; agreement is the separate required
+/// checkbox on the registration form.
 class PrivacyScreen extends StatelessWidget {
   const PrivacyScreen({super.key});
   @override
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
+    final sections = [
+      (s.privacyInfoTitle, s.privacyInfoBody),
+      (s.privacyRegisteredPhotosTitle, s.privacyRegisteredPhotosBody),
+      (s.privacyVolunteerPhotosTitle, s.privacyVolunteerPhotosBody),
+      (s.privacyLocationTitle, s.privacyLocationBody),
+      (s.privacyUsageTitle, s.privacyUsageBody),
+      (s.privacyAccessTitle, s.privacyAccessBody),
+      (s.privacyRetentionTitle, s.privacyRetentionBody),
+      (s.privacyStatisticsTitle, s.privacyStatisticsBody),
+      (s.privacyAgreementTitle, s.privacyAgreementBody),
+    ];
+    const body = TextStyle(fontSize: 15, height: 1.7, color: AppColors.text);
     return FeaturePage(
       title: s.privacyTitle,
-      children: [Text(s.privacyBody, style: const TextStyle(height: 1.7))],
+      children: [
+        Text(s.privacyIntro, style: body),
+        for (final (title, text) in sections) ...[
+          const SizedBox(height: 24),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: AppColors.primary,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(text, style: body),
+        ],
+        const SizedBox(height: 16),
+      ],
     );
   }
 }

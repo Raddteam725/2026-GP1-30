@@ -39,6 +39,36 @@ void main() {
   });
 
   testWidgets(
+    'One continuous splash: the animation starts on the first frame, is not '
+    'restarted when startup completes, and only then moves on',
+    (t) async {
+      final pending = Completer<AppStartupData>();
+      final auth = TestAuth();
+      await t.pumpWidget(RaddApp(initialize: () => pending.future));
+      final splash = t.state(find.byType(SplashScreen));
+      // Well into the animation while startup is still pending (a slow
+      // Firebase init on a cold start): the same splash instance is on
+      // screen -- no second splash, no restart.
+      await t.pump(const Duration(milliseconds: 3000));
+      expect(find.byType(SplashScreen), findsOneWidget);
+      expect(identical(t.state(find.byType(SplashScreen)), splash), isTrue);
+      // Startup finishes after the sequence has already completed: the very
+      // same splash is still there, then navigates exactly once.
+      await t.pump(const Duration(milliseconds: 1500));
+      expect(identical(t.state(find.byType(SplashScreen)), splash), isTrue);
+      expect(find.byType(LanguageSelectionScreen), findsNothing);
+      pending.complete(ready(auth));
+      await t.pump();
+      await t.pumpAndSettle();
+      expect(find.byType(SplashScreen), findsNothing);
+      expect(find.byType(LanguageSelectionScreen), findsOneWidget);
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+      await auth.events.close();
+    },
+  );
+
+  testWidgets(
     'Initialization exception renders visible retry and can recover',
     (t) async {
       final auth = TestAuth();

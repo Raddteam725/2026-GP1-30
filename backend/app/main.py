@@ -1,11 +1,28 @@
+import logging
+import time
+import re
+import os
+from contextlib import asynccontextmanager
+from .local_jobs import LocalJobs
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from .firebase import identity
-from .models import ProfileCreate, ProfileUpdate, IndividualInput
+from .models import ProfileCreate, ProfileUpdate, IndividualInput, FcmRegistration, FcmUnregister
 from .service import GuardianService
 
-app = FastAPI(title="Radd Guardian API", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app):
+    jobs = LocalJobs() if os.getenv('RADD_LOCAL_JOBS') == '1' else None
+    if jobs:
+        jobs.start()
+    try:
+        yield
+    finally:
+        if jobs:
+            jobs.stop()
+
+app = FastAPI(title="Radd Shared API", version="0.1.0", lifespan=lifespan)
 
 @app.middleware("http")
 async def limits(request: Request, call_next):
@@ -20,7 +37,14 @@ async def limits(request: Request, call_next):
             if len(body) > 11_300_000:
                 return JSONResponse(status_code=413, content={"detail": "request_too_large"})
         request._body = bytes(body)
+    request_id = request.headers.get('x-radd-request-id', '')
+    if not re.fullmatch(r'[0-9]{1,20}-[0-9]{1,8}', request_id):
+        request_id = '-'
+    logging.getLogger('uvicorn.error').info('Radd request %s T1 received epoch_ms=%d', request_id, time.time()*1000)
+    started = time.monotonic()
     response = await call_next(request)
+    route = request.scope.get("route")
+    logging.getLogger("uvicorn.error").info("Radd request %s API: %s %s -> %s (%d ms)", request_id, request.method, getattr(route, "path", "/unknown"), response.status_code, (time.monotonic() - started) * 1000)
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -30,6 +54,8 @@ async def invalid(request, error):
 
 @app.exception_handler(Exception)
 async def unavailable(request, error):
+    # No PII/tokens in the response; the traceback is server-side only, never returned to the client.
+    logging.getLogger("uvicorn.error").error("Radd API: unhandled exception", exc_info=error)
     return JSONResponse(status_code=503, content={"detail": "service_unavailable"})
 
 def service(token=Depends(identity)):
@@ -50,6 +76,24 @@ def profile(s=Depends(service)):
 @app.put("/v1/guardian")
 def create_profile(value: ProfileCreate, s=Depends(service)):
     return s.save_profile(value, create=True)
+
+@app.post("/v1/guardian/verification")
+def account_verification(s=Depends(service)):
+    return s.account_verification()
+
+@app.put("/v1/guardian/fcm-registrations")
+def register_fcm_token(value: FcmRegistration, s=Depends(service)):
+    # Idempotent upsert, scoped to the authenticated Guardian's own
+    # subcollection -- no other Guardian's registrations are reachable
+    # through this or any other endpoint.
+    return s.register_fcm_token(value.token, value.locale)
+
+@app.post("/v1/guardian/fcm-registrations/unregister")
+def unregister_fcm_token(value: FcmUnregister, s=Depends(service)):
+    # Called at logout so this installation stops being able to receive the
+    # signing-out Guardian's pushes. Idempotent -- deleting an already-absent
+    # registration is a no-op, so a retried/duplicate call is always safe.
+    return s.unregister_fcm_token(value.token)
 
 @app.patch("/v1/guardian")
 def update_profile(value: ProfileUpdate, s=Depends(service)):
@@ -82,3 +126,49 @@ def delete_individual(item_id: str, s=Depends(service)):
 @app.get("/v1/individuals/{item_id}/photo")
 def photograph(item_id: str, s=Depends(service)):
     return Response(content=s.photo(item_id), media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+from .case_models import CaseCreate, GuidedReport
+from .cases import CaseService, public_case
+
+def cases_service(s=Depends(service)):
+    return CaseService(s)
+
+@app.get("/v1/cases")
+def cases(s=Depends(cases_service)):
+    return s.list()
+
+@app.post("/v1/cases", status_code=201)
+def report_missing(value: CaseCreate, s=Depends(cases_service)):
+    return s.create(value)
+
+@app.get("/v1/cases/{case_id}")
+def case(case_id: str, s=Depends(cases_service)):
+    return public_case(s.owned(case_id))
+
+@app.put("/v1/cases/{case_id}/guided-report")
+def guided_report(case_id: str, value: GuidedReport, s=Depends(cases_service)):
+    return s.save_report(case_id, value)
+
+@app.post("/v1/cases/{case_id}/verification")
+def verification(case_id: str, s=Depends(cases_service)):
+    return s.verification(case_id)
+
+@app.post("/v1/cases/{case_id}/cancel")
+def cancel_case(case_id: str, s=Depends(cases_service)):
+    return s.cancel(case_id)
+
+@app.post("/v1/cases/{case_id}/resolve")
+def resolve_case(case_id: str, s=Depends(cases_service)):
+    return s.resolve(case_id)
+
+@app.get("/v1/notifications")
+def notifications(s=Depends(cases_service)):
+    return s.list_notifications()
+
+@app.put("/v1/notifications/{notification_id}/read", status_code=204)
+def read_notification(notification_id: str, s=Depends(cases_service)):
+    s.mark_read(notification_id)
+    return Response(status_code=204)
+
+from .volunteer import router as volunteer_router
+app.include_router(volunteer_router)

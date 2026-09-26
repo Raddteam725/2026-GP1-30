@@ -4,6 +4,13 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Android 13+ (API 33) requires this to be requested at runtime before
+         any notification can be shown; FirebaseMessaging.instance.requestPermission()
+         (see GuardianPushService) triggers that system dialog. Radd's push is a
+         standard notification + data message (see backend/app/push.py), so with
+         this permission granted Android shows the generic banner itself while
+         the app is backgrounded or terminated. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:label="radd"
         android:name="${applicationName}"
