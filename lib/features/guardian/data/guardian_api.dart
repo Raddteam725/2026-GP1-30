@@ -45,7 +45,9 @@ class GuardianApi implements GuardianRepository {
     }
     final uri = Uri.parse('$_base/v1$path');
     if (kDebugMode && _sequence == 1) {
-      debugPrint('Radd Guardian backend ${uri.scheme}://${uri.host}:${uri.port}');
+      debugPrint(
+        'Radd Guardian backend ${uri.scheme}://${uri.host}:${uri.port}',
+      );
     }
     if (!kDebugMode && uri.scheme != 'https') throw const AppFailure('service');
     try {
@@ -65,7 +67,7 @@ class GuardianApi implements GuardianRepository {
         if (response.statusCode >= 400) {
           Object? decoded;
           try {
-            decoded = jsonDecode(response.body);
+            decoded = jsonDecode(_text(response));
           } on FormatException {
             // Fall through to the generic status-code mapping below.
           }
@@ -90,8 +92,14 @@ class GuardianApi implements GuardianRepository {
     }
   }
 
+  /// The backend answers `application/json` with no charset parameter, and
+  /// package:http then falls back to Latin-1 for `Response.body` -- which
+  /// turns every Arabic name, answer or label into mojibake. JSON is UTF-8
+  /// by definition, so always decode the raw bytes as UTF-8.
+  static String _text(http.Response r) => utf8.decode(r.bodyBytes);
   Map<String, dynamic> _json(http.Response r) =>
-      jsonDecode(r.body) as Map<String, dynamic>;
+      jsonDecode(_text(r)) as Map<String, dynamic>;
+  List<dynamic> _list(http.Response r) => jsonDecode(_text(r)) as List;
   @override
   Future<String> accountRole() async =>
       _json(await _request('GET', '/session'))['role'] as String;
@@ -127,7 +135,7 @@ class GuardianApi implements GuardianRepository {
       );
   @override
   Future<List<Individual>> individuals() async =>
-      (jsonDecode((await _request('GET', '/individuals')).body) as List)
+      _list(await _request('GET', '/individuals'))
           .map((e) => Individual.fromJson(e as Map<String, dynamic>))
           .toList();
   String _path(String id) => '/individuals/${Uri.encodeComponent(id)}';
@@ -162,7 +170,7 @@ class GuardianApi implements GuardianRepository {
 
   @override
   Future<List<MissingCase>> cases() async =>
-      (jsonDecode((await _request('GET', '/cases')).body) as List)
+      _list(await _request('GET', '/cases'))
           .map((e) => MissingCase.fromJson(e as Map<String, dynamic>))
           .toList();
   @override
@@ -195,7 +203,7 @@ class GuardianApi implements GuardianRepository {
   );
   @override
   Future<List<GuardianNotification>> notifications() async =>
-      (jsonDecode((await _request('GET', '/notifications')).body) as List)
+      _list(await _request('GET', '/notifications'))
           .map((e) => GuardianNotification.fromJson(e as Map<String, dynamic>))
           .toList();
   @override

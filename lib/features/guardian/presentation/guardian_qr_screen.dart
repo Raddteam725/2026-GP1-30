@@ -310,39 +310,22 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
           ? null
           : const GuardianNavigation(selected: 2),
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    s.qrCode,
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    s.qrSubtitle,
-                    style: const TextStyle(
-                      color: mutedText,
-                      fontSize: 14,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              tooltip: s.retry,
-              onPressed: _reload,
-              icon: const Icon(Icons.refresh, color: AppColors.primary),
-            ),
-          ],
+        // No manual refresh control: the credential regenerates itself at
+        // expiry (_generate's timer) and the case context follows case events
+        // / app resume (_recoverCases). Only an explicit load failure offers
+        // a retry (ErrorNotice below / in the QR card).
+        Text(
+          s.qrCode,
+          style: const TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w700,
+            color: AppColors.primary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          s.qrSubtitle,
+          style: const TextStyle(color: mutedText, fontSize: 14, height: 1.4),
         ),
         const SizedBox(height: 20),
         FutureBuilder<List<MissingCase>>(
@@ -435,12 +418,12 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const DecoratedBox(
+                      DecoratedBox(
                         decoration: BoxDecoration(
-                          color: AppColors.secondary,
+                          color: caseStatusColor(selected.status),
                           shape: BoxShape.circle,
                         ),
-                        child: SizedBox.square(dimension: 7),
+                        child: const SizedBox.square(dimension: 7),
                       ),
                       const SizedBox(width: 8),
                       Flexible(

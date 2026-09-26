@@ -102,8 +102,20 @@ class TestRepository implements GuardianRepository {
     records.removeWhere((i) => i.id == id);
   }
 
+  // Counts authoritative list refetches (event/resume-driven) and simulates
+  // one transient load failure (flips back after throwing once).
+  int caseListFetches = 0;
+  bool failNextCases = false;
   @override
-  Future<List<MissingCase>> cases() async => List.of(caseRecords);
+  Future<List<MissingCase>> cases() async {
+    caseListFetches++;
+    if (failNextCases) {
+      failNextCases = false;
+      throw const AppFailure('unavailable');
+    }
+    return List.of(caseRecords);
+  }
+
   @override
   Future<MissingCase> missingCase(String id) async {
     caseFetches++;
@@ -204,6 +216,9 @@ class TestRepository implements GuardianRepository {
   }
 
   int _verificationCounter = 0;
+
+  /// How many short-lived credentials the QR screen has requested.
+  int get verificationRequests => _verificationCounter;
   @override
   Future<GuardianVerification>
   accountVerification() async => GuardianVerification(

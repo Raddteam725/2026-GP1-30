@@ -92,15 +92,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final s = AppLocalizations.of(context)!;
     return FutureBuilder<List<GuardianNotification>>(
       future: _data,
+      // No manual refresh control: the list follows the backend through the
+      // event refetch (_recover) and app resume; only an explicit load
+      // failure offers a retry (below).
       builder: (context, state) => FeaturePage(
         title: s.notifications,
-        actions: [
-          IconButton(
-            tooltip: s.retry,
-            onPressed: _reload,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
         children: [
           if (_error != null) ErrorNotice(message: failureMessage(_error!, s)),
           if (state.hasError)
@@ -121,10 +117,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               GuardianPanel(
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
+                  // The notification is about a status: its icon takes that
+                  // status's canonical colour, the same as everywhere else.
                   leading: Icon(
                     value.read
                         ? Icons.notifications_none
                         : Icons.notifications_active_outlined,
+                    color: caseStatusColor(value.status),
                   ),
                   title: Text(caseStatusLabel(value.status, s)),
                   subtitle: Text(

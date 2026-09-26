@@ -410,12 +410,12 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
             if (value != null && value.active)
               Row(
                 children: [
-                  const DecoratedBox(
+                  DecoratedBox(
                     decoration: BoxDecoration(
-                      color: Color(0xFF2E9E6E),
+                      color: caseStatusColor(value.status),
                       shape: BoxShape.circle,
                     ),
-                    child: SizedBox.square(dimension: 7),
+                    child: const SizedBox.square(dimension: 7),
                   ),
                   const SizedBox(width: 6),
                   Flexible(
@@ -423,11 +423,11 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
                       s.activeCase.toUpperCase(),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         letterSpacing: .8,
-                        color: Color(0xFF2E9E6E),
+                        color: caseStatusColor(value.status),
                       ),
                     ),
                   ),

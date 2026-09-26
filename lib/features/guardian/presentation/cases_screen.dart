@@ -98,35 +98,23 @@ class _CasesScreenState extends State<CasesScreen> {
               ? null
               : const GuardianNavigation(selected: 3),
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        s.cases,
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        s.casesSubtitle,
-                        style: const TextStyle(color: mutedText, fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  tooltip: s.retry,
-                  onPressed: _reload,
-                  icon: const Icon(Icons.refresh, color: AppColors.primary),
-                ),
-              ],
+            // No manual refresh control: the list follows the backend on its
+            // own -- a validated case event (FCM) or an app resume triggers
+            // the authoritative refetch above (_recover), and returning from
+            // Case Status reloads. Only an explicit load FAILURE offers a
+            // retry (ErrorNotice below).
+            Text(
+              s.cases,
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              s.casesSubtitle,
+              style: const TextStyle(color: mutedText, fontSize: 14),
             ),
             const SizedBox(height: 20),
             if (state.hasError)
@@ -361,16 +349,12 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
       future: _data,
       builder: (context, state) {
         final value = _live ?? state.data;
+        // No manual refresh control: this screen follows its case through
+        // the event refetch (_onCaseEvent), app resume and the slow fallback
+        // poll; only an explicit load failure offers a retry (below).
         return FeaturePage(
           title: s.caseStatus,
           centerTitle: false,
-          actions: [
-            IconButton(
-              tooltip: s.retry,
-              onPressed: _busy ? null : _reload,
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
           bottomNavigationBar: const GuardianNavigation(selected: 3),
           children: [
             if (state.hasError)
@@ -525,9 +509,7 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
                     ? Icons.celebration_outlined
                     : Icons.info_outline,
                 size: 20,
-                color: value.status == 'reunited'
-                    ? AppColors.secondary
-                    : mutedText,
+                color: caseStatusColor(value.status),
               ),
               const SizedBox(width: 12),
               Expanded(

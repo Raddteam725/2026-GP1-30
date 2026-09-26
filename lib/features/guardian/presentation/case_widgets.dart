@@ -61,15 +61,19 @@ const mutedText = Color(0xFF718096);
 const _greyBackground = Color(0xFFEDF2F7);
 
 /// The ONE semantic colour per canonical backend case status, used by every
-/// Guardian status chip, badge, card and timeline indicator. Keyed on the
-/// backend identifier, never on a translated label.
+/// Guardian status chip, badge, card border/accent, icon and timeline
+/// indicator -- on every screen, in both languages. Keyed on the backend
+/// identifier, never on a translated label, and never on whether a case is
+/// merely "active" (that is not a status). Reunited and Resolved share the
+/// same green on purpose. "Report Missing" is an action, not a status: see
+/// [reportMissingColor].
 const caseStatusColors = <String, Color>{
   'report_received': Color(0xFF2563EB),
   'search_in_progress': Color(0xFFF59E0B),
   'match_confirmed': Color(0xFF7C3AED),
   'awaiting_guardian_verification': Color(0xFF0D9488),
   'reunited': Color(0xFF16A34A),
-  'resolved': Color(0xFF15803D),
+  'resolved': Color(0xFF16A34A),
   'cancelled': Color(0xFF64748B),
   'transferred_to_authority': Color(0xFFEA580C),
 };
@@ -157,10 +161,12 @@ class CaseIdChip extends StatelessWidget {
 }
 
 enum CaseCardStyle {
-  /// Home "Active Cases": amber outline, "Track Status" action.
+  /// Home "Active Cases": outline in the case's canonical status colour,
+  /// "Track Status" action.
   home,
 
-  /// Cases list: teal accent bar on the leading edge, "View Status" action.
+  /// Cases list: accent bar on the leading edge in the case's canonical
+  /// status colour, "View Status" action.
   list,
 }
 
@@ -180,15 +186,19 @@ class CaseCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
     final home = style == CaseCardStyle.home;
+    // The outline (Home) and the leading accent bar (Cases list) both
+    // communicate the case's state, so they take the canonical status colour
+    // -- the same one the chip inside the card shows.
+    final statusColor = caseStatusColor(value.status);
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: home && value.active
-              ? AppColors.accent.withValues(alpha: .7)
+          color: home
+              ? statusColor.withValues(alpha: .7)
               : AppColors.border.withValues(alpha: .7),
-          width: home && value.active ? 1.5 : 1,
+          width: home ? 1.5 : 1,
         ),
         boxShadow: [
           BoxShadow(
@@ -210,13 +220,7 @@ class CaseCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (!home)
-                  Container(
-                    width: 5,
-                    color: value.active
-                        ? AppColors.secondary
-                        : AppColors.border,
-                  ),
+                if (!home) Container(width: 5, color: statusColor),
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.all(18),

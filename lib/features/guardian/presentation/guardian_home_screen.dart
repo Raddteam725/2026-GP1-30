@@ -214,7 +214,11 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
             enabled: !_loggingOut,
           ),
           children: [
-            if (state.connectionState != ConnectionState.done)
+            // A spinner only while there is nothing to show yet. An event-
+            // driven or explicit refetch keeps the retained snapshot on
+            // screen until the new one arrives, so Home updates in place --
+            // no loading flash, and the list keeps its scroll position.
+            if (state.connectionState != ConnectionState.done && !state.hasData)
               const Center(child: CircularProgressIndicator())
             else if (state.hasError) ...[
               ErrorNotice(

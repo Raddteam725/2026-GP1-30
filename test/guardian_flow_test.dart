@@ -429,15 +429,13 @@ void main() {
       );
     },
   );
-  testWidgets('Refresh on the Cases list never passes a Future to setState', (
-    t,
-  ) async {
+  testWidgets('Cases has no manual refresh control; it follows the backend '
+      'on its own (see guardian_status_refresh_test)', (t) async {
     await start(t);
     auth.active = true;
     await route(t, AppRoutes.cases);
     expect(find.byType(CasesScreen), findsOneWidget);
-    await t.tap(find.byIcon(Icons.refresh));
-    await t.pumpAndSettle();
+    expect(find.byIcon(Icons.refresh), findsNothing);
     expect(t.takeException(), isNull);
   });
   for (final destination in [AppRoutes.guardian, AppRoutes.cases]) {
@@ -483,15 +481,12 @@ void main() {
       expect(t.takeException(), isNull);
     });
   }
-  testWidgets('Refresh on Notifications never passes a Future to setState', (
-    t,
-  ) async {
+  testWidgets('Notifications has no manual refresh control', (t) async {
     await start(t);
     auth.active = true;
     await route(t, AppRoutes.notifications);
     expect(find.byType(NotificationsScreen), findsOneWidget);
-    await t.tap(find.byIcon(Icons.refresh));
-    await t.pumpAndSettle();
+    expect(find.byIcon(Icons.refresh), findsNothing);
     expect(t.takeException(), isNull);
   });
   testWidgets(
@@ -520,9 +515,7 @@ void main() {
       expect(t.takeException(), isNull);
     },
   );
-  testWidgets('Refresh on Case Status never passes a Future to setState', (
-    t,
-  ) async {
+  testWidgets('Case Status has no manual refresh control', (t) async {
     await start(t);
     auth.active = true;
     repo.records.add(
@@ -537,8 +530,7 @@ void main() {
     final case1 = await repo.reportMissing('test-id');
     await route(t, AppRoutes.caseStatus, arguments: case1.id);
     expect(find.byType(CaseStatusScreen), findsOneWidget);
-    await t.tap(find.byIcon(Icons.refresh));
-    await t.pumpAndSettle();
+    expect(find.byIcon(Icons.refresh), findsNothing);
     expect(t.takeException(), isNull);
     // Dispose the screen so its background status-poll timer is cancelled
     // before the test ends (an outstanding Timer otherwise fails teardown).
@@ -717,15 +709,13 @@ void main() {
     expect(t.takeException(), isNull);
   });
 
-  testWidgets('Refresh on the QR screen never passes a Future to setState', (
-    t,
-  ) async {
+  testWidgets('QR screen has no manual refresh control (its credential '
+      'regenerates itself -- see guardian_status_refresh_test)', (t) async {
     await start(t);
     auth.active = true;
     await route(t, AppRoutes.qrCode);
     expect(find.byType(GuardianQrScreen), findsOneWidget);
-    await t.tap(find.byIcon(Icons.refresh));
-    await t.pumpAndSettle();
+    expect(find.byIcon(Icons.refresh), findsNothing);
     expect(t.takeException(), isNull);
   });
   testWidgets('Active case locks the individual profile until resolved', (
