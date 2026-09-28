@@ -59,6 +59,9 @@ void main() {
           'uid': 'volunteer',
           'full_name': 'Real Volunteer',
           'volunteer_id': 'V-1',
+          'consent_current': true,
+          'assigned': true,
+          'event_id': 'test-event',
           'active': true,
         });
       }
@@ -81,6 +84,16 @@ void main() {
         ]);
       }
       if (path.endsWith('/profiles')) return json([person]);
+      if (path.endsWith('/profiles/profile-key')) {
+        return json({
+          ...person,
+          if (request.url.queryParameters['found_report_id'] == 'FR-real')
+            'guardian': {
+              'full_name': 'Real Guardian',
+              'phone': '+966500000003',
+            },
+        });
+      }
       if (path.endsWith('/found-reports')) {
         if (request.method == 'POST') {
           final body = jsonDecode(request.body) as Map;
@@ -133,6 +146,13 @@ void main() {
     await repo.loadProfiles();
     expect(repo.profiles.single.guardian.phone, isNull);
     expect(repo.profiles.single.photoBytes, [1, 2, 3]);
+    final browsing = await repo.loadProfileDetails(repo.profiles.single);
+    expect(browsing.guardian.phone, isNull);
+    final contextual = await repo.loadProfileDetails(
+      repo.profiles.single,
+      foundReportId: found.id,
+    );
+    expect(contextual.guardian.phone, '+966500000003');
     await repo.confirmMatch(repo.account!, found, repo.profiles.single);
     expect(found.status, CaseStatus.matchConfirmed);
     expect(found.matchedPerson!.guardian.phone, '+966500000003');

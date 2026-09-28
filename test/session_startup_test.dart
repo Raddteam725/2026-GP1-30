@@ -161,6 +161,24 @@ void main() {
     await t.pumpAndSettle();
     expect(find.byType(GuardianHomeScreen), findsOneWidget);
   });
+  testWidgets(
+    'Restored Volunteer session retries unavailable role service without logout',
+    (t) async {
+      auth.active = true;
+      repo.role = 'volunteer';
+      repo.failure = 'network';
+      await launch(t);
+      expect(find.text('Account recovery'), findsOneWidget);
+      expect(auth.active, isTrue);
+      expect(find.byType(VolunteerEntry), findsNothing);
+      repo.failure = null;
+      await t.tap(find.text('Try Again'));
+      await t.pumpAndSettle();
+      expect(find.byType(VolunteerEntry), findsOneWidget);
+      expect(repo.profileReads, 0);
+      expect(auth.active, isTrue);
+    },
+  );
   testWidgets('Signout during resolution cannot let a stale result open Home', (
     t,
   ) async {

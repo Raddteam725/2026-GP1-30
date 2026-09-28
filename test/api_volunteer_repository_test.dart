@@ -2,6 +2,11 @@ import 'dart:convert';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'volunteer_location_test.dart' show LocationPlatform;
+
 import 'package:radd/features/guardian/presentation/guardian_components.dart';
 import 'package:radd/features/volunteer/presentation/volunteer_workspace.dart';
 
@@ -15,10 +20,27 @@ import 'package:radd/features/volunteer/domain/volunteer_models.dart';
 import 'package:radd/features/volunteer/domain/volunteer_notification_event.dart';
 
 void main() {
+  late GeolocatorPlatform previousLocation;
+  late LocationPlatform locationPlatform;
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    previousLocation = GeolocatorPlatform.instance;
+    locationPlatform = LocationPlatform()
+      ..permission = LocationPermission.whileInUse;
+    GeolocatorPlatform.instance = locationPlatform;
+  });
+  tearDown(() async {
+    GeolocatorPlatform.instance = previousLocation;
+    await locationPlatform.positions.close();
+    await locationPlatform.services.close();
+  });
   Map<String, dynamic> profile({bool active = true}) => {
     'uid': 'server-uid',
     'full_name': 'اسم حقيقي',
     'volunteer_id': 'V-42',
+    'consent_current': true,
+    'assigned': true,
+    'event_id': 'test-event',
     'active': active,
     'email': 'real@example.test',
     'phone': '+966500000001',
@@ -49,6 +71,69 @@ void main() {
     200,
     headers: {'content-type': 'application/json; charset=utf-8'},
   );
+
+  test('Volunteer proximity uses the authenticated backend radius', () async {
+    final repo = ApiVolunteerRepository(
+      token: () async => 'test-token',
+      baseUrl: 'http://test',
+      client: MockClient(
+        (request) async => json({...profile(), 'proximity_radius_meters': 375}),
+      ),
+    );
+    addTearDown(repo.dispose);
+    await repo.loadProfile();
+    expect(repo.proximityRadiusMeters, 375);
+  });
+
+  testWidgets('Location access gates event UI, not a temporarily missing fix', (
+    tester,
+  ) async {
+    locationPlatform.permission = LocationPermission.denied;
+    locationPlatform.response = LocationPermission.whileInUse;
+    final repo = ApiVolunteerRepository(
+      token: () async => 'test-token',
+      baseUrl: 'http://test',
+      client: MockClient(
+        (request) async =>
+            json(request.url.path == '/v1/volunteer' ? profile() : []),
+      ),
+    );
+    addTearDown(repo.dispose);
+    await repo.loadProfile();
+    await tester.pumpWidget(
+      harness(
+        VolunteerWorkspace(
+          account: repo.account!,
+          repository: repo,
+          onLogout: () async {},
+        ),
+        'en',
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(locationPlatform.requests, 0); // Explanation precedes OS dialog.
+    expect(find.text('Manual Review'), findsNothing);
+    // Use the existing Radd action's label independently of button subclass.
+    final label = find.text('Allow Location');
+    expect(label, findsOneWidget);
+    await tester.tap(label);
+    await tester.pumpAndSettle();
+    expect(locationPlatform.requests, 1);
+    expect(
+      find.text('Report Found Individual'),
+      findsWidgets,
+    ); // No fix needed.
+    locationPlatform.enabled = false;
+    locationPlatform.services.add(ServiceStatus.disabled);
+    await tester.pumpAndSettle();
+    expect(find.text('Manual Review'), findsNothing);
+    expect(find.text('Open Settings'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('radd-tab-4')));
+    await tester.pumpAndSettle();
+    expect(find.text('Account Information'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+  });
 
   test('Closure history compatibility preserves read document IDs and suppresses aliases', () async {
     final writes = <String>[];

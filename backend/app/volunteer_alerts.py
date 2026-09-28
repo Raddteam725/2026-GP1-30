@@ -1,7 +1,7 @@
 """Delivery of the shared alert intents to authenticated, enabled Volunteers.
 
 FCM is a delivery channel; per-user notification records are durable history.
-Location is foreground-only and expires after 60 seconds without a heartbeat.
+Location is available during authorized participation; estimates expire after 60 seconds.
 FCM registration eligibility expires with the verified Firebase ID token.
 """
 import logging
@@ -14,6 +14,8 @@ from .firebase import firebase_app
 from . import delivery_queue
 from .case_models import STAGES
 from .alerts import PROXIMITY_RADIUS_METERS
+from .volunteer_access import eligible_for_event
+from .volunteer_consent import current as consent_current
 
 TEXT = {
     'en': {'general': 'A new missing-person case needs your help.', 'priority': 'A nearby missing-person case needs your help.', 'status_update': 'A match has been found for a case you joined.', 'cancelled': 'The guardian cancelled this missing-person case.', 'resolved': 'The guardian found the individual and resolved this case.', 'reunited': 'The individual has been reunited with their guardian.'},
@@ -45,14 +47,24 @@ def delivery(db, user, case, kind, registrations):
 def _send_registration(db, user, case, kind, ref, registration):
     cd = case.to_dict()
     latest = case.reference.get().to_dict() or {}
+    if not eligible_for_event(db, user.id, latest.get('event_id')):
+        return
     if not latest or latest.get('scrubbed_at') or not ref.get().exists:
         return
     if kind in ('general', 'priority') and latest.get('status') not in STAGES[:2]:
         return
     fresh = registration.reference.get()
     rd = fresh.to_dict() or {}
+    history = ref.get().to_dict() or {}
+    registered_at = rd.get('created_at')
+    event_at = history.get('created_at')
+    # Token rotation/re-login must not deliver historical events to a new
+    # registration. Existing failed deliveries remain retryable on their device.
+    if history.get('read_at') or (isinstance(registered_at, datetime) and
+            isinstance(event_at, datetime) and registered_at > event_at):
+        return
     profile = user.reference.get().to_dict() or {}
-    if (not fresh.exists or profile.get('role') != 'volunteer' or profile.get('active') is not True
+    if (not fresh.exists or profile.get('role') != 'volunteer' or profile.get('active') is not True or not consent_current(profile)
             or rd.get('event_id') != latest.get('event_id')
             or rd.get('session_expires_at', 0) <= datetime.now(timezone.utc).timestamp()):
         return
@@ -83,7 +95,7 @@ def _send_registration(db, user, case, kind, ref, registration):
         messaging.send(messaging.Message(token=rd['token'],
             notification=messaging.Notification(title='راد' if locale == 'ar' else 'Radd', body=text),
             data={'role': 'volunteer', 'case_id': case.id, 'event_id': cd['event_id'], 'kind': kind, 'status': cd['status'], 'notification_id': ref.id},
-            android=messaging.AndroidConfig(priority='high', notification=messaging.AndroidNotification(tag=ref.id))), app=firebase_app())
+            android=messaging.AndroidConfig(priority='high', notification=messaging.AndroidNotification(tag=ref.id, channel_id='radd_volunteer_alerts'))), app=firebase_app())
         logging.getLogger("uvicorn.error").info("Radd event %s T5 fcm_accepted epoch_ms=%d elapsed_ms=%d", ref.id, time.time()*1000, (time.monotonic()-started)*1000)
         receipt.set({'sent_at': firestore.SERVER_TIMESTAMP})
     except messaging.UnregisteredError:
@@ -108,7 +120,9 @@ def dispatch(db, case_id, *, matched=False, recipient=None):
     now = datetime.now(timezone.utc)
     users = [db.collection('users').document(recipient).get()] if recipient else db.collection('users').where(filter=FieldFilter('role', '==', 'volunteer')).stream()
     for user in users:
-        if (user.to_dict() or {}).get('role') != 'volunteer' or user.to_dict().get('active') is not True:
+        if (user.to_dict() or {}).get('role') != 'volunteer' or user.to_dict().get('active') is not True or not consent_current(user.to_dict()):
+            continue
+        if not eligible_for_event(db, user.id, cd.get('event_id')):
             continue
         if not terminal and matched and (user.id not in cd.get('joined_by', []) or user.id == cd.get('confirmed_by')):
             continue

@@ -1,14 +1,4 @@
-"""Two independent 24-hour retention timers, each on its own clock:
-
-- a registered individual's PHOTO expires 24h from its own capture time
-  (app.service.photo_expired / app.cleanup.expire_photos);
-- a TERMINAL CASE is scrubbed to its minimal statistical fields 24h after
-  closed_at (app.cleanup.scrub_terminal_cases).
-
-Neither timer is derived from the other, from an event day/date, or from the
-Guardian device's clock -- both compare a server-stamped timestamp already on
-the document against datetime.now(timezone.utc) computed here in the test.
-"""
+"""Registration retention and separate terminal-case cleanup tests."""
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -19,13 +9,13 @@ from app import service, push
 from app.cases import CaseService
 from app.case_models import CaseCreate
 from app.cleanup import expire_photos, scrub_terminal_cases
-from firestore_fake import Database, Bucket
+from firestore_fake import Database, Bucket, configured_event
 from test_cases import guardian_with_individual, photo
 
 @pytest.fixture
 def storage(monkeypatch):
     db, bucket = Database(), Bucket()
-    db.set(db.collection("events").document("test-event"), {"active": True})
+    db.set(db.collection("events").document("test-event"), configured_event())
     monkeypatch.setattr(service, "database", lambda: db)
     monkeypatch.setattr(service, "bucket", lambda: bucket)
     monkeypatch.setattr(service.firestore, "transactional", lambda f: f)
@@ -44,149 +34,6 @@ def backdate_photo(db, s, individual_id, delta):
 
 def backdate_case(db, case_id, delta):
     db.data[f"cases/{case_id}"]["closed_at"] = datetime.now(timezone.utc) - delta
-
-# --- Registered-photo 24-hour expiry -----------------------------------
-
-def test_photo_is_valid_immediately_before_the_24_hour_boundary(storage):
-    db, _ = storage
-    s, individual_id = guardian_with_individual("owner")
-    backdate_photo(db, s, individual_id, timedelta(hours=24) - timedelta(seconds=1))
-    assert s.list()[0]["photo_expired"] is False
-    assert s.photo(individual_id)  # Still servable.
-
-def test_photo_is_expired_at_and_after_the_24_hour_boundary(storage):
-    db, _ = storage
-    s, individual_id = guardian_with_individual("owner")
-    backdate_photo(db, s, individual_id, timedelta(hours=24))
-    assert s.list()[0]["photo_expired"] is True
-    with pytest.raises(HTTPException) as error:
-        s.photo(individual_id)
-    assert error.value.status_code == 404
-    assert error.value.detail == "photo_expired"
-
-def test_a_never_captured_photo_is_never_assumed_fresh(storage):
-    db, _ = storage
-    s, individual_id = guardian_with_individual("owner")
-    db.data[individual_path(s, individual_id)].pop("photo_captured_at", None)
-    assert s.list()[0]["photo_expired"] is True
-
-def test_report_missing_is_blocked_once_the_photo_expires(storage):
-    db, _ = storage
-    s, individual_id = guardian_with_individual("owner")
-    backdate_photo(db, s, individual_id, timedelta(hours=25))
-    with pytest.raises(HTTPException) as error:
-        CaseService(s).create(CaseCreate(individual_id=individual_id))
-    assert error.value.status_code == 409
-    assert error.value.detail == "photo_expired"
-
-def test_a_fresh_capture_restores_report_missing_eligibility(storage):
-    from app.models import IndividualInput
-    db, _ = storage
-    s, individual_id = guardian_with_individual("owner")
-    backdate_photo(db, s, individual_id, timedelta(hours=25))
-    s.save(IndividualInput(full_name="Missing Person", age=7, gender="female", relationship="child", photo_base64=photo()), individual_id)
-    assert s.list()[0]["photo_expired"] is False
-    created = CaseService(s).create(CaseCreate(individual_id=individual_id))
-    assert created["id"].startswith("RD-")
-
-def test_a_restored_session_still_enforces_expiry_server_side(storage):
-    # A fresh GuardianService (stands in for "the app restarted") reads the
-    # same stored capture timestamp -- nothing client-cached bypasses this.
-    db, _ = storage
-    s, individual_id = guardian_with_individual("owner")
-    backdate_photo(db, s, individual_id, timedelta(hours=25))
-    reloaded = service.GuardianService({"uid": "owner", "email": "owner@example.test"})
-    assert reloaded.list()[0]["photo_expired"] is True
-    with pytest.raises(HTTPException):
-        reloaded.photo(individual_id)
-
-def test_expire_photos_deletes_the_storage_object_and_clears_the_reference(storage):
-    db, bucket = storage
-    s, individual_id = guardian_with_individual("owner")
-    path = db.data[individual_path(s, individual_id)]["photo_path"]
-    assert path in bucket.data
-    backdate_photo(db, s, individual_id, timedelta(hours=24, minutes=1))
-    expire_photos()
-    assert path not in bucket.data  # No orphaned Storage object survives.
-    assert "photo_path" not in db.data[individual_path(s, individual_id)]
-    # The individual's own profile is untouched -- only the stale photo is gone.
-    assert db.data[individual_path(s, individual_id)]["full_name"] == "Missing Person"
-
-def test_expire_photos_does_not_touch_a_fresh_photo(storage):
-    db, bucket = storage
-    s, individual_id = guardian_with_individual("owner")
-    path = db.data[individual_path(s, individual_id)]["photo_path"]
-    expire_photos()
-    assert path in bucket.data
-    assert db.data[individual_path(s, individual_id)]["photo_path"] == path
-
-def test_expire_photos_is_idempotent_on_repeated_runs(storage):
-    db, bucket = storage
-    s, individual_id = guardian_with_individual("owner")
-    backdate_photo(db, s, individual_id, timedelta(hours=48))
-    expire_photos()
-    expire_photos()  # Must not raise, double-delete, or otherwise misbehave.
-    assert "photo_path" not in db.data[individual_path(s, individual_id)]
-
-def test_a_failed_storage_delete_preserves_the_reference_for_retry(storage):
-    db, bucket = storage
-    s, individual_id = guardian_with_individual("owner")
-    path = db.data[individual_path(s, individual_id)]["photo_path"]
-    backdate_photo(db, s, individual_id, timedelta(hours=25))
-    bucket.fail_next_delete(path)
-    expire_photos()
-    # The delete failed -- the ONLY reference to the object must survive so
-    # this is retried, never silently treated as "nothing left to clean up".
-    assert db.data[individual_path(s, individual_id)]["photo_path"] == path
-    assert path in bucket.data  # Never removed from Storage either.
-
-def test_retry_after_a_storage_failure_is_idempotent_and_completes(storage):
-    db, bucket = storage
-    s, individual_id = guardian_with_individual("owner")
-    path = db.data[individual_path(s, individual_id)]["photo_path"]
-    backdate_photo(db, s, individual_id, timedelta(hours=25))
-    bucket.fail_next_delete(path)
-    expire_photos()  # First attempt: the simulated transient failure hits.
-    assert path in bucket.data
-    expire_photos()  # Retry: succeeds this time.
-    assert path not in bucket.data
-    assert "photo_path" not in db.data[individual_path(s, individual_id)]
-    expire_photos()  # A third run: nothing left to do, still safe.
-    assert "photo_path" not in db.data[individual_path(s, individual_id)]
-
-def test_a_delayed_retry_never_deletes_a_newer_replacement_photo(storage):
-    # Simulates the exact race the transactional re-read guards against: the
-    # stale photo's blob is deleted (correctly -- it really is 24h+ old), but
-    # a Guardian captures a brand new photo before the Firestore reference is
-    # cleared. The new capture must survive untouched.
-    db, bucket = storage
-    s, individual_id = guardian_with_individual("owner")
-    old_path = db.data[individual_path(s, individual_id)]["photo_path"]
-    backdate_photo(db, s, individual_id, timedelta(hours=25))
-    new_path = f"guardians/owner/individuals/{individual_id}/replacement.jpg"
-    bucket.blob(new_path).upload_from_string(b"new", content_type="image/jpeg")
-
-    import app.cleanup as cleanup_module
-
-    original = cleanup_module._delete_blob
-
-    def delete_then_simulate_concurrent_capture(path):
-        result = original(path)
-        if path == old_path:
-            db.data[individual_path(s, individual_id)].update(
-                {"photo_path": new_path, "photo_captured_at": datetime.now(timezone.utc)}
-            )
-        return result
-
-    cleanup_module._delete_blob = delete_then_simulate_concurrent_capture
-    try:
-        expire_photos()
-    finally:
-        cleanup_module._delete_blob = original
-
-    assert old_path not in bucket.data  # The genuinely stale blob is gone.
-    assert db.data[individual_path(s, individual_id)]["photo_path"] == new_path
-    assert new_path in bucket.data  # The new capture was never touched.
 
 # --- Terminal-case 24-hour retention ------------------------------------
 

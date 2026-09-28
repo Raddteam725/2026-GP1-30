@@ -32,7 +32,7 @@ class Individual {
   final String id, fullName, gender, relationship;
   final int age;
 
-  /// Server-computed, from the photo's own capture time -- never derived
+  /// Server-computed registration eligibility (with active-case deferral), never derived
   /// from this device's clock. When true, Report Missing is unavailable
   /// (the backend enforces this independently; this only drives the UI).
   final bool photoExpired;
@@ -55,11 +55,15 @@ class IndividualInput {
     required this.gender,
     required this.relationship,
     this.relationshipOther,
+    this.registrationPeriodId,
   });
+  final String? registrationPeriodId;
   final String fullName, gender, relationship;
   final String? relationshipOther;
   final int age;
   Map<String, dynamic> toJson() => {
+    if (registrationPeriodId != null)
+      'registration_period_id': registrationPeriodId,
     'full_name': fullName.trim(),
     'age': age,
     'gender': gender,
@@ -75,7 +79,15 @@ class AppFailure implements Exception {
   final String code;
 }
 
+class RegistrationPeriod {
+  const RegistrationPeriod(this.id, this.hours);
+  final String id;
+  final int hours;
+}
+
 abstract class GuardianRepository {
+  Future<List<RegistrationPeriod>> registrationPeriods();
+
   /// Server-owned role, resolved without assuming a Guardian profile.
   Future<String> accountRole();
   Future<GuardianProfile> profile();
@@ -100,6 +112,7 @@ abstract class GuardianRepository {
 
   /// Account-level: one Guardian QR, not one per case.
   Future<GuardianVerification> accountVerification();
+  Future<List<String>> activeFoundReportIds();
   Future<MissingCase> cancelCase(String id);
   Future<MissingCase> resolveCase(String id);
 

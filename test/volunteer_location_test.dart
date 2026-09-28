@@ -10,8 +10,13 @@ class LocationPlatform extends GeolocatorPlatform {
   LocationPermission permission = LocationPermission.denied;
   LocationPermission response = LocationPermission.denied;
   bool enabled = true;
+  bool failStream = false;
   int requests = 0, settings = 0, streams = 0;
   final positions = StreamController<Position>.broadcast();
+  final services = StreamController<ServiceStatus>.broadcast();
+  LocationSettings? lastSettings;
+  @override
+  Stream<ServiceStatus> getServiceStatusStream() => services.stream;
   @override
   Future<LocationPermission> checkPermission() async => permission;
   @override
@@ -37,6 +42,8 @@ class LocationPlatform extends GeolocatorPlatform {
   @override
   Stream<Position> getPositionStream({LocationSettings? locationSettings}) {
     streams++;
+    if (failStream) throw StateError("test stream unavailable");
+    lastSettings = locationSettings;
     return positions.stream;
   }
 }
@@ -55,6 +62,7 @@ void main() {
   tearDown(() async {
     GeolocatorPlatform.instance = previous;
     await platform.positions.close();
+    await platform.services.close();
   });
   test(
     'First use asks once; denial never repeatedly prompts on re-entry',
@@ -145,4 +153,140 @@ void main() {
     expect(location.coordinates, isNull);
     location.dispose();
   });
+
+  test(
+    'No estimate and transient fix errors do not revoke granted access',
+    () async {
+      platform.permission = LocationPermission.whileInUse;
+      final location = VolunteerLocation();
+      await location.initialize();
+      expect(location.accessGranted, isTrue);
+      expect(location.coordinates, isNull);
+      platform.positions.addError(TimeoutException('test fix unavailable'));
+      await pumpEventQueue();
+      expect(location.accessGranted, isTrue);
+      await location.request(askPermission: false); // Next recovery heartbeat.
+      platform.positions.add(fix());
+      await pumpEventQueue();
+      expect(location.coordinates, isNotNull);
+      location.dispose();
+    },
+  );
+
+  test(
+    'Synchronous stream failure does not turn valid permission into denial',
+    () async {
+      platform.permission = LocationPermission.whileInUse;
+      platform.failStream = true;
+      final location = VolunteerLocation();
+      await location.initialize();
+      expect(location.accessGranted, isTrue);
+      expect(location.coordinates, isNull);
+      platform.failStream = false;
+      await location.request(askPermission: false);
+      platform.positions.add(fix());
+      await pumpEventQueue();
+      expect(location.coordinates, isNotNull);
+      location.dispose();
+    },
+  );
+
+  test(
+    'Disabled services stop subscription; re-enabled services restore access',
+    () async {
+      platform.permission = LocationPermission.whileInUse;
+      final location = VolunteerLocation();
+      await location.initialize();
+      platform.enabled = false;
+      platform.services.add(ServiceStatus.disabled);
+      await pumpEventQueue();
+      expect(location.accessGranted, isFalse);
+      expect(platform.positions.hasListener, isFalse);
+      platform.enabled = true;
+      platform.services.add(ServiceStatus.enabled);
+      await pumpEventQueue();
+      expect(location.accessGranted, isTrue);
+      expect(platform.positions.hasListener, isTrue);
+      location.dispose();
+    },
+  );
+
+  test(
+    'Permission revoked on resume blocks participation and cancels updates',
+    () async {
+      platform.permission = LocationPermission.whileInUse;
+      final location = VolunteerLocation();
+      await location.initialize();
+      platform.permission = LocationPermission.denied;
+      location.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await pumpEventQueue();
+      expect(location.accessGranted, isFalse);
+      expect(platform.positions.hasListener, isFalse);
+      location.dispose();
+    },
+  );
+
+  test('Explicit participation config continues fixes in background and stops on logout', () async {
+    platform.permission = LocationPermission.whileInUse;
+    final location = VolunteerLocation();
+    await location.initialize();
+    await location.authorizeBackgroundParticipation(
+      title: 'Radd',
+      description: 'Event participation',
+      channelName: 'Event location',
+    );
+    final settings = platform.lastSettings as AndroidSettings;
+    expect(settings.foregroundNotificationConfig!.setOngoing, isTrue);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    platform.positions.add(fix());
+    await pumpEventQueue();
+    expect(location.coordinates, isNotNull);
+    await location.stop();
+    expect(platform.positions.hasListener, isFalse);
+    expect(location.coordinates, isNull);
+    expect(location.accessGranted, isFalse);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await location.request();
+    expect(platform.positions.hasListener, isFalse);
+    location.dispose();
+  });
+
+  test('Background service cannot be started from a hidden activity', () async {
+    platform.permission = LocationPermission.whileInUse;
+    final location = VolunteerLocation();
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await location.authorizeBackgroundParticipation(
+      title: 'Radd',
+      description: 'Event participation',
+      channelName: 'Event location',
+    );
+    expect(location.continuesInBackground, isFalse);
+    expect(platform.streams, 0);
+    location.dispose();
+  });
+
+  test(
+    'Dispose during permission request cannot start a late subscription',
+    () async {
+      platform.permission = LocationPermission.whileInUse;
+      final location = VolunteerLocation();
+      final pending = location.request();
+      location.dispose();
+      await pending;
+      expect(platform.streams, 0);
+    },
+  );
 }
+
+Position fix() => Position(
+  latitude: 24.7,
+  longitude: 46.7,
+  timestamp: DateTime.now(),
+  accuracy: 10,
+  altitude: 0,
+  altitudeAccuracy: 0,
+  heading: 0,
+  headingAccuracy: 0,
+  speed: 0,
+  speedAccuracy: 0,
+);

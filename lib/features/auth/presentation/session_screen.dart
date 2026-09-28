@@ -95,6 +95,9 @@ class _SessionScreenState extends State<SessionScreen> {
     } catch (error) {
       if (!mounted || revision != _revision) return;
       final code = error is AppFailure ? error.code : 'service';
+      debugPrint(
+        'Radd session resolution failed: code=$code type=${error.runtimeType}',
+      );
       if (code == 'notFound' && widget.expectedRole == 'guardian') {
         Navigator.of(context).pushReplacementNamed(AppRoutes.completeProfile);
         return;

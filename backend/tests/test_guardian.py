@@ -17,7 +17,7 @@ from app import firebase as firebase_module
 
 def test_protected_endpoints_require_token():
     with TestClient(app) as client:
-        for path in ("/v1/session", "/v1/guardian", "/v1/individuals", "/v1/individuals/other", "/v1/individuals/other/photo"):
+        for path in ("/v1/registration-periods", "/v1/session", "/v1/guardian", "/v1/individuals", "/v1/individuals/other", "/v1/individuals/other/photo"):
             assert client.get(path).status_code == 401
         assert client.get("/health").json() == {"status": "ok"}
 

@@ -27,6 +27,7 @@ class FcmUnregister(BaseModel):
     token: str = Field(min_length=1, max_length=4096)
 
 class IndividualInput(BaseModel):
+    registration_period_id: str | None = Field(default=None, min_length=1, max_length=128, pattern=r"^[^/]+$")
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
     full_name: str = Field(min_length=1, max_length=120)
     age: int = Field(ge=0, le=130, strict=True)

@@ -16,6 +16,9 @@ const _detailFailures = {
   'case_closed': 'caseClosed',
   'report_already_submitted': 'reportAlreadySubmitted',
   'photo_expired': 'photoExpired',
+  'registration_unavailable': 'photoExpired',
+  'registration_configuration_required': 'eventUnavailable',
+  'invalid_registration_period': 'eventUnavailable',
 };
 
 class GuardianApi implements GuardianRepository {
@@ -50,10 +53,13 @@ class GuardianApi implements GuardianRepository {
       );
     }
     if (!kDebugMode && uri.scheme != 'https') throw const AppFailure('service');
+    var stage = 'token';
+    int? status;
     try {
       return await (() async {
         final jwt = await token();
         if (jwt == null) throw const AppFailure('unauthorized');
+        stage = 'http';
         final request = http.Request(method, uri)
           ..headers.addAll({
             'Authorization': 'Bearer $jwt',
@@ -64,6 +70,7 @@ class GuardianApi implements GuardianRepository {
         final response = await http.Response.fromStream(
           await _client.send(request),
         );
+        status = response.statusCode;
         if (response.statusCode >= 400) {
           Object? decoded;
           try {
@@ -85,10 +92,18 @@ class GuardianApi implements GuardianRepository {
         }
         return response;
       })().timeout(const Duration(seconds: 30));
-    } on TimeoutException {
-      throw const AppFailure('network');
-    } on http.ClientException {
-      throw const AppFailure('network');
+    } catch (error) {
+      if (kDebugMode && path == '/session') {
+        // No token, account identifier, response body or exception payload.
+        debugPrint(
+          'Radd session GET /v1/session failed: stage=$stage '
+          'status=${status ?? "none"} type=${error.runtimeType}',
+        );
+      }
+      if (error is TimeoutException || error is http.ClientException) {
+        throw const AppFailure('network');
+      }
+      rethrow;
     }
   }
 
@@ -133,6 +148,19 @@ class GuardianApi implements GuardianRepository {
           ),
         ),
       );
+  @override
+  Future<List<RegistrationPeriod>> registrationPeriods() async {
+    final data = jsonDecode(
+      (await _request('GET', '/registration-periods')).body,
+    ) as Map<String, dynamic>;
+    return (data['options'] as List)
+        .map(
+          (p) =>
+              RegistrationPeriod(p['id'] as String, p['duration_hours'] as int),
+        )
+        .toList();
+  }
+
   @override
   Future<List<Individual>> individuals() async =>
       _list(await _request('GET', '/individuals'))
@@ -210,6 +238,12 @@ class GuardianApi implements GuardianRepository {
   Future<void> readNotification(String id) async {
     await _request('PUT', '/notifications/${Uri.encodeComponent(id)}/read');
   }
+
+  @override
+  Future<List<String>> activeFoundReportIds() async =>
+      _list(await _request('GET', '/guardian/found-reports'))
+          .map((value) => (value as Map<String, dynamic>)['id'] as String)
+          .toList();
 
   @override
   Future<GuardianVerification> accountVerification() async =>

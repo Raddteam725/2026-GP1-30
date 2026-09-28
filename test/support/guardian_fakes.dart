@@ -43,6 +43,14 @@ class TestAuth implements AuthService {
 
 class TestRepository implements GuardianRepository {
   @override
+  Future<List<String>> activeFoundReportIds() async => foundReportIds;
+  List<String> foundReportIds = [];
+  @override
+  Future<List<RegistrationPeriod>> registrationPeriods() async => const [
+    RegistrationPeriod('test-short', 2),
+    RegistrationPeriod('test-long', 48),
+  ];
+  @override
   Future<String> accountRole() async => 'guardian';
   GuardianProfile person = const GuardianProfile(
     fullName: 'Test Guardian',

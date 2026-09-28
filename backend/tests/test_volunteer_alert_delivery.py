@@ -184,8 +184,7 @@ def test_unchanged_device_heartbeat_does_not_redispatch_all_cases(db, sends, mon
     device('one', latitude=24.7, longitude=46.7)
     dispatch.assert_not_called()
     device('one', latitude=24.8, longitude=46.7)
-    dispatch.assert_called_once()
-    assert dispatch.call_args.kwargs['recipient'] == 'one'
+    dispatch.assert_not_called()
 
 
 def test_reunited_delivery_uses_successful_qr_handover_and_stable_history(db, sends, monkeypatch):
@@ -240,9 +239,9 @@ def test_normal_id_token_renewal_extends_same_device_without_duplicate_registrat
     assert len(registrations)==1
     assert registrations[0].to_dict()['session_expires_at']==9999999999
     assert registrations[0].to_dict()['session_auth_time']==1000
-    assert sends.call_count==1
+    assert sends.call_count==0
     vol('one', exp=9999999999, auth_time=1000).register_device(VolunteerDevice(token='session-device'))
-    assert sends.call_count==1
+    assert sends.call_count==0
 
 
 def test_session_validation_failure_fails_closed_and_retries(db, sends, monkeypatch):
@@ -265,3 +264,43 @@ def test_confirmed_only_recipient_without_history_or_device_is_not_lost(db, send
     note = vol('one').user.collection('volunteer_notifications').document(identifier + '-' + outcome).get()
     assert note.to_dict()['kind'] == outcome
     assert sends.call_count == 0
+
+
+def test_registration_rotation_logout_history_and_refresh_never_replay(db, sends):
+    device('one')
+    _, identifier = case()
+    assert sends.call_count == 1
+    ref = vol().user.collection('volunteer_notifications').document(identifier + '-new')
+    original = ref.get().to_dict()
+    device('one')
+    volunteer_alerts.dispatch(db, identifier)
+    vol().notifications_list()
+    assert sends.call_count == 1
+    for registration in vol().user.collection('fcm_registrations').stream():
+        registration.reference.delete() # Isolated fixture models logout.
+    vol('one', exp=9999999999).register_device(VolunteerDevice(token='rotated-device'))
+    volunteer_alerts.dispatch(db, identifier) # Recovery job must not replay either.
+    assert sends.call_count == 1
+    assert ref.get().to_dict() == original
+    from test_cases import guardian_with_individual
+    from app.case_models import CaseCreate
+    guardian, individual = guardian_with_individual('next-guardian')
+    new_id = CaseService(guardian).create(CaseCreate(individual_id=individual))['id']
+    assert sends.call_count == 2
+    assert sends.call_args.args[0].data['case_id'] == new_id
+    assert sends.call_args.args[0].android.notification.channel_id == 'radd_volunteer_alerts'
+
+
+def test_consent_change_blocks_queued_push_and_new_notification_history(db, sends, monkeypatch):
+    from app import delivery_queue
+    device('one')
+    pending = []
+    monkeypatch.setattr(delivery_queue, 'submit', lambda key, operation: pending.append(operation))
+    _, identifier = case()
+    assert pending
+    db.data['users/one']['privacy_version'] = 'obsolete'
+    for send in pending:
+        send()
+    assert sends.call_count == 0
+    _, next_id = case()
+    assert not db.collection('users').document('one').collection('volunteer_notifications').document(next_id + '-new').get().exists

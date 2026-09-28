@@ -136,6 +136,7 @@ class GuardianQrScreen extends StatefulWidget {
 
 class _GuardianQrScreenState extends State<GuardianQrScreen> {
   Future<List<MissingCase>>? _cases;
+  Future<List<String>>? _foundReports;
   List<MissingCase> _active = const [];
   String? _selectedId;
   GuardianVerification? _code;
@@ -172,6 +173,7 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
   }
 
   Future<List<MissingCase>> _loadCases() async {
+    _foundReports = AppServices.of(context).guardian.activeFoundReportIds();
     final generation = ++_caseRequest;
     final all = await AppServices.of(context).guardian.cases();
     // Most relevant first: the case currently awaiting this Guardian's
@@ -328,6 +330,32 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
           style: const TextStyle(color: mutedText, fontSize: 14, height: 1.4),
         ),
         const SizedBox(height: 20),
+        FutureBuilder<List<String>>(
+          future: _foundReports,
+          builder: (context, state) {
+            if (state.hasError) {
+              return ErrorNotice(
+                message: failureMessage(state.error!, s),
+                onRetry: _reload,
+              );
+            }
+            return Column(
+              children: [
+                for (final id in state.data ?? <String>[])
+                  GuardianPanel(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(s.vFoundReportTitle),
+                        Text(s.vFoundIdentifierHelp),
+                        SelectableText(id, textDirection: TextDirection.ltr),
+                      ],
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
         FutureBuilder<List<MissingCase>>(
           future: _cases,
           builder: (context, state) {

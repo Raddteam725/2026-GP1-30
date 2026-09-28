@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:radd/core/localization/generated/app_localizations.dart';
 import 'package:radd/features/volunteer/data/mock_volunteer_repository.dart';
 import 'package:radd/features/volunteer/presentation/volunteer_workspace.dart';
+import 'package:radd/features/volunteer/presentation/volunteer_consent_screen.dart';
 
 import 'volunteer_navigation_test.dart' show harness;
 
@@ -81,7 +82,23 @@ void main() {
       expect(find.text(s.edit), findsNothing);
       expect(find.text(s.accountInformation), findsOneWidget);
       await screenshot('profile');
-      await tester.ensureVisible(find.text(s.logout));
+      for (final title in [s.vTermsTitle, s.vPrivacyTitle]) {
+        await tester.scrollUntilVisible(
+          find.text(title),
+          150,
+          scrollable: find.byType(Scrollable).last,
+        );
+        await tester.tap(find.text(title));
+        await tester.pumpAndSettle();
+        expect(find.byType(VolunteerPolicyScreen), findsOneWidget);
+        await tester.tap(find.byType(BackButton));
+        await tester.pumpAndSettle();
+      }
+      await tester.scrollUntilVisible(
+        find.text(s.logout),
+        150,
+        scrollable: find.byType(Scrollable).last,
+      );
       await tester.tap(find.text(s.logout));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsOneWidget);

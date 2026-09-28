@@ -21,13 +21,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app import service, push
 from app.cases import CaseService
 from app.case_models import CaseCreate
-from firestore_fake import Database, Bucket
+from firestore_fake import Database, Bucket, configured_event
 from test_cases import guardian_with_individual
 
 @pytest.fixture
 def storage(monkeypatch):
     db, bucket = Database(), Bucket()
-    db.set(db.collection("events").document("test-event"), {"active": True})
+    db.set(db.collection("events").document("test-event"), configured_event())
     monkeypatch.setattr(service, "database", lambda: db)
     monkeypatch.setattr(service, "bucket", lambda: bucket)
     monkeypatch.setattr(service.firestore, "transactional", lambda f: f)

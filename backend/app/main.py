@@ -99,6 +99,16 @@ def unregister_fcm_token(value: FcmUnregister, s=Depends(service)):
 def update_profile(value: ProfileUpdate, s=Depends(service)):
     return s.save_profile(value)
 
+@app.get("/v1/registration-periods")
+def registration_periods(s=Depends(service)):
+    from .events import active_event
+    from .registration_retention import valid_periods
+    s.profile()
+    event = active_event(s.db)
+    options = valid_periods(event)
+    return {'event_id': event.id, 'ends_at': event.to_dict()['ends_at'],
+            'options': options, 'default_period_id': options[-1]['id']}
+
 @app.get("/v1/individuals")
 def individuals(s=Depends(service)):
     return s.list()
@@ -112,7 +122,7 @@ def individual(item_id: str, s=Depends(service)):
     if "/" in item_id or not item_id:
         raise HTTPException(404)
     from .service import public_individual
-    return public_individual(s.get(item_id))
+    return public_individual(s.get(item_id), s.db)
 
 @app.put("/v1/individuals/{item_id}")
 def update_individual(item_id: str, value: IndividualInput, s=Depends(service)):
@@ -172,3 +182,15 @@ def read_notification(notification_id: str, s=Depends(cases_service)):
 
 from .volunteer import router as volunteer_router
 app.include_router(volunteer_router)
+
+@app.get('/v1/guardian/found-reports')
+def guardian_found_reports(s=Depends(service)):
+    from .found_reports import IDENTIFIED_ACTIVE, found_status
+    from google.cloud.firestore_v1.base_query import FieldFilter
+    s.profile()
+    from .events import active_event
+    event_id = active_event(s.db).id
+    return [{'id': doc.id, 'status': found_status(doc.to_dict()),
+             'individual_id': doc.to_dict().get('individual_id')}
+            for doc in s.db.collection('found_reports').where(filter=FieldFilter('guardian_id', '==', s.uid)).stream()
+            if doc.to_dict().get('event_id') == event_id and found_status(doc.to_dict()) in IDENTIFIED_ACTIVE and not doc.to_dict().get('case_id') and not doc.to_dict().get('ended')]

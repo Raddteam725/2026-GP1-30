@@ -6,13 +6,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from firebase_admin import auth, firestore
 from app.firebase import database, firebase_app
 
-def provision(db, user, name, phone, volunteer_id):
+def provision(db, user, name, phone, volunteer_id, *, create_only=False):
     if not all(isinstance(value, str) and value.strip() for value in (user.uid, user.email, name, phone, volunteer_id)):
         raise ValueError('An existing email/password Auth account and non-empty profile fields are required')
     ref = db.collection('users').document(user.uid)
     @firestore.transactional
     def save(tx):
         current = ref.get(transaction=tx)
+        if create_only:
+            if current.exists:
+                raise ValueError('Refusing to overwrite an existing profile')
+            duplicates = db.collection('users').where(filter=firestore.FieldFilter(
+                'volunteer_id', '==', volunteer_id.strip())).stream(transaction=tx)
+            if any(doc.id != user.uid for doc in duplicates):
+                raise ValueError('Volunteer ID already in use')
         if current.exists and current.to_dict().get('role') != 'volunteer':
             raise ValueError('Refusing to replace an existing non-Volunteer account')
         data = {'role': 'volunteer', 'full_name': name.strip(), 'email': user.email,

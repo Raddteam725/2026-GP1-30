@@ -16,6 +16,9 @@ const account = {
   'uid': 'v',
   'full_name': 'Volunteer',
   'volunteer_id': 'V-1',
+  'consent_current': true,
+  'assigned': true,
+  'event_id': 'test-event',
   'active': true,
 };
 
@@ -58,11 +61,13 @@ void main() {
       token: () async => 'token',
       baseUrl: 'http://localhost',
       client: MockClient((request) async {
+        if (request.url.path == '/v1/volunteer') return json(account);
         paths.add(request.url.path);
         return json({'id': 'FR-1', 'ended': true, 'photo_available': false});
       }),
     );
     addTearDown(repo.dispose);
+    await repo.loadProfile();
     await expectLater(repo.loadReport('FR-1'), throwsStateError);
     expect(paths, ['/v1/volunteer/found-reports/FR-1']);
   });
@@ -142,6 +147,7 @@ void main() {
       token: () async => 'token',
       baseUrl: 'http://localhost',
       client: MockClient((request) async {
+        if (request.url.path == '/v1/volunteer') return json(account);
         expect(request.url.path, '/v1/volunteer/fcm-registrations');
         expect(request.headers['Authorization'], 'Bearer token');
         bodies.add(jsonDecode(request.body) as Map<String, dynamic>);
@@ -149,6 +155,7 @@ void main() {
       }),
     );
     addTearDown(repo.dispose);
+    await repo.loadProfile();
     await repo.registerDevice('fcm', 'ar', const Coordinates(24, 46));
     await repo.registerDevice('fcm', 'ar', null);
     expect(bodies.first, {
