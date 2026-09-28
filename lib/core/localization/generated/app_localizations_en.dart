@@ -156,7 +156,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get privacyRegisteredPhotosBody =>
-      'When an individual is registered under your care, their photograph is captured through the Radd application to provide a recent image that can be used for identification when needed.\n\nThe registered photograph may be used within the identification and reunification process, including to support face matching and the review of potential matches by authorized users. A potential match produced by the system is not treated as a final identification without human review and completion of the required verification steps.\n\nThe registered photograph is automatically deleted 24 hours after capture. After deletion, a new photograph must be captured through the application before the Guardian can submit a missing-person report for that individual.';
+      'The reference photograph and facial embedding belong to the individual’s identifiable event information. Their availability follows the registration period selected from the Active Event’s configured options, or the longest valid option by default. They do not expire solely because of photo capture age.\n\nWhen the period expires, identifiable information is deleted unless an associated active missing-person case requires it. In that case deletion is deferred until the case is terminal. Replacing a photograph does not extend the registration. AI suggestions never replace human confirmation and Guardian verification.';
 
   @override
   String get privacyVolunteerPhotosTitle =>
@@ -194,7 +194,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get privacyRetentionBody =>
-      'Radd applies different retention periods depending on the type of data:\n\n• Registered photograph: Deleted 24 hours after capture. A new photograph must be captured before a new missing-person report can be submitted for that individual after the previous photograph has been deleted.\n\n• Photograph captured by a Volunteer during identification: Deleted when the identification attempt concludes, whether or not a match is confirmed.\n\n• Identifiable personal and case data: Automatically deleted 24 hours after the associated case reaches a terminal status.\n\nRadd therefore does not retain identifiable personal or facial data associated with cases beyond the defined retention periods.';
+      'Registered individual identifiable event information, including the reference photograph and facial embedding, follows the selected event registration period. If no shorter option is selected, the longest valid configured period applies, without exceeding the event end date. Replacing a photograph or extending the event does not extend an existing registration. Deletion is deferred while an associated missing-person case remains active and is performed after it becomes terminal.\n\nFound-person photographs are separate temporary identification images. They are deleted when the attempt ends without a confirmed match or immediately after match confirmation.\n\nCase records follow their applicable retention policy; only permitted non-identifying statistics remain afterward.';
 
   @override
   String get privacyStatisticsTitle =>
@@ -834,7 +834,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get vScanHint =>
-      'Keep the case-specific code steady within the frame.';
+      'Keep the Guardian’s QR code steady within the frame.';
 
   @override
   String get vScanCode => 'Scan QR Code';
@@ -1010,7 +1010,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get vLocationHelp =>
-      'Allow location while using Radd to check whether you are within 500 meters of a reported location. General alerts remain available without location.';
+      'Location permission and device location services are required to participate in the event. Radd uses your location to prioritize nearby case alerts. If a location estimate is temporarily unavailable, you can continue participating.';
 
   @override
   String get vAllowLocation => 'Allow Location';
@@ -1324,11 +1324,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get photoExpiredError =>
-      'This photo has expired and can no longer be used. Take a new photo to continue.';
+      'This registration is expired or its retention period is unavailable. Create a new registration with a valid event period.';
 
   @override
   String get photoExpiredNotice =>
-      'This photo has expired and is no longer usable. Take a new photo before reporting this individual missing.';
+      'This registration is not eligible for a new missing-person report. A new photograph alone does not renew its registration period.';
 
   @override
   String get updatePhotoRequired => 'Update Photo';
@@ -1537,13 +1537,138 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get vLocationDeniedForever =>
-      'Location permission is disabled. Enable it in Settings to receive nearby alerts. General alerts remain available.';
+      'Enable location permission in Settings to continue participating in the event.';
 
   @override
   String get vLocationServicesDisabled =>
-      'Turn on device location services to receive nearby alerts.';
+      'Turn on device location services to continue participating in the event.';
+
+  @override
+  String get vLocationServiceTitle => 'Radd event participation';
+
+  @override
+  String get vLocationServiceBody =>
+      'Radd uses location for nearby case alerts during your authorized event participation, including while the app is in the background.';
+
+  @override
+  String get vLocationServiceChannel => 'Event location';
+
+  @override
+  String get vEventAuthorized => 'Authorized for Current Event';
+
+  @override
+  String get vEventUnassigned => 'Not Assigned to Current Event';
+
+  @override
+  String get vAccountStatus => 'Account status';
 
   @override
   String get vNotificationCaseUnavailable =>
       'This case is no longer available for an active search. Notifications and cases have been refreshed.';
+
+  @override
+  String get vJoinSearch => 'Join Search';
+
+  @override
+  String get vFindWithAi => 'Find Match with AI';
+
+  @override
+  String get vStandalonePending =>
+      'No missing-person report is associated with this individual. Your found report is saved. Match confirmation, Guardian verification and handover for standalone found reports are not available yet.';
+
+  @override
+  String get vLocationRequired => 'Location is required to participate';
+
+  @override
+  String get vAiReady =>
+      'Your found report is saved. Start AI-assisted identification, or use Manual Review when needed.';
+
+  @override
+  String get vAiError =>
+      'Identification could not be completed. Please try again or continue with Manual Review.';
+
+  @override
+  String get vNoEligibleRegistrations =>
+      'No registered individuals are currently eligible for review in this event.';
+
+  @override
+  String get registrationPeriodTitle => 'Registration period';
+
+  @override
+  String get registrationPeriodHint =>
+      'The period starts when registration succeeds and cannot exceed the event end. Replacing the photograph does not extend it.';
+
+  @override
+  String get registrationPeriodDefault => 'Longest available period (default)';
+
+  @override
+  String registrationPeriodHours(int hours) {
+    return '$hours hours';
+  }
+
+  @override
+  String get registrationPeriodUnavailable =>
+      'Registration periods are not available for this event. Please try again later.';
+
+  @override
+  String get vFoundReportTitle => 'Found Individual Report';
+
+  @override
+  String get vIdentityConfirmed => 'Identity Confirmed';
+
+  @override
+  String get vIdentificationInProgress => 'Identification in Progress';
+
+  @override
+  String get vFoundIdentifierHelp =>
+      'Show the Found Report identifier from the Guardian’s signed-in Radd account. Compare the complete identifier before confirming verification.';
+
+  @override
+  String get vFoundReportIdentifier => 'Found Report Identifier';
+
+  @override
+  String get vConfirmIdentity => 'Confirm Identity';
+
+  @override
+  String get vTermsDocument =>
+      '### Purpose and scope\nRadd supports event-based reporting, searching, identification, Guardian verification\nand reunification. It provides coordination tools; a possible identification result\nis not proof of identity or authorization to hand over a person. These draft terms\ncover the Guardian and Volunteer functions described below. The Admin interface and\nactual AI face-matching engine are not currently implemented.\n\n### Accounts and authorized roles\nGuardians use their authenticated accounts to manage individuals under their care\nand genuine missing-person reports. Volunteers use accounts provisioned through the\nproject\'s authorized account-management process; they do not self-register. Keep\naccount access private and use only the data and actions authorized for your role.\nDo not use another person\'s session, credentials or verification code to obtain\nunauthorized access.\n\nAn enabled Volunteer account is separate from assignment to an event. Volunteer\nevent participation requires authentication, an enabled account, assignment to the\ncurrent Active Event, required device location permission and enabled Location\nServices. Deactivation, removal of assignment or loss of the required device access\ncan stop participation. The Digital Volunteer ID reflects the account and assignment\nchecks; it does not replace Guardian verification.\n\n### Location as a participation condition\nLocation access is required during Volunteer Active Event participation for event\ncoordination and proximity-based prioritization. Where supported by the Android\nimplementation, location may continue updating while Radd is in the background,\nusing the required foreground location service and ongoing notification. Event-related\nlocation collection must stop when participation is no longer authorized, including\nlogout, deactivation, unassignment, loss of Active Event access, permission revocation\nor disabled Location Services.\n\nAndroid controls permission choices. Acceptance of these terms does not grant Android\npermission. If permission is denied/revoked or Location Services are off, event actions\nremain blocked until the conditions are restored. If permission and services are valid\nbut a location estimate is temporarily unavailable, participation and standard alerts\nremain available; proximity prioritization resumes when a suitable estimate returns.\n\nGuardian location follows a different rule. In the guided missing report, current\ncoordinates are used as the last-seen location only when the Guardian confirms that\nthey are at that location and permits access. This is not the Volunteer participation\nlocation-update rule.\n\n### Registration and reports\nGuardians should provide information they are authorized to provide about individuals\nunder their care and accurate details to support identification. Registration uses the\nsingle Active Event and its currently valid configured periods. The selected period,\nor the longest currently valid option if none is selected, determines the stored\nregistration expiry. Replacing a photograph or extending the event does not renew an\nexisting registration automatically.\n\nGuardian Missing Cases and Volunteer Found Individual Reports are distinct. Starting\nor joining a search participates in the same Missing Case; it does not create a new\ncase. A standalone Found Report can exist without a Guardian missing report and does\nnot count as a Guardian Missing Case. An actual later Guardian report may link to the\nexisting identification workflow without duplicating verification or handover.\n\n### Identification and handling information\nThe camera/AI path is the primary planned identification method. It requires an in-app\ncaptured photograph. AI is presently unavailable: Radd must not present invented\nmatches or scores. When integrated later, AI results will be possible matches requiring\nhuman review and explicit confirmation, not automatic identity confirmation.\n\nManual Review is an operational fallback and can be opened without camera capture or\nan AI failure. It searches eligible registrations for the Active Event. Browsing or\nselecting a profile does not confirm identity and does not authorize access to Guardian\ncontact details. Explicit manual confirmation can create a standalone Found Report\nwithout a photograph. Do not capture substitute or fabricated images for this purpose.\n\nUse personal information and authorized Guardian contact details only for the approved\nsearch, identification and reunification work. Do not share them outside that purpose\nor try to access another Volunteer\'s privately owned Found Report.\n\n### Verification and handover\nAfter identity confirmation, the authorized Volunteer may coordinate with the associated\nGuardian. The legitimate Guardian/context must be verified using the account QR or\napproved identifier fallback. The fallback requires viewing the relevant identifier\ninside the Guardian\'s authenticated Radd account on their own device. A failed check\nblocks handover. A successful check alone does not mark Reunited: the Volunteer must\nexplicitly confirm handover after reunification. Do not bypass these steps.\n\n### Notifications, availability and limitations\nStandard Missing Case alerts and nearby priority alerts support coordination; priority\nuses the configured prototype radius, currently 500 metres, and a suitable reported\nlast-seen location and Volunteer estimate. A priority alert does not create a separate\ncase. Notification delivery depends on an eligible authenticated session, Android\npermissions/settings, network connectivity and service availability. History may remain\nvisible without being replayed as a new alert. Radd does not guarantee instant delivery,\ncontinuous connectivity or an accurate location estimate at every moment.\n\n### Agreement and changes\nThese documents require review before they become an enforced consent requirement.\nThe planned Volunteer gate will request explicit acceptance of specified Terms and\nPrivacy versions; login alone will not constitute acceptance. A later required version\nmay require renewed acceptance. Acceptance will not bypass account, assignment,\nlocation, identification or Guardian verification requirements.';
+
+  @override
+  String get vPrivacyDocument =>
+      '### Scope and people concerned\nThis draft describes data used by Radd\'s current Guardian and Volunteer workflows,\nincluding information about children, older adults and other people registered under\nGuardian care. It also identifies the future AI boundary rather than claiming an\noperational face-matching service. The project owner must provide the responsible\noperator\'s identity and a privacy contact before final approval.\n\n### Account and event data\nRadd processes account identifiers, names, email addresses, phone numbers and roles\nas needed for authentication and authorized coordination. Volunteer records additionally\ninclude the Volunteer ID, enabled status and event assignment. Authentication uses\nFirebase Authentication; the shared FastAPI service enforces role and event access\nagainst the shared Firebase data. Account provision/management is separate from a\nfuture consent record. The planned consent record contains accepted document versions\nand server acceptance times, not an assertion that Android permission was granted.\n\n### Registered individuals and photographs\nA Guardian supplies a registered individual\'s name, age, gender, relationship and\nreference photograph, with applicable descriptive information. Records belong to an\nevent and an established registration period. Photographs are identifiable information.\nAny future facial embedding derived from them must follow the same registration expiry\nand deletion controls. No actual AI matching engine is operating in the current build.\n\nThe server records registration start, expiry, period ID and duration. Only currently\nvalid event options may be selected; the longest valid option applies by default.\nNeither photo replacement nor event extension changes a previously established expiry.\nLegacy records with unknown retention periods are not silently made eligible.\n\n### Missing Cases, Found Reports and identification\nMissing Cases contain the information needed to search, status updates and participation\nrecords. Guided details may include clothing, distinguishing descriptions and last-seen\ninformation. A Found Report is a separate record of a Volunteer\'s identification work;\nit may exist before a Guardian submits a missing report.\n\nCamera-based Found photographs are temporary identification images. They are deleted\nwhen the attempt ends without a confirmed match or immediately after confirmed identity.\nInterrupted Storage deletion uses the existing retry mechanism; deleted Found photos\nare not required for subsequent verification/handover and do not become profile photos.\nManual-only confirmation may create a Found Report without any captured photograph.\n\nManual Review exposes eligible registered profile information for the current Active\nEvent. Selecting a profile is not confirmation. Guardian contact is available only after\nexplicit confirmation in an authorized identification/reunification context. Any future\nAI scores will be possible-match suggestions, subject to human confirmation.\n\n### Location\nVolunteer location permission and enabled services are mandatory for Active Event\nparticipation. Coordinates may update during valid participation, including in the\nbackground through the implemented Android location service. The purpose is event\ncoordination and proximity prioritization. Event-related location access stops when\nparticipation conditions cease. The device estimate may be unavailable or insufficiently\naccurate; this removes proximity eligibility temporarily without equating it to denied\npermission. Radd does not need a continuous historical movement trail for this purpose;\nthe implementation uses the latest available estimate and its freshness.\n\nGuardian device coordinates are used as a reported last-seen location only after the\nGuardian confirms that the device is at that location and grants permission through\nthe guided reporting flow. A textual last-seen description can be supplied instead.\nGuardian location is not subject to the continuous Volunteer participation rule.\n\n### Verification and completed outcomes\nQR/identifier checks bind verification to the legitimate Guardian and workflow. QR\nchallenges are short-lived and single-use. Verification receipts record the relevant\ncontext, participants, method and time. A successful check enables explicit handover;\nit does not complete reunification automatically.\n\nOn standalone Found Report Reunited, identifying report details are removed and the\nminimal record retains only the internal report identifier, origin, event, outcome,\nnecessary creation/update/completion timestamps, confirming Volunteer reference and\nverification method. It does not retain Guardian contact, person identity/snapshot,\nFound photograph or QR secret. A Volunteer reference is retained for approved\nper-Volunteer statistics; it must not be represented as fully anonymous data.\n\n### Retention and deletion holds\nRegistered identifiable event information, its photograph and any future embedding\nfollow the registration\'s stored expiry. If an approved active Missing Case or an\nidentified active Found Report still requires that information, deletion alone is\ndeferred. Expiry is not extended and the record is not generally eligible again for\nunrelated identification or new reporting. When no approved active hold remains, due\ncleanup can delete the expired identifiable registration. A still-valid registration\nis not deleted merely because one Found Report completes. Account records are not\ndeleted by these workflow cleanup operations.\n\nTerminal Missing Cases use their separate existing retention/minimization rules.\nThe current local cleanup worker checks periodically when enabled; access restrictions\nand deletion scheduling are separate, and a failed storage operation is retried rather\nthan falsely reported as deleted. No production scheduler has been selected. This draft\ndoes not invent a new retention duration for ended, unmatched report metadata, consent\nhistory or device presentation memory; those lifecycle details remain review items.\n\n### Notifications and service access\nRadd stores notification history and applicable read state with stable event IDs.\nFCM device registrations associate a token with the authenticated session, event,\nlanguage and available proximity estimate. Tokens are not passwords. Standard and\npriority Missing Case notifications may be displayed by Android in the background or\nby Radd in the foreground, subject to permissions and session eligibility. History\nfetches and device registration are not requests to replay old notifications. Local\npresentation memory stores handled event IDs, scoped to the user/event, to suppress\nrepeated foreground banners. Notification payloads avoid person/contact details;\nopening a case performs authenticated authorization checks.\n\n### Protection, providers and limits\nThe shared backend uses Firebase Authentication, Firestore, Storage and Cloud Messaging\nfor the implemented functions. Access is restricted by role, event and workflow rather\nthan by hiding buttons alone. Development diagnostics should exclude credentials and\npersonal payloads. Network/service failures and implementation limitations may occur;\nthis notice does not promise absolute security, guaranteed delivery or perfect matching.\nProduction hosting, operator contact, requests for access/correction/deletion, and any\nadditional required legal disclosures must be finalized before publication. No automatic\nrights-request service or production deployment is claimed by this draft.';
+
+  @override
+  String get vConsentTitle => 'Welcome to Radd';
+
+  @override
+  String get vConsentIntro =>
+      'Before using Radd as a Volunteer, please review the following conditions and Radd’s Terms of Use and Privacy Policy.';
+
+  @override
+  String get vConsentConditions =>
+      'By participating as a Volunteer, you acknowledge that:\n\n• Location access is required during active event participation.\n\n• Radd may update your location while you are actively participating, including while the app is running in the background, to support event coordination and proximity-based Volunteer prioritization.\n\n• If location permission is denied or revoked, or Location Services are disabled, you cannot access the event workflow until location access is restored.\n\n• You may access personal and Guardian information only when authorized and only for identification and reunification purposes.\n\n• Potential AI or Manual Review matches do not confirm identity automatically. Identity must be explicitly confirmed, and Guardian verification is required before handover.\n\n• You must use only your authorized Volunteer account and must not share protected information outside the approved Radd workflow.';
+
+  @override
+  String get vTermsTitle => 'Terms of Use';
+
+  @override
+  String get vPrivacyTitle => 'Privacy Policy';
+
+  @override
+  String get vConsentCheckbox =>
+      'I have read and agree to Radd’s Terms of Use and Privacy Policy.';
+
+  @override
+  String get vConsentContinue => 'Accept & Continue';
+
+  @override
+  String get vConsentNotNow => 'Not Now';
+
+  @override
+  String get vDevelopmentPolicy =>
+      'Development / academic project documents — not legally reviewed production policies.';
+
+  @override
+  String get vConsentUnavailable =>
+      'The required document version is not available in this app. Please update Radd and try again.';
 }

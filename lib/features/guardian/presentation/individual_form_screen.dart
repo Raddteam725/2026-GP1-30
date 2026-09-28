@@ -36,6 +36,32 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
   Uint8List? _photo;
   bool _busy = false, _photoError = false;
   Object? _error;
+  List<RegistrationPeriod>? _periods;
+  String? _periodId;
+  bool _requestedPeriods = false, _periodError = false;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_requestedPeriods && widget.individual == null) {
+      _requestedPeriods = true;
+      _loadPeriods();
+    }
+  }
+
+  Future<void> _loadPeriods() async {
+    try {
+      final periods = await AppServices.of(context).guardian
+          .registrationPeriods();
+      if (!mounted) return;
+      setState(() {
+        _periods = periods;
+        _periodError = periods.isEmpty;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _periodError = true);
+    }
+  }
+
   @override
   void dispose() {
     _scroll.dispose();
@@ -57,6 +83,7 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
 
   Future<void> _save() async {
     if (_busy) return;
+    if (widget.individual == null && (_periods == null || _periodError)) return;
     final valid = _form.currentState!.validate();
     setState(() => _photoError = _photo == null && widget.individual == null);
     if (_photoError) {
@@ -76,6 +103,7 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
     try {
       await AppServices.of(context).guardian.saveIndividual(
         IndividualInput(
+          registrationPeriodId: widget.individual == null ? _periodId : null,
           fullName: _name.text,
           age: int.parse(_age.text.trim()),
           gender: _gender!,
@@ -341,10 +369,53 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
             ),
           ),
           const SizedBox(height: 24),
+          if (!editing)
+            GuardianPanel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    s.registrationPeriodTitle,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(s.registrationPeriodHint),
+                  if (_periodError) ...[
+                    Text(s.registrationPeriodUnavailable),
+                    TextButton(
+                      onPressed: _busy ? null : _loadPeriods,
+                      child: Text(s.retry),
+                    ),
+                  ] else if (_periods == null)
+                    const LinearProgressIndicator()
+                  else
+                    DropdownButtonFormField<String>(
+                      key: const ValueKey('registration-period'),
+                      initialValue: _periodId,
+                      isExpanded: true,
+                      hint: Text(s.registrationPeriodDefault),
+                      items: [
+                        for (final period in _periods!)
+                          DropdownMenuItem(
+                            value: period.id,
+                            child: Text(
+                              s.registrationPeriodHours(period.hours),
+                            ),
+                          ),
+                      ],
+                      onChanged: _busy
+                          ? null
+                          : (value) => setState(() => _periodId = value),
+                    ),
+                ],
+              ),
+            ),
           if (_error != null) ErrorNotice(message: failureMessage(_error!, s)),
           PrimaryButton(
             label: editing ? s.saveChanges : s.save,
-            onPressed: _save,
+            onPressed: !editing && (_periods == null || _periodError)
+                ? null
+                : _save,
             isLoading: _busy,
           ),
         ],

@@ -20,6 +20,9 @@ void main() {
             'uid': 'volunteer',
             'full_name': 'Volunteer',
             'volunteer_id': 'V-1',
+            'consent_current': true,
+            'assigned': true,
+            'event_id': 'test-event',
             'active': true,
           };
         } else {
@@ -56,6 +59,7 @@ void main() {
     final account = await repo.loadProfile();
     final report = FoundReport(
       id: 'FR-real',
+      caseId: 'RD-real',
       volunteerUid: account.uid,
       photo: '',
     );

@@ -66,6 +66,8 @@ class MockVolunteerRepository extends VolunteerRepository {
     name: LocalizedData('Ahmed Khalid', 'أحمد خالد'),
     volunteerId: 'VOL-1024',
     active: true,
+    assigned: true,
+    eventId: 'preview-event',
     email: 'ahmed.khalid@example.com',
     phone: '+966 55 123 4567',
   );

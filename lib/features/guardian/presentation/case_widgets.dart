@@ -437,9 +437,8 @@ class _ReportMissingActionState extends State<ReportMissingAction> {
     if (mounted) widget.onChanged();
   }
 
-  Future<void> _updatePhoto() async {
-    await Navigator.of(context)
-        .pushNamed(AppRoutes.editIndividual, arguments: widget.individual);
+  Future<void> _newRegistration() async {
+    await Navigator.of(context).pushNamed(AppRoutes.addIndividual);
     if (mounted) widget.onChanged();
   }
 
@@ -506,9 +505,9 @@ class _ReportMissingActionState extends State<ReportMissingAction> {
               foregroundColor: AppColors.error,
               side: const BorderSide(color: AppColors.error),
             ),
-            onPressed: _updatePhoto,
+            onPressed: _newRegistration,
             icon: const Icon(Icons.camera_alt_outlined),
-            label: Text(s.updatePhotoRequired),
+            label: Text(s.registerIndividual),
           ),
         ] else
           Align(
@@ -556,7 +555,7 @@ class _ReportMissingActionState extends State<ReportMissingAction> {
       button: true,
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: _busy ? null : (expired ? _updatePhoto : _report),
+        onTap: _busy ? null : (expired ? _newRegistration : _report),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
@@ -570,7 +569,7 @@ class _ReportMissingActionState extends State<ReportMissingAction> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : Text(
-                  expired ? s.updatePhotoRequired : s.reportMissing,
+                  expired ? s.registerIndividual : s.reportMissing,
                   style: TextStyle(
                     color: color,
                     fontSize: 12,

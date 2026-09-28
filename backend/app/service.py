@@ -28,29 +28,23 @@ def ensure_deletable(data):
     # change under it, so this rejects both delete and edit while active_case_id
     # is set. Case creation/cancellation must update this field in the same
     # transaction as the case's own status change.
-    if data.get("active_case_id"):
+    if data.get("active_case_id") or data.get("active_found_report_id"):
         raise HTTPException(409, detail="active_case")
 
-# Independent of any event/case timer: a registered individual's photo is only
-# ever "current" for exactly 24 hours from its own capture time (Firestore's
-# server clock, never a client-supplied value -- see save()/photo_expired()).
-PHOTO_FRESHNESS = timedelta(hours=24)
+from .registration_retention import registration_available, establish
 
-def photo_expired(data):
-    captured = data.get("photo_captured_at")
-    # No authoritative capture time on record (never captured, or pre-dates
-    # this field) is treated as expired -- freshness is never assumed absent
-    # server-stamped proof.
-    if not isinstance(captured, datetime):
-        return True
-    return datetime.now(timezone.utc) - captured >= PHOTO_FRESHNESS
 
-def public_individual(doc):
+def photo_expired(data, db=None, tx=None, *, case_context=False):
+    # Compatibility API name: now registration validity, never photograph age.
+    return not registration_available(data, db, tx, case_context=case_context)
+
+def public_individual(doc, db=None):
     data = doc.to_dict()
     return {**{k: data[k] for k in ("full_name", "age", "gender", "relationship")},
         "relationship_other": data.get("relationship_other"),
         "id": doc.id, "active_case_id": data.get("active_case_id"),
-        "photo_expired": photo_expired(data)}
+        "registration_expires_at": data.get("registration_expires_at"),
+        "photo_expired": photo_expired(data, db)}
 
 def normalize_photo(encoded):
     try:
@@ -199,14 +193,13 @@ class GuardianService:
         return doc
 
     def list(self):
-        return [public_individual(d) for d in self.collection().stream() if not d.to_dict().get("deleting")]
+        return [public_individual(d, self.db) for d in self.collection().stream() if not d.to_dict().get("deleting")]
 
     def photo(self, item_id):
         doc = self.get(item_id)
         data = doc.to_dict()
-        # A photo past its own 24-hour freshness window is never served, even
-        # if the sweep job (see cleanup.expire_photos) has not yet run for it.
-        if not data.get("photo_path") or photo_expired(data):
+        # Registration validity, including an authorized active-case deferral.
+        if not data.get("photo_path") or photo_expired(data, self.db, case_context=True):
             raise HTTPException(404, detail="photo_expired")
         return bucket().blob(data["photo_path"]).download_as_bytes()
 
@@ -249,26 +242,35 @@ class GuardianService:
             else:
                 current_data = {}
             event = active_event(self.db, tx) if existing is None else None
-            data = value.model_dump(exclude={"photo_base64"})
+            if existing and not registration_available(current_data, self.db, tx):
+                raise HTTPException(409, detail='registration_unavailable')
+            if existing and value.registration_period_id is not None:
+                raise HTTPException(422, detail='registration_period_immutable')
+            data = value.model_dump(exclude={"photo_base64", "registration_period_id"})
             data.update(guardian_id=self.uid, updated_at=firestore.SERVER_TIMESTAMP)
             if new_path:
                 data["photo_path"] = new_path
-                # A freshly captured photo always restarts its own 24-hour
-                # window -- independent of the individual's case/event history.
+                # Capture metadata is not a retention deadline. Invalidate the
+                # old reference embedding when replacing the photograph.
+                data["face_embedding"] = firestore.DELETE_FIELD
+                data["embedding_path"] = firestore.DELETE_FIELD
                 data["photo_captured_at"] = firestore.SERVER_TIMESTAMP
             if existing is None:
                 data["created_at"] = firestore.SERVER_TIMESTAMP
                 data["event_id"] = event.id
+                data.update(establish(event, value.registration_period_id))
             tx.set(ref, data, merge=True)
-            return current_data.get("photo_path")
+            return (current_data.get("photo_path"), current_data.get("embedding_path"))
         try:
-            old_path = save(transaction)
+            old_path, old_embedding = save(transaction)
         except Exception:
             self.cleanup(new_path)
             raise
         if new_path and old_path:
             self.cleanup(old_path)
-        return public_individual(ref.get())
+        if new_path and old_embedding:
+            self.cleanup(old_embedding)
+        return public_individual(ref.get(), self.db)
 
     def delete(self, item_id):
         doc = self.get(item_id, include_deleting=True)
@@ -279,7 +281,9 @@ class GuardianService:
             data = owned_registration(current.to_dict(), self.uid)
             ensure_deletable(data)
             tx.update(doc.reference, {"deleting": True})
-            return data["photo_path"]
-        path = mark(transaction)
-        self.cleanup(path)
+            return [data.get("photo_path"), data.get("embedding_path")]
+        paths = mark(transaction)
+        for path in paths:
+            if path:
+                self.cleanup(path)
         doc.reference.delete()

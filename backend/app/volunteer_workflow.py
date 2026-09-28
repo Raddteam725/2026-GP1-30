@@ -5,14 +5,14 @@ import logging
 import time
 from datetime import datetime, timezone
 from fastapi import HTTPException, Depends, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, AliasChoices
 from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 from google.api_core.exceptions import NotFound
 from .firebase import bucket
-from .events import active_event
 from .service import normalize_photo, photo_expired
 from .case_models import STAGES, age_group
+from . import found_reports as found_lifecycle
 from .push import notify_guardian
 from .volunteer_alerts import safe_dispatch
 
@@ -20,6 +20,11 @@ class FoundInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     request_id: str = Field(min_length=16, max_length=128, pattern=r'^[a-zA-Z0-9-]+$')
     photo_base64: str = Field(min_length=1, max_length=11_000_000)
+
+class ManualFoundInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    request_id: str = Field(min_length=16, max_length=128, pattern=r'^[a-zA-Z0-9-]+$')
+    profile_id: str = Field(pattern=r'^[a-f0-9]{64}$')
 
 class MatchInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -31,9 +36,9 @@ class VerifyInput(BaseModel):
 
 class IdentifierVerifyInput(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
-    # The case identifier the Guardian displays from their signed-in Radd
-    # account ("#RD-…" as shown, or the bare id), typed/compared by the Volunteer.
-    case_id: str = Field(min_length=1, max_length=128, pattern=r'^[^/]+$')
+    # The real reunification identifier displayed by the signed-in Guardian.
+    # Preserve the case_id input alias for existing Missing Case clients.
+    case_id: str = Field(min_length=1, max_length=128, pattern=r'^[^/]+$', validation_alias=AliasChoices('identifier', 'case_id'))
 
 def key(doc):
     return hashlib.sha256(doc.reference.path.encode()).hexdigest()
@@ -46,7 +51,7 @@ def valid_id(value):
 class VolunteerWorkflow:
     def registrations(self):
         self.profile(require_active=True)
-        event = active_event(self.db)
+        event = self.participation_event()
         # Reuses existing registration subcollections; no copied registry/index.
         for guardian in self.db.collection('users').where(filter=FieldFilter('role', '==', 'guardian')).stream():
             for person in guardian.reference.collection('individuals').where(filter=FieldFilter('event_id', '==', event.id)).stream():
@@ -61,7 +66,7 @@ class VolunteerWorkflow:
         raise HTTPException(404, detail='not_found')
 
     def eligible(self, doc):
-        if photo_expired(doc.to_dict()):
+        if photo_expired(doc.to_dict(), self.db):
             return False
         case_id = doc.to_dict().get('active_case_id')
         if not case_id:
@@ -85,11 +90,27 @@ class VolunteerWorkflow:
     def profiles_list(self):
         return [self.public_registration(doc) for doc in self.registrations() if self.eligible(doc)]
 
-    def profile_detail(self, profile_id):
+    def profile_detail(self, profile_id, found_report_id=None, case_id=None):
         doc = self.registration(profile_id)
         if not self.eligible(doc):
             raise HTTPException(404, detail='not_found')
-        return self.public_registration(doc, contact=True)
+        contact = False
+        if found_report_id:
+            report = self.found_owned(found_report_id).to_dict()
+            if report.get('ended') or report.get('matched_profile_id'):
+                raise HTTPException(409, detail='identification_unavailable')
+            # Selection is comparison only; contact follows explicit confirmation.
+        if case_id:
+            case = self.accessible(valid_id(case_id)).to_dict()
+            data = doc.to_dict()
+            if (case.get('status') not in STAGES[:2]
+                    or case_id != data.get('active_case_id')
+                    or case.get('guardian_id') != data.get('guardian_id')
+                    or case.get('individual_id') != doc.id):
+                raise HTTPException(404, detail='not_found')
+            # Case browsing does not establish confirmed identity.
+        return {**self.public_registration(doc, contact=contact),
+                'confirmation_available': bool(found_report_id)}
 
     def registration_photo(self, profile_id):
         doc = self.registration(profile_id)
@@ -97,11 +118,12 @@ class VolunteerWorkflow:
             raise HTTPException(404, detail='not_found')
         return self.registration_bytes(doc)
 
-    def registration_bytes(self, doc):
+    def registration_bytes(self, doc, report_id=None):
         data = doc.to_dict()
         if not data:
             raise HTTPException(404, detail='not_found')
-        if photo_expired(data):
+        held = found_lifecycle.identified_report(self.db, data) if report_id else None
+        if photo_expired(data, self.db) and (held is None or held.id != report_id):
             raise HTTPException(404, detail='photo_expired')
         expected = f"guardians/{data['guardian_id']}/individuals/{doc.id}/"
         path = data.get('photo_path', '')
@@ -111,18 +133,25 @@ class VolunteerWorkflow:
 
     def found_owned(self, report_id, tx=None):
         self.profile(tx, require_active=True)
-        event = active_event(self.db, tx)
+        event = self.participation_event(tx)
         doc = self.db.collection('found_reports').document(valid_id(report_id)).get(transaction=tx)
         data = doc.to_dict() or {}
-        if data.get('volunteer_uid') != self.uid or data.get('event_id') != event.id:
+        if (data.get('volunteer_uid') or data.get('handed_over_by')) != self.uid or data.get('event_id') != event.id:
             raise HTTPException(404, detail='not_found')
         return doc
 
     def public_found(self, doc):
         data = doc.to_dict()
-        result = {'id': doc.id, 'created_at': data.get('created_at'), 'ai_status': data['ai_status'],
+        result = {'id': doc.id, 'created_at': data.get('created_at'), 'ai_status': data.get('ai_status', 'unavailable'), 'status': found_lifecycle.found_status(data), 'found_status': found_lifecycle.found_status(data), 'origin': 'volunteer_found', 'event_id': data.get('event_id'),
                   'case_id': data.get('case_id'), 'matched_profile_id': data.get('matched_profile_id'),
                   'ended': data.get('ended', False), 'photo_available': bool(data.get('photo_path')) and not data.get('ended') and not data.get('matched_profile_id')}
+        if not data.get('case_id') and data.get('matched_profile_id'):
+            person = self.db.collection('users').document(data['guardian_id']).collection('individuals').document(data['individual_id']).get()
+            if person.exists:
+                result['person'] = self.public_registration(person, contact=True)
+            proof = data.get('guardian_verification')
+            result['verification'] = {k: v for k, v in proof.items() if k != 'token_hash'} if proof else None
+        result.update(handed_over_at=data.get('handed_over_at'), handed_over_by=data.get('handed_over_by'))
         if data.get('case_id'):
             case = self.accessible(data['case_id'])
             state = case.to_dict()
@@ -135,19 +164,19 @@ class VolunteerWorkflow:
                 person_data = {'id': data['matched_profile_id'], **data.get('matched_snapshot', {})}
                 guardian = self.db.collection('users').document(state['guardian_id']).get().to_dict() or {}
                 person_data['guardian'] = {'full_name': guardian.get('full_name'), 'phone': guardian.get('phone')}
-            result.update(status=state['status'], person=person_data,
+            result.update(status=state['status'], found_status=found_lifecycle.IDENTIFIED if state['status'] == 'match_confirmed' else state['status'], person=person_data,
                           verification=({k: v for k, v in state['guardian_verification'].items() if k != 'token_hash'} if state.get('guardian_verification') else None), handed_over_at=state.get('handed_over_at'),
                           handed_over_by=state.get('handed_over_by'))
         return result
 
     def found_list(self):
         self.profile(require_active=True)
-        event = active_event(self.db)
+        event = self.participation_event()
         docs = self.db.collection('found_reports').where(filter=FieldFilter('volunteer_uid', '==', self.uid)).stream()
         result = []
         for doc in docs:
             data = doc.to_dict()
-            if data.get('event_id') != event.id or data.get('ended'):
+            if data.get('event_id') != event.id or data.get('ended') or found_lifecycle.found_status(data) == found_lifecycle.REUNITED:
                 continue
             case_id = data.get('case_id')
             if case_id and not self.visible(self.cases.document(case_id).get().to_dict() or {}):
@@ -174,12 +203,12 @@ class VolunteerWorkflow:
         @firestore.transactional
         def save(tx):
             self.profile(tx, require_active=True)
-            event = active_event(self.db, tx)
+            event = self.participation_event(tx)
             if ref.get(transaction=tx).exists:
                 return False
             tx.set(ref, {'volunteer_uid': self.uid, 'event_id': event.id, 'photo_path': path,
                 'created_at': firestore.SERVER_TIMESTAMP, 'updated_at': firestore.SERVER_TIMESTAMP,
-                'ai_status': 'unavailable', 'matched_profile_id': None, 'case_id': None})
+                'origin': 'volunteer_found', 'status': found_lifecycle.IDENTIFYING, 'ai_status': 'unavailable', 'matched_profile_id': None, 'case_id': None})
             return True
         try:
             created = save(self.db.transaction())
@@ -225,7 +254,7 @@ class VolunteerWorkflow:
         @firestore.transactional
         def end(tx):
             doc = self.found_owned(report_id, tx)
-            if doc.to_dict().get('matched_profile_id'):
+            if doc.to_dict().get('matched_profile_id') or found_lifecycle.found_status(doc.to_dict()) != found_lifecycle.IDENTIFYING:
                 raise HTTPException(409, detail='match_already_confirmed')
             if not doc.to_dict().get('ended'):
                 tx.update(doc.reference, {'ended': True, 'ended_at': firestore.SERVER_TIMESTAMP})
@@ -234,26 +263,51 @@ class VolunteerWorkflow:
         return self.public_found(self.found_owned(report_id))
 
     def candidates(self, report_id):
-        if self.found_owned(report_id).to_dict().get('ended'):
+        data = self.found_owned(report_id).to_dict()
+        if data.get('ended') or found_lifecycle.found_status(data) != found_lifecycle.IDENTIFYING:
             raise HTTPException(409, detail='identification_ended')
+        if not data.get('photo_path'):
+            raise HTTPException(409, detail='capture_required')
         # Explicit contract for the future model worker; zero fabricated candidates.
         return {'state': 'unavailable', 'candidates': []}
 
-    def confirm(self, report_id, profile_id):
-        found = self.found_owned(report_id)
-        if found.to_dict().get('ended'):
+    def submit_manual(self, value):
+        self.profile(require_active=True)
+        event = self.participation_event()
+        report_id = 'FR-' + hashlib.sha256((self.uid + ':manual:' + value.request_id).encode()).hexdigest()[:40]
+        seed = {'volunteer_uid': self.uid, 'event_id': event.id,
+                'created_at': firestore.SERVER_TIMESTAMP, 'updated_at': firestore.SERVER_TIMESTAMP,
+                'origin': 'volunteer_found', 'identification_method': 'manual',
+                'status': found_lifecycle.IDENTIFYING, 'ai_status': 'not_requested', 'case_id': None}
+        return self.confirm(report_id, value.profile_id, manual_seed=seed)
+
+    def confirm(self, report_id, profile_id, manual_seed=None):
+        found = (self.db.collection('found_reports').document(report_id).get()
+                 if manual_seed else self.found_owned(report_id))
+        if manual_seed and found.exists:
+            found = self.found_owned(report_id)
+
+        if (found.to_dict() or {}).get('ended') or found_lifecycle.found_status(found.to_dict() or {}) == found_lifecycle.REUNITED:
             raise HTTPException(409, detail='identification_ended')
-        if found.to_dict().get('matched_profile_id') == profile_id:
+        if (found.to_dict() or {}).get('matched_profile_id') == profile_id:
             self.delete_found_photo(report_id)
             return self.public_found(found)
         person_ref = self.registration(profile_id).reference
-        new_case = self.cases.document('RD-' + secrets.token_hex(6).upper())
         push = {}
         @firestore.transactional
         def confirm(tx):
-            report = self.found_owned(report_id, tx)
-            rd = report.to_dict()
-            if rd.get('ended'):
+            self.profile(tx, require_active=True)
+            event = self.participation_event(tx)
+            ref_report = self.db.collection('found_reports').document(report_id)
+            report = ref_report.get(transaction=tx)
+            creating = manual_seed is not None and not report.exists
+            if creating:
+                rd = {**manual_seed, 'event_id': event.id}
+            else:
+                report = self.found_owned(report_id, tx)
+                rd = report.to_dict()
+
+            if rd.get('ended') or found_lifecycle.found_status(rd) == found_lifecycle.REUNITED:
                 raise HTTPException(409, detail='identification_ended')
             person = person_ref.get(transaction=tx)
             pd = person.to_dict() or {}
@@ -261,32 +315,35 @@ class VolunteerWorkflow:
                 if rd['matched_profile_id'] == profile_id:
                     return
                 raise HTTPException(409, detail='already_matched')
-            if pd.get('deleting') or photo_expired(pd) or pd.get('event_id') != rd['event_id']:
+            if pd.get('deleting') or photo_expired(pd, self.db, tx, case_context=not creating) or pd.get('event_id') != rd['event_id']:
                 raise HTTPException(409, detail='profile_unavailable')
             case_id = pd.get('active_case_id')
-            ref = self.cases.document(case_id) if case_id else new_case
+            linked_id = pd.get('active_found_report_id')
+            linked = self.db.collection('found_reports').document(linked_id).get(transaction=tx) if linked_id else None
+            if linked and linked.exists and not linked.to_dict().get('ended') and found_lifecycle.found_status(linked.to_dict() or {}) in found_lifecycle.ACTIVE and linked.id != report_id:
+                raise HTTPException(409, detail='already_matched')
+            identity = {'matched_profile_id': profile_id, 'guardian_id': pd['guardian_id'],
+                        'individual_id': person.id, 'individual_path': person.reference.path,
+                        'confirmed_by': self.uid, 'status': found_lifecycle.IDENTIFIED,
+                        'updated_at': firestore.SERVER_TIMESTAMP}
+            if not case_id:
+                if creating:
+                    tx.set(report.reference, rd)
+                tx.update(person.reference, {'active_found_report_id': report_id})
+                tx.update(report.reference, identity)
+                return
+            ref = self.cases.document(case_id)
             old = ref.get(transaction=tx)
             cd = old.to_dict() or {}
             if case_id and (cd.get('status') not in STAGES[:2] or cd.get('guardian_id') != pd['guardian_id'] or cd.get('individual_id') != person.id or cd.get('event_id') != rd['event_id']):
                 raise HTTPException(409, detail='case_not_joinable')
-            if not case_id and old.exists:
-                raise HTTPException(409, detail='identifier_conflict')
             now = firestore.SERVER_TIMESTAMP
-            if not case_id:
-                # A real found report may precede a missing report. Create the shared
-                # case on confirmation so the Guardian can verify and see handover.
-                tx.set(ref, {'guardian_id': pd['guardian_id'], 'individual_id': person.id,
-                    'individual_path': person_ref.path, 'individual_name': pd['full_name'], 'age': pd['age'],
-                    'event_id': rd['event_id'], 'created_at': now, 'source': 'found_report',
-                    'age_group': age_group(pd['age']), 'closed_at': None,
-                    'guided_report': None, 'status': 'match_confirmed', 'confirmed_by': self.uid,
-                    'found_report_id': report_id, 'joined_by': [self.uid], 'updated_at': now,
-                    'stage_timestamps': {'match_confirmed': now}})
-                tx.update(person_ref, {'active_case_id': ref.id})
-            else:
-                tx.update(ref, {'status': 'match_confirmed', 'confirmed_by': self.uid,
-                    'found_report_id': report_id, 'updated_at': now, 'stage_timestamps.match_confirmed': now})
-            tx.update(report.reference, {'matched_profile_id': profile_id, 'case_id': ref.id, 'updated_at': now, 'matched_snapshot': {k: pd.get(k) for k in ('full_name', 'age', 'gender', 'relationship', 'relationship_other')}})
+            if creating:
+                tx.set(report.reference, rd)
+            tx.update(person.reference, {'active_found_report_id': report_id})
+            tx.update(ref, {'status': 'match_confirmed', 'confirmed_by': self.uid,
+                'found_report_id': report_id, 'updated_at': now, 'stage_timestamps.match_confirmed': now})
+            tx.update(report.reference, {**identity, 'case_id': ref.id, 'updated_at': now, 'matched_snapshot': {k: pd.get(k) for k in ('full_name', 'age', 'gender', 'relationship', 'relationship_other')}})
             for uid in set(cd.get('joined_by', [])) - {self.uid}:
                 tx.set(self.db.collection('users').document(uid).collection('volunteer_notifications').document(ref.id + '-match_confirmed'),
                     {'case_id': ref.id, 'event_id': rd['event_id'], 'kind': 'status_update', 'status': 'match_confirmed', 'created_at': now, 'read_at': None})
@@ -308,11 +365,16 @@ class VolunteerWorkflow:
                 pass
         return self.public_found(self.found_owned(report_id))
 
-    def confirmed_case(self, report_id, tx=None):
+    def reunification_context(self, report_id, tx=None):
         report = self.found_owned(report_id, tx)
         case_id = report.to_dict().get('case_id')
         if not case_id:
-            raise HTTPException(409, detail='match_required')
+            data = report.to_dict()
+            if data.get('status') == found_lifecycle.REUNITED and data.get('handed_over_by') == self.uid:
+                return report
+            if not data.get('matched_profile_id') or data.get('confirmed_by') != self.uid:
+                raise HTTPException(409, detail='match_required')
+            return report
         case = self.accessible(case_id, tx)
         if case.to_dict().get('confirmed_by') != self.uid or case.to_dict().get('found_report_id') != report_id:
             raise HTTPException(403, detail='confirmer_required')
@@ -322,15 +384,18 @@ class VolunteerWorkflow:
         push = {}
         @firestore.transactional
         def begin(tx):
-            case = self.confirmed_case(report_id, tx)
+            case = self.reunification_context(report_id, tx)
             cd = case.to_dict()
             if cd['status'] == 'awaiting_guardian_verification':
                 return
-            if cd['status'] != 'match_confirmed':
+            if cd['status'] not in ('match_confirmed', found_lifecycle.IDENTIFIED):
                 raise HTTPException(409, detail='invalid_transition')
             now = firestore.SERVER_TIMESTAMP
             tx.update(case.reference, {'status': 'awaiting_guardian_verification', 'updated_at': now,
                 'stage_timestamps.awaiting_guardian_verification': now})
+            if case.reference.path.startswith('found_reports/'):
+                return
+            tx.update(self.db.collection('found_reports').document(report_id), {'status': found_lifecycle.VERIFYING, 'updated_at': now})
             # The Guardian must know to open their QR now: same notification
             # record shape as every other Guardian status update.
             tx.set(self.db.collection('users').document(cd['guardian_id']).collection('notifications').document(case.id + '-awaiting_guardian_verification'),
@@ -347,16 +412,13 @@ class VolunteerWorkflow:
         return self.public_found(self.found_owned(report_id))
 
     def verify_guardian_identifier(self, report_id, case_id):
-        # CASE-SPECIFIC alternative for when the Guardian's QR cannot be shown
-        # or scanned: the Volunteer compares the identifier the Guardian
-        # displays from their signed-in Radd account with this Volunteer's OWN
-        # current case. Recorded distinctly (method=case_identifier, never qr)
-        # so the handover record always says how the Guardian was verified;
-        # a mismatch records nothing and can never touch any other case.
+        # Compare the identifier from the authenticated Guardian's account with
+        # this authorized context: a real Missing Case or standalone Found Report.
+        # The distinct method/context receipt is required by handover.
         presented = case_id.strip().lstrip('#').upper()
         @firestore.transactional
         def verify(tx):
-            case = self.confirmed_case(report_id, tx)
+            case = self.reunification_context(report_id, tx)
             cd = case.to_dict()
             if cd['status'] != 'awaiting_guardian_verification':
                 raise HTTPException(409, detail='invalid_transition')
@@ -364,23 +426,23 @@ class VolunteerWorkflow:
                 tx.update(case.reference, {'guardian_verification': None})
                 return False
             receipt = cd.get('guardian_verification') or {}
-            if receipt.get('volunteer_uid') == self.uid and receipt.get('method') == 'case_identifier' and receipt.get('case_id') == case.id:
+            if receipt.get('volunteer_uid') == self.uid and receipt.get('method') in ('case_identifier', 'found_identifier') and found_lifecycle.proof_context(receipt) == case.id:
                 return True
             now = firestore.SERVER_TIMESTAMP
-            tx.update(case.reference, {'guardian_verification': {'method': 'case_identifier', 'volunteer_uid': self.uid,
-                'guardian_id': cd['guardian_id'], 'case_id': case.id, 'verified_at': now}, 'updated_at': now})
+            tx.update(case.reference, {'guardian_verification': {'method': 'found_identifier' if case.reference.path.startswith('found_reports/') else 'case_identifier', 'volunteer_uid': self.uid,
+                'guardian_id': cd['guardian_id'], **found_lifecycle.context_fields(case), 'verified_at': now}, 'updated_at': now})
             return True
         return {'verified': verify(self.db.transaction()), 'report': self.public_found(self.found_owned(report_id))}
 
     def verify_guardian(self, report_id, payload):
         # The QR is Guardian-account-level, not per-case: the payload names WHICH
-        # guardian, and this Volunteer's own current case (confirmed_case) supplies
-        # the case context. A scan only proves "this account", so the association
+        # guardian, and this Volunteer's authorized reunification context supplies
+        # the case or Found Report association. A scan only proves "this account", so the association
         # to the case is re-checked here (case.guardian_id must equal the scanned
         # guardian_id) before the challenge is even looked up.
         @firestore.transactional
         def verify(tx):
-            case = self.confirmed_case(report_id, tx)
+            case = self.reunification_context(report_id, tx)
             cd = case.to_dict()
             if cd['status'] != 'awaiting_guardian_verification':
                 raise HTTPException(409, detail='invalid_transition')
@@ -390,7 +452,7 @@ class VolunteerWorkflow:
             associated = bool(subject and '/' not in subject and subject in (cd['guardian_id'], case.id))
             digest = hashlib.sha256(nonce.encode()).hexdigest() if nonce else ''
             receipt = cd.get('guardian_verification') or {}
-            if associated and receipt.get('volunteer_uid') == self.uid and receipt.get('case_id') == case.id and receipt.get('guardian_id') == cd['guardian_id'] and receipt.get('token_hash') == digest and nonce:
+            if associated and receipt.get('volunteer_uid') == self.uid and found_lifecycle.proof_context(receipt) == case.id and receipt.get('guardian_id') == cd['guardian_id'] and receipt.get('token_hash') == digest and nonce:
                 return True
             challenge = None
             if associated and nonce:
@@ -407,30 +469,42 @@ class VolunteerWorkflow:
             now = firestore.SERVER_TIMESTAMP
             tx.update(challenge.reference, {'consumed_at': now, 'consumed_by': self.uid})
             tx.update(case.reference, {'guardian_verification': {'method': 'qr', 'volunteer_uid': self.uid,
-                'guardian_id': cd['guardian_id'], 'case_id': case.id, 'verified_at': now, 'token_hash': digest}, 'updated_at': now})
+                'guardian_id': cd['guardian_id'], **found_lifecycle.context_fields(case), 'verified_at': now, 'token_hash': digest}, 'updated_at': now})
             return True
         return {'verified': verify(self.db.transaction()), 'report': self.public_found(self.found_owned(report_id))}
 
     def handover_found(self, report_id):
+        report = self.found_owned(report_id).to_dict()
+        if report.get('matched_profile_id'):
+            self.delete_found_photo(report_id)
         push = {}
         @firestore.transactional
         def handover(tx):
-            case = self.confirmed_case(report_id, tx)
+            case = self.reunification_context(report_id, tx)
             cd = case.to_dict()
+            if cd['status'] == found_lifecycle.REUNITED and cd.get('handed_over_by') == self.uid:
+                return
             person = self.db.collection('users').document(cd['guardian_id']).collection('individuals').document(cd['individual_id']).get(transaction=tx)
             proof = cd.get('guardian_verification') or {}
             if cd['status'] == 'reunited' and cd.get('handed_over_by') == self.uid:
                 return
             # Either verification method authorizes handover; the recorded
             # method itself is retained on the case for the handover record.
-            if cd['status'] != 'awaiting_guardian_verification' or proof.get('method') not in ('qr', 'case_identifier') or proof.get('volunteer_uid') != self.uid or proof.get('case_id') != case.id or proof.get('guardian_id') != cd['guardian_id']:
+            if cd['status'] != 'awaiting_guardian_verification' or proof.get('method') not in ('qr', 'case_identifier', 'found_identifier') or proof.get('volunteer_uid') != self.uid or found_lifecycle.proof_context(proof) != case.id or proof.get('guardian_id') != cd['guardian_id']:
                 raise HTTPException(409, detail='guardian_verification_required')
             now = firestore.SERVER_TIMESTAMP
+            if case.reference.path.startswith('found_reports/'):
+                completed = {**cd, 'status': found_lifecycle.REUNITED, 'handed_over_at': now, 'handed_over_by': self.uid}
+                tx.set(case.reference, found_lifecycle.minimal_completed(completed))
+                if person.exists and person.to_dict().get('active_found_report_id') == report_id:
+                    tx.update(person.reference, {'active_found_report_id': firestore.DELETE_FIELD})
+                return
             tx.update(case.reference, {'status': 'reunited', 'updated_at': now, 'stage_timestamps.reunited': now,
                 'handed_over_at': now, 'handed_over_by': self.uid, 'closed_at': now,
                 'age_group': cd.get('age_group') or age_group(cd['age'])})
+            tx.update(self.db.collection('found_reports').document(report_id), {'status': found_lifecycle.REUNITED, 'handed_over_at': now, 'handed_over_by': self.uid, 'verification_method': proof.get('method'), 'updated_at': now})
             if person.exists and person.to_dict().get('active_case_id') == case.id:
-                tx.update(person.reference, {'active_case_id': None, 'updated_at': now})
+                tx.update(person.reference, {'active_case_id': None, 'active_found_report_id': firestore.DELETE_FIELD, 'updated_at': now})
             tx.set(self.db.collection('users').document(cd['guardian_id']).collection('notifications').document(case.id + '-reunited'),
                 {'case_id': case.id, 'event_id': cd['event_id'], 'kind': 'status_update', 'status': 'reunited', 'created_at': now, 'read_at': None})
             push.update(guardian_id=cd['guardian_id'], case_id=case.id, event_id=cd['event_id'])
@@ -447,7 +521,7 @@ class VolunteerWorkflow:
 
     def notifications_list(self):
         self.profile(require_active=True)
-        event = active_event(self.db)
+        event = self.participation_event()
         collection = self.user.collection('volunteer_notifications')
         existing = {doc.id for doc in collection.stream()}
         # Materialize actual event case notifications lazily, using stable IDs and
@@ -494,8 +568,9 @@ def register_workflow(router, service):
     def profiles(s=Depends(service)):
         return s.profiles_list()
     @router.get('/profiles/{profile_id}')
-    def profile_detail(profile_id: str, s=Depends(service)):
-        return s.profile_detail(profile_id)
+    def profile_detail(profile_id: str, found_report_id: str | None = None,
+                       case_id: str | None = None, s=Depends(service)):
+        return s.profile_detail(profile_id, found_report_id, case_id)
     @router.get('/profiles/{profile_id}/photo')
     def profile_photo(profile_id: str, s=Depends(service)):
         return Response(s.registration_photo(profile_id), media_type='image/jpeg', headers={'Cache-Control': 'no-store'})
@@ -505,6 +580,9 @@ def register_workflow(router, service):
     @router.post('/found-reports', status_code=201)
     def submit(value: FoundInput, s=Depends(service)):
         return s.submit_found(value)
+    @router.post('/found-reports/manual', status_code=201)
+    def submit_manual(value: ManualFoundInput, s=Depends(service)):
+        return s.submit_manual(value)
     @router.get('/found-reports/{report_id}')
     def report(report_id: str, s=Depends(service)):
         return s.public_found(s.found_owned(report_id))
@@ -513,9 +591,11 @@ def register_workflow(router, service):
         return Response(s.found_photo(report_id), media_type='image/jpeg', headers={'Cache-Control': 'no-store'})
     @router.get('/found-reports/{report_id}/registered-photo')
     def matched_photo(report_id: str, s=Depends(service)):
-        case = s.confirmed_case(report_id).to_dict()
+        case = s.reunification_context(report_id).to_dict()
+        if case.get('status') == found_lifecycle.REUNITED:
+            raise HTTPException(404, detail='not_found')
         doc = s.db.collection('users').document(case['guardian_id']).collection('individuals').document(case['individual_id']).get()
-        return Response(s.registration_bytes(doc), media_type='image/jpeg', headers={'Cache-Control': 'no-store'})
+        return Response(s.registration_bytes(doc, report_id), media_type='image/jpeg', headers={'Cache-Control': 'no-store'})
     @router.get('/found-reports/{report_id}/candidates')
     def candidates(report_id: str, s=Depends(service)):
         return s.candidates(report_id)

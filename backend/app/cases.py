@@ -44,6 +44,7 @@ class CaseService:
         return sorted([public_case(d) for d in docs], key=lambda d: str(d["created_at"]), reverse=True)
 
     def create(self, value):
+        from .found_reports import identified_report, VERIFYING
         person = self.guardian.user.collection("individuals").document(value.individual_id)
         ref = self.cases.document("RD-" + secrets.token_hex(6).upper())
         created_new = False
@@ -62,23 +63,34 @@ class CaseService:
                 raise HTTPException(409, detail="deletion_in_progress")
             if active:
                 return active.id  # Idempotent retry after a lost response.
-            # A report only becomes possible with a current photo -- this is
-            # the authoritative, server-side gate; the Flutter UI's own
-            # "needs a new photo" prompt is a convenience, not the enforcement.
-            if not data.get("photo_path") or photo_expired(data):
+            # New reports require an available reference photo under the
+            # established registration period, enforced on the server.
+            if not data.get("photo_path") or photo_expired(data, self.db, tx):
                 raise HTTPException(409, detail="photo_expired")
+            if data.get("event_id") != event_id:
+                raise HTTPException(409, detail="registration_unavailable")
+            found = identified_report(self.db, data, tx)
             if collision.exists:
                 raise HTTPException(409, detail="identifier_conflict")
             nonlocal created_new
             created_new = True
             now = firestore.SERVER_TIMESTAMP
+            linked = found.to_dict() if found else {}
+            state = (VERIFYING if linked.get('status') == VERIFYING else 'match_confirmed') if found else STAGES[0]
             tx.set(ref, {"guardian_id": self.uid, "individual_id": value.individual_id,
                 "individual_path": person.path, "individual_name": data["full_name"],
                 "age": data["age"], "age_group": age_group(data["age"]),
-                "event_id": event_id, "status": STAGES[0],
+                "event_id": event_id, "status": state,
+                **({"found_report_id": found.id, "confirmed_by": linked["confirmed_by"], "guardian_verification": ({**linked["guardian_verification"], "case_id": ref.id, "context_id": ref.id, "context_type": "missing_case"} if linked.get("guardian_verification") else None)} if found else {}),
                 "created_at": now, "updated_at": now, "closed_at": None,
-                "stage_timestamps": {STAGES[0]: now}, "guided_report": None})
+                "stage_timestamps": {state: now}, "guided_report": None})
             tx.update(person, {"active_case_id": ref.id})
+            if found:
+                tx.update(found.reference, {'case_id': ref.id, 'updated_at': now})
+                tx.set(self.notifications.document(ref.id + '-' + state), {
+                    'event_id': event_id, 'case_id': ref.id, 'kind': 'status_update',
+                    'status': state, 'created_at': now, 'read_at': None})
+                return ref.id
             # The initial general Volunteer alert happens as part of this same
             # successful case-creation transaction -- never delayed by the
             # (separate, subsequent) Guided Assistant step.
@@ -95,7 +107,7 @@ class CaseService:
             # already written above -- never a replacement for it, and never
             # allowed to affect this already-committed business operation.
             try:
-                notify_guardian(self.uid, kind="case_created", status=result["status"],
+                notify_guardian(self.uid, kind="case_created" if result["status"] == STAGES[0] else "status_update", status=result["status"],
                     case_id=result["id"], event_id=result["event_id"])
             except Exception:
                 pass
@@ -132,7 +144,10 @@ class CaseService:
             person = self.guardian.user.collection("individuals").document(data["individual_id"])
             now = firestore.SERVER_TIMESTAMP
             tx.update(doc.reference, {"status": outcome, "updated_at": now, "closed_at": now})
-            tx.update(person, {"active_case_id": None})
+            tx.update(person, {"active_case_id": None, "active_found_report_id": firestore.DELETE_FIELD})
+            if data.get('found_report_id'):
+                tx.update(self.db.collection('found_reports').document(data['found_report_id']),
+                          {'ended': True, 'ended_at': now, 'updated_at': now})
             tx.set(self.notifications.document(case_id + "-" + outcome), {
                 "event_id": data["event_id"], "case_id": case_id, "kind": "status_changed",
                 "status": outcome, "created_at": firestore.SERVER_TIMESTAMP, "read_at": None})

@@ -122,22 +122,10 @@ extension _VolunteerCaseViews on _VolunteerWorkspaceState {
               ? s.vLocationDeniedForever
               : _location!.servicesDisabled
               ? s.vLocationServicesDisabled
-              : _location!.unavailable
+              : _location!.unavailable || _location!.accessGranted
               ? s.vLocationUnavailable
               : s.vLocationHelp,
           title: s.vLocation,
-        ),
-        VolunteerAction(
-          _location!.permanentlyDenied || _location!.servicesDisabled
-              ? s.vLocationSettings
-              : s.vAllowLocation,
-          onPressed: _location!.requesting
-              ? null
-              : _location!.permanentlyDenied || _location!.servicesDisabled
-              ? _location!.openSettings
-              : _location!.request,
-          icon: Icons.my_location,
-          secondary: true,
         ),
         const SizedBox(height: 24),
       ],
@@ -410,10 +398,11 @@ extension _VolunteerCaseViews on _VolunteerWorkspaceState {
         const SizedBox(height: 16),
         if (item.joinable && !item.joinedBy.contains(account.uid))
           VolunteerAction(
-            s.vStartSearch,
+            item.status == CaseStatus.reportReceived
+                ? s.vStartSearch
+                : s.vJoinSearch,
             icon: Icons.search,
             onPressed: _busy || !account.active ? null : () => _join(item),
-            secondary: item.status == CaseStatus.searchInProgress,
           )
         else
           VolunteerAction(
@@ -539,7 +528,9 @@ extension _VolunteerCaseViews on _VolunteerWorkspaceState {
         ),
       if (item.joinable && !item.joinedBy.contains(account.uid))
         VolunteerAction(
-          s.vStartSearch,
+          item.status == CaseStatus.reportReceived
+              ? s.vStartSearch
+              : s.vJoinSearch,
           icon: Icons.search,
           onPressed: _busy || !account.active ? null : () => _join(item),
         ),

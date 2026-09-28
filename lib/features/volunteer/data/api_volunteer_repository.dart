@@ -23,9 +23,28 @@ class ApiVolunteerRepository extends VolunteerRepository {
              defaultValue: kDebugMode ? 'http://10.0.2.2:8000' : '',
            );
   final Future<String?> Function() token;
+  double? _proximityRadiusMeters;
+  @override
+  double get proximityRadiusMeters =>
+      _proximityRadiusMeters ?? super.proximityRadiusMeters;
   final Future<void> Function(String reason)? onAccessLost;
   bool _accessLost = false;
   Future<void> Function()? closeSession;
+  void clearEventData() {
+    ++_dataVersion;
+    for (final report in _reports) {
+      report.photoBytes = null;
+    }
+    _cases = [];
+    _profiles = [];
+    _reports = [];
+    _alerts = [];
+    caseStates.clear();
+    proximityLocation = null;
+    hasLoadedCases = false;
+    hasLoadedNotifications = false;
+  }
+
   void clearProtectedData() {
     _accessLost = true;
     ++_dataVersion;
@@ -45,6 +64,22 @@ class ApiVolunteerRepository extends VolunteerRepository {
   final http.Client _client;
   final String _base;
   VolunteerAccount? account;
+  bool consentCurrent = false;
+  String? requiredTermsVersion, requiredPrivacyVersion;
+
+  Future<void> acceptConsent(String terms, String privacy) async {
+    await _request(
+      'POST',
+      '/consent',
+      body: {
+        'accepted': true,
+        'terms_version': terms,
+        'privacy_version': privacy,
+      },
+    );
+    await loadProfile();
+  }
+
   List<VolunteerCase> _cases = [];
   List<RegisteredPerson> _profiles = [];
   List<FoundReport> _reports = [];
@@ -106,6 +141,14 @@ class ApiVolunteerRepository extends VolunteerRepository {
       throw StateError('unauthorized');
     }
     if (_base.isEmpty) throw StateError('backend-unavailable');
+    final eventRequest =
+        path.isNotEmpty &&
+        path != '/consent' &&
+        path != '/fcm-registrations/unregister';
+    final requestEventId = account?.eventId;
+    if (eventRequest && (!consentCurrent || account?.eventAuthorized != true)) {
+      throw StateError('event-access-required');
+    }
     final uri = Uri.parse('$_base/v1/volunteer$path');
     if (kDebugMode && _requestSequence == 0) {
       debugPrint(
@@ -141,7 +184,7 @@ class ApiVolunteerRepository extends VolunteerRepository {
     // Route templates only: no UID, JWT, FCM token, report body or contact data.
     final route = path.replaceAllMapped(
       RegExp(
-        r'/(cases|found-reports|profiles|notifications)/(?!available(?:/|$)|mine(?:/|$))[^/]+',
+        r'/(cases|found-reports|profiles|notifications)/(?!available(?:/|$)|mine(?:/|$)|manual(?:/|$))[^/]+',
       ),
       (match) => '/${match[1]}/{id}',
     );
@@ -171,11 +214,40 @@ class ApiVolunteerRepository extends VolunteerRepository {
       }
       rethrow;
     }
+    if (kDebugMode &&
+        path == '/found-reports/manual' &&
+        response.statusCode == 405) {
+      debugPrint(
+        'Radd manual confirmation: server does not support POST /found-reports/manual; check running backend version.',
+      );
+    }
     if (response.statusCode == 401 || response.statusCode == 403) {
       String? detail;
       try {
         detail = (jsonDecode(response.body) as Map)['detail'] as String?;
       } catch (_) {}
+      if (detail == 'volunteer_consent_required') {
+        consentCurrent = false;
+        clearEventData();
+        notifyListeners();
+        await loadProfile();
+      }
+      if (detail == 'event_access_required') {
+        clearEventData();
+        final old = account;
+        if (old != null) {
+          account = VolunteerAccount(
+            uid: old.uid,
+            name: old.name,
+            volunteerId: old.volunteerId,
+            active: old.active,
+            email: old.email,
+            phone: old.phone,
+            eventId: old.eventId,
+          );
+        }
+        notifyListeners();
+      }
       if (response.statusCode == 401 ||
           detail == 'volunteer_inactive' ||
           detail == 'volunteer_required') {
@@ -198,13 +270,26 @@ class ApiVolunteerRepository extends VolunteerRepository {
         _ => 'backend-unavailable',
       });
     }
+    if (eventRequest &&
+        (account?.eventAuthorized != true ||
+            account?.eventId != requestEventId)) {
+      throw StateError('event-access-required');
+    }
     return response;
   }
 
   Future<VolunteerAccount> loadProfile() async {
     final data =
         jsonDecode((await _request('GET', '')).body) as Map<String, dynamic>;
+    consentCurrent = data['consent_current'] == true;
+    requiredTermsVersion = data['required_terms_version'] as String?;
+    requiredPrivacyVersion = data['required_privacy_version'] as String?;
+    if (!consentCurrent) clearEventData();
     final name = data['full_name'] as String;
+    final radius = data['proximity_radius_meters'];
+    if (radius is num && radius.isFinite && radius > 0) {
+      _proximityRadiusMeters = radius.toDouble();
+    }
     final result = VolunteerAccount(
       uid: data['uid'] as String,
       name: LocalizedData(name, name),
@@ -212,13 +297,23 @@ class ApiVolunteerRepository extends VolunteerRepository {
       active: data['active'] as bool,
       email: data['email'] as String?,
       phone: data['phone'] as String?,
+      assigned: data['assigned'] == true,
+      eventId: data['event_id'] as String?,
     );
     if (!result.active) {
       clearProtectedData();
       if (onAccessLost != null) await onAccessLost!('volunteer_inactive');
       throw StateError('volunteer_inactive');
     }
-    if (!_disposed && !_accessLost) account = result;
+    if (!_disposed && !_accessLost) {
+      if (account != null &&
+          (account!.eventId != result.eventId ||
+              account!.assigned != result.assigned)) {
+        clearEventData();
+      }
+      account = result;
+      notifyListeners();
+    }
     return result;
   }
 
@@ -243,7 +338,7 @@ class ApiVolunteerRepository extends VolunteerRepository {
   }
 
   Future<void> _refresh({bool eventOnly = false, String? caseId}) async {
-    final version = _dataVersion;
+    var version = _dataVersion;
     bool current() => !_disposed && !_accessLost && version == _dataVersion;
     Object? failure;
     Future<void> attempt(Future<void> Function() action) async {
@@ -256,6 +351,8 @@ class ApiVolunteerRepository extends VolunteerRepository {
 
     try {
       final user = eventOnly ? account! : await loadProfile();
+      if (!eventOnly) version = _dataVersion;
+      if (!consentCurrent || !user.eventAuthorized) return;
       if (!current()) return;
       // Independent resources publish independently. Photos and FCM registration
       // must never hold case lists or navigation behind their network round trips.
@@ -518,6 +615,9 @@ class ApiVolunteerRepository extends VolunteerRepository {
 
   LocalizedData _text(dynamic value) =>
       LocalizedData(value as String? ?? '', value ?? '');
+  @override
+  List<RegisteredPerson> get reviewableProfiles => profiles;
+
   RegisteredPerson _person(Map<String, dynamic> data, {Uint8List? photo}) {
     final guardian = data['guardian'] as Map<String, dynamic>?;
     final info = data['guided_report'] as Map<String, dynamic>?;
@@ -526,6 +626,7 @@ class ApiVolunteerRepository extends VolunteerRepository {
     return RegisteredPerson(
       id: data['id'] as String,
       name: _text(data['full_name']),
+      confirmationAvailable: data['confirmation_available'] == true,
       age: data['age'] as int,
       gender: data['gender'] == 'male'
           ? Gender.male
@@ -568,17 +669,25 @@ class ApiVolunteerRepository extends VolunteerRepository {
       caseId: data['case_id'] as String?,
       createdAt: DateTime.parse(data['created_at'] as String),
     );
-    result.status = _status(data['status'] as String?);
+    result.status = _status(
+      data['status'] == 'identity_confirmed'
+          ? 'match_confirmed'
+          : data['status'] as String?,
+    );
+    result.foundStatus = FoundStatus.parse(
+      (data['found_status'] ?? data['status']) as String?,
+    );
     if (data['person'] != null) {
       result.matchedPerson = _person(data['person'] as Map<String, dynamic>);
     }
     final proof = data['verification'] as Map<String, dynamic>?;
     if (proof != null) {
       result.verification = VerificationReceipt(
-        caseId: data['case_id'] as String,
+        caseId: data['case_id'] as String? ?? data['id'] as String,
         guardianId: proof['guardian_id'] as String,
         volunteerUid: proof['volunteer_uid'] as String,
-        method: proof['method'] == 'case_identifier'
+        method:
+            ['case_identifier', 'found_identifier'].contains(proof['method'])
             ? VerificationMethod.caseIdentifier
             : VerificationMethod.qr,
         at: DateTime.parse(proof['verified_at'] as String),
@@ -598,9 +707,13 @@ class ApiVolunteerRepository extends VolunteerRepository {
         data['matched_profile_id'] != null) {
       target.photoBytes = null;
     }
+    if (value.status == CaseStatus.reunited && data['person'] == null) {
+      target.matchedPerson = null;
+    }
     target.ended = value.ended;
     target.caseId = value.caseId;
     target.status = value.status;
+    target.foundStatus = value.foundStatus;
     if (data['person'] != null) {
       Uint8List? photo = target.matchedPerson?.photoBytes;
       for (final person in _profiles) {
@@ -660,10 +773,18 @@ class ApiVolunteerRepository extends VolunteerRepository {
     report.photoBytes = null;
   }
 
-  Future<RegisteredPerson> loadProfileDetails(RegisteredPerson person) async {
-    final row = jsonDecode(
-      (await _request('GET', '/profiles/${person.id}')).body,
-    ) as Map<String, dynamic>;
+  Future<RegisteredPerson> loadProfileDetails(
+    RegisteredPerson person, {
+    String? foundReportId,
+  }) async {
+    final path = Uri(
+      path: '/profiles/${person.id}',
+      queryParameters: foundReportId == null
+          ? null
+          : {'found_report_id': foundReportId},
+    ).toString();
+    final row =
+        jsonDecode((await _request('GET', path)).body) as Map<String, dynamic>;
     return _person(row, photo: person.photoBytes);
   }
 
@@ -714,6 +835,23 @@ class ApiVolunteerRepository extends VolunteerRepository {
     return item;
   }
 
+  Future<FoundReport> confirmManualIdentity(
+    String profileId,
+    String requestId,
+  ) async {
+    final data = jsonDecode(
+      (await _request(
+        'POST',
+        '/found-reports/manual',
+        body: {'profile_id': profileId, 'request_id': requestId},
+      )).body,
+    ) as Map<String, dynamic>;
+    final result = _found(data);
+    _reports = [result, ..._reports.where((r) => r.id != result.id)];
+    if (!_disposed) notifyListeners();
+    return result;
+  }
+
   @override
   Future<FoundReport> submitFound(
     VolunteerAccount account, {
@@ -742,6 +880,28 @@ class ApiVolunteerRepository extends VolunteerRepository {
       (await _request('GET', '/found-reports/${report.id}/candidates')).body,
     ) as Map<String, dynamic>;
     if (data['state'] == 'unavailable') throw StateError('ai-unavailable');
+    if (data['state'] == 'no_reliable_candidate') return [];
+    if (data['state'] == 'candidates' && data['candidates'] is List) {
+      final results = <MatchCandidate>[];
+      for (final row in data['candidates'] as List) {
+        final score = row['similarity'];
+        if (score is! num ||
+            !score.isFinite ||
+            score < 0 ||
+            score > 1 ||
+            row['person'] is! Map<String, dynamic>) {
+          throw StateError('unsupported-model-contract');
+        }
+        results.add(
+          MatchCandidate(
+            _person(row['person'] as Map<String, dynamic>),
+            similarity: score.toDouble(),
+          ),
+        );
+      }
+      results.sort((a, b) => b.similarity!.compareTo(a.similarity!));
+      return results;
+    }
     throw StateError('unsupported-model-contract');
   }
 
@@ -825,7 +985,12 @@ class ApiVolunteerRepository extends VolunteerRepository {
         '/found-reports/${report.id}/$action',
         body: method == VerificationMethod.qr
             ? {'payload': value}
-            : {'case_id': value},
+            : {
+                if (report.caseId == null)
+                  'identifier': value
+                else
+                  'case_id': value,
+              },
       )).body,
     ) as Map<String, dynamic>;
     _updateReport(report, data['report'] as Map<String, dynamic>);

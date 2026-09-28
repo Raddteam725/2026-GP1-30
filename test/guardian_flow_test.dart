@@ -203,7 +203,7 @@ void main() {
       await t.enterText(fields.at(1), '9');
       await tapText(t, 'Female');
       expect(find.text('Specify relationship'), findsNothing);
-      await t.tap(find.byType(DropdownButtonFormField<String>));
+      await t.tap(find.byType(DropdownButtonFormField<String>).first);
       await t.pumpAndSettle();
       await t.tap(find.text('Other').last);
       await t.pumpAndSettle();
@@ -216,6 +216,53 @@ void main() {
       expect(repo.records, isEmpty);
     },
   );
+  testWidgets(
+    'Registration offers configured periods without selecting an event',
+    (t) async {
+      await start(t);
+      auth.active = true;
+      await route(t, AppRoutes.addIndividual);
+      await scrollToText(t, 'Registration period');
+      final selector = find.byKey(const ValueKey('registration-period'));
+      await t.ensureVisible(selector);
+      expect(
+        t.widget<DropdownButtonFormField<String>>(selector).initialValue,
+        isNull,
+      );
+      await t.tap(selector);
+      await t.pumpAndSettle();
+      expect(find.text('2 hours'), findsOneWidget);
+      expect(find.text('48 hours'), findsOneWidget);
+      await t.tap(find.text('2 hours'));
+      await t.pumpAndSettle();
+      expect(t.state<FormFieldState<String>>(selector).value, 'test-short');
+      expect(
+        const IndividualInput(
+          fullName: 'Test',
+          age: 7,
+          gender: 'female',
+          relationship: 'child',
+          registrationPeriodId: 'test-short',
+        ).toJson()['registration_period_id'],
+        'test-short',
+      );
+    },
+  );
+  for (final language in ['en', 'ar']) {
+    testWidgets(
+      'Guardian can display standalone Found Report identifier without missing case in $language',
+      (t) async {
+        await start(t, locale: language);
+        auth.active = true;
+        repo.foundReportIds = ['FR-test-context'];
+        await route(t, AppRoutes.qrCode);
+        expect(repo.caseRecords, isEmpty);
+        expect(find.text('FR-test-context'), findsOneWidget);
+        expect(find.byType(QrImageView), findsOneWidget);
+        expect(t.takeException(), isNull);
+      },
+    );
+  }
   testWidgets('Logout clears protected history and keeps locale', (t) async {
     await start(t, locale: 'ar');
     auth.active = true;
@@ -264,7 +311,7 @@ void main() {
     expect(t.takeException(), isNull);
   });
   testWidgets(
-    'An expired photo hides Report Missing until a new photo is captured',
+    'An expired registration cannot be renewed by replacing its photo',
     (t) async {
       await start(t);
       auth.active = true;
@@ -280,19 +327,12 @@ void main() {
       );
       await route(t, AppRoutes.guardian);
       await tapText(t, 'Test Person');
-      await scrollToText(t, 'Update Photo');
+      await scrollToText(t, 'Register an Individual');
       expect(find.text('Report Missing'), findsNothing);
-      expect(find.text('Update Photo'), findsOneWidget);
-      await tapText(t, 'Update Photo');
+      await tapText(t, 'Register an Individual');
       expect(find.byType(IndividualFormScreen), findsOneWidget);
-      // The fake's own save() never carries photoExpired forward from an
-      // edit, standing in for a freshly captured photo restarting the
-      // 24-hour window server-side.
-      await t.enterText(find.byType(TextFormField).first, 'Test Person');
-      await tapText(t, 'Save Changes');
-      await scrollToText(t, 'Report Missing');
-      expect(find.text('Report Missing'), findsOneWidget);
-      expect(find.text('Update Photo'), findsNothing);
+      expect(find.text('Save Changes'), findsNothing);
+      expect(repo.records.single.photoExpired, isTrue);
     },
   );
   testWidgets('Language remains accessible from the authenticated profile', (

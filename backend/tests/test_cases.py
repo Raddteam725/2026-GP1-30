@@ -11,12 +11,12 @@ from app import service, push
 from app.cases import CaseService, validate_transition
 from app.case_models import CaseCreate, GuidedReport, STAGES, TERMINAL_STATUSES
 from app.models import ProfileCreate, IndividualInput
-from firestore_fake import Database, Bucket
+from firestore_fake import Database, Bucket, configured_event
 
 @pytest.fixture
 def storage(monkeypatch):
     db, bucket = Database(), Bucket()
-    db.set(db.collection("events").document("test-event"), {"active": True})
+    db.set(db.collection("events").document("test-event"), configured_event())
     monkeypatch.setattr(service, "database", lambda: db)
     monkeypatch.setattr(service, "bucket", lambda: bucket)
     monkeypatch.setattr(service.firestore, "transactional", lambda f: f)

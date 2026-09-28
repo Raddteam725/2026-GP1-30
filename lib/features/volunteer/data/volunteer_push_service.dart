@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'volunteer_notification_memory.dart';
+
 import 'package:flutter/foundation.dart';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -17,15 +19,27 @@ class VolunteerPushService {
     this.repo, {
     required this.onOpen,
     required this.onNotification,
+    required this.onAccessChanged,
   });
   final ApiVolunteerRepository repo;
   final void Function(VolunteerNotificationEvent event) onOpen;
   final void Function(VolunteerNotificationEvent event) onNotification;
+  final VoidCallback onAccessChanged;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   String? _token;
+  Future<void> _foregroundDelivery = Future.value();
   bool _closed = false;
   String _locale = 'en';
   Coordinates? _location;
+  bool _locationAccess = false;
+
+  void setLocationAccess(bool granted) {
+    if (_locationAccess == granted || _closed) return;
+    _locationAccess = granted;
+    if (!granted) _location = null;
+    unawaited(sync(_locale, _location));
+  }
+
   Future<void> initialize(String locale) async {
     _locale = locale;
     repo.closeSession = close;
@@ -45,14 +59,40 @@ class VolunteerPushService {
       // dispatch during registration can otherwise arrive before the listener.
       _subscriptions.add(
         FirebaseMessaging.onMessage.listen((message) {
+          if (!_closed &&
+              message.data['role'] == 'volunteer' &&
+              message.data['kind'] == 'access_changed') {
+            onAccessChanged();
+            return;
+          }
           final event = VolunteerNotificationEvent.fromData(message.data);
-          if (!_closed && event != null) {
+          if (!_closed && _locationAccess && event != null) {
             if (kDebugMode) {
               debugPrint(
                 'Radd FCM ${event.id} received ${DateTime.now().toUtc().toIso8601String()}',
               );
             }
-            onNotification(event);
+            _foregroundDelivery = _foregroundDelivery
+                .then((_) async {
+                  if (_closed) return;
+                  final account = repo.account;
+                  if (account == null) return;
+                  if (!await VolunteerNotificationMemory.accept(
+                    account.uid,
+                    account.eventId ?? '',
+                    event.id,
+                  )) {
+                    return;
+                  }
+                  if (!_closed && _locationAccess) onNotification(event);
+                })
+                .catchError((Object error) {
+                  if (kDebugMode) {
+                    debugPrint(
+                      'Radd notification dedup failed (${error.runtimeType})',
+                    );
+                  }
+                });
           }
         }),
       );
@@ -114,11 +154,15 @@ class VolunteerPushService {
     _syncAgain = false;
     final token = _token!;
     try {
-      await repo.registerDevice(token, _locale, _location);
-      // A registration already in flight must not survive a concurrent logout.
-      // Do not await _syncing from close(): authorization loss can call close
-      // from inside this very request.
-      if (_closed) await repo.unregisterDevice(token);
+      if (_locationAccess) {
+        await repo.registerDevice(token, _locale, _location);
+        // Recheck after the request, including permission loss during flight.
+        // Do not await _syncing from close(): authorization loss can call close
+        // from inside this very request.
+        if (_closed || !_locationAccess) await repo.unregisterDevice(token);
+      } else {
+        await repo.unregisterDevice(token);
+      }
     } catch (error) {
       if (kDebugMode) {
         debugPrint('Radd FCM registration failed (${error.runtimeType})');

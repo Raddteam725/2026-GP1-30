@@ -9,6 +9,7 @@ import '../../auth/presentation/auth_screen.dart';
 import '../data/api_volunteer_repository.dart';
 import 'volunteer_components.dart';
 import 'volunteer_workspace.dart';
+import 'volunteer_consent_screen.dart';
 
 /// Protected Volunteer destination; login/reset/logout use the shared auth stack.
 class VolunteerEntry extends StatefulWidget {
@@ -112,10 +113,14 @@ class _VolunteerEntryState extends State<VolunteerEntry> {
     }
     final repo = _repository;
     if (repo?.account != null) {
-      return VolunteerWorkspace(
-        account: repo!.account!,
-        repository: repo,
+      return VolunteerConsentGate(
+        repository: repo!,
         onLogout: _leave,
+        childBuilder: (context) => VolunteerWorkspace(
+          account: repo.account!,
+          repository: repo,
+          onLogout: _leave,
+        ),
       );
     }
     return Scaffold(

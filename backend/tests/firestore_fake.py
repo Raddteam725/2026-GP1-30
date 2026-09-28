@@ -135,3 +135,12 @@ class Bucket:
     def fail_next_delete(self, path):
         """Test-only: makes the next delete() of this exact path raise once."""
         self.failures.add(path)
+
+
+def configured_event():
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    return {'active': True, 'starts_at': now - timedelta(days=1),
+            'ends_at': now + timedelta(days=10),
+            'registration_periods': [{'id': 'short', 'duration_hours': 2},
+                                     {'id': 'long', 'duration_hours': 72}]}

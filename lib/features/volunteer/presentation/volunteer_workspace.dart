@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'volunteer_capture.dart';
+import 'volunteer_consent_screen.dart';
 import 'volunteer_notification_banner.dart';
 import '../domain/volunteer_notification_event.dart';
 
@@ -26,6 +27,15 @@ import 'volunteer_components.dart';
 part 'volunteer_case_views.dart';
 part 'volunteer_identification_views.dart';
 part 'volunteer_account_views.dart';
+
+enum IdentificationState {
+  ready,
+  processing,
+  candidates,
+  noReliableCandidate,
+  unavailable,
+  error,
+}
 
 enum VolunteerView {
   home,
@@ -74,9 +84,11 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
   StreamSubscription<VolunteerNotificationEvent>? _noticeSubscription;
   OverlayEntry? _noticeOverlay;
   VolunteerNotificationEvent? _pendingNotificationOpen;
-  bool _aiUnavailable = false;
+  IdentificationState _identificationState = IdentificationState.ready;
+  bool _independentReview = false;
   Uint8List? _pendingCapture;
   String? _captureRequestId;
+  String? _manualRequestId;
   final List<VolunteerView> _stack = [VolunteerView.home];
   int _tab = 0, _searchGeneration = 0;
   bool _mine = false,
@@ -119,29 +131,127 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
           repo as ApiVolunteerRepository,
           onNotification: _receiveNotification,
           onOpen: _openNotification,
+          onAccessChanged: _checkParticipation,
         );
-        _push!
-            .initialize(Localizations.localeOf(context).languageCode)
-            .whenComplete(() {
-              if (mounted) _location?.initialize();
-            });
+        _push!.setLocationAccess(_location?.accessGranted == true);
+        unawaited(
+          _push!.initialize(Localizations.localeOf(context).languageCode),
+        );
+        _syncParticipation();
         _loadRemote();
       });
       _poll = Timer.periodic(const Duration(seconds: 20), (_) {
         if (WidgetsBinding.instance.lifecycleState ==
-            AppLifecycleState.resumed) {
+                AppLifecycleState.resumed ||
+            _location?.continuesInBackground == true) {
           _loadRemote();
         }
       });
     }
-    if (!repo.isPreview) {
-      _location = VolunteerLocation()
-        ..addListener(() {
-          _refresh();
-          if (mounted) {
-            _push?.sync(Localizations.localeOf(context).languageCode, location);
-          }
-        });
+  }
+
+  bool _configuringLocation = false;
+  bool _hadLocationAccess = false;
+  void _closeProtectedRoutes() {
+    final route = ModalRoute.of(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && route != null && route.isActive) {
+        Navigator.of(context)
+            .popUntil((candidate) => identical(candidate, route));
+      }
+    });
+  }
+
+  bool _checkingAccess = false;
+  Future<void> _checkParticipation() async {
+    if (_checkingAccess || !mounted || repo is! ApiVolunteerRepository) return;
+    _checkingAccess = true;
+    try {
+      await (repo as ApiVolunteerRepository).loadProfile();
+      if (mounted) {
+        _syncParticipation();
+        unawaited(_loadRemote(event: true));
+      }
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Radd participation refresh: ${error.runtimeType}');
+      }
+    } finally {
+      _checkingAccess = false;
+    }
+  }
+
+  String? _participationEventId;
+  void _syncParticipation() {
+    if (!mounted || repo is! ApiVolunteerRepository) return;
+    if (!(repo as ApiVolunteerRepository).consentCurrent ||
+        (repo as ApiVolunteerRepository).account == null ||
+        !account.eventAuthorized ||
+        (_participationEventId != null &&
+            _participationEventId != account.eventId)) {
+      final previous = _location;
+      if (_participationEventId != null) _closeProtectedRoutes();
+      _hadLocationAccess = false;
+      _location = null;
+      previous?.dispose();
+      _push?.setLocationAccess(false);
+      _case = null;
+      _person = null;
+      _report?.photoBytes = null;
+      _report = null;
+      _pendingCapture = null;
+      _candidates = [];
+      _participationEventId = null;
+      if (view != VolunteerView.profile && view != VolunteerView.badge) {
+        _tab = 0;
+        _stack
+          ..clear()
+          ..add(VolunteerView.home);
+      }
+      if (!(repo as ApiVolunteerRepository).consentCurrent ||
+          (repo as ApiVolunteerRepository).account == null ||
+          !account.eventAuthorized) {
+        return;
+      }
+    }
+    _participationEventId = account.eventId;
+    if (_location == null) {
+      final service = VolunteerLocation();
+      _location = service;
+      service.addListener(() {
+        if (!mounted || !identical(_location, service)) return;
+        if (_hadLocationAccess && !service.accessGranted) {
+          _notices.clear();
+          _dismissNotice();
+          _closeProtectedRoutes();
+        }
+        final gainedAccess = !_hadLocationAccess && service.accessGranted;
+        _hadLocationAccess = service.accessGranted;
+        setState(() {});
+        _push?.setLocationAccess(
+          account.eventAuthorized && service.accessGranted,
+        );
+        _push?.sync(Localizations.localeOf(context).languageCode, location);
+        _syncParticipation();
+        if (gainedAccess && !_refreshing) unawaited(_loadRemote(event: true));
+      });
+      unawaited(service.initialize(askPermissionOnFirstUse: false));
+    }
+    final service = _location!;
+    if (service.accessGranted &&
+        !service.continuesInBackground &&
+        !_configuringLocation &&
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      _configuringLocation = true;
+      unawaited(
+        service
+            .authorizeBackgroundParticipation(
+              title: s.vLocationServiceTitle,
+              description: s.vLocationServiceBody,
+              channelName: s.vLocationServiceChannel,
+            )
+            .whenComplete(() => _configuringLocation = false),
+      );
     }
   }
 
@@ -153,8 +263,50 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     }
     setState(() => _refreshing = true);
     try {
-      await (repo as ApiVolunteerRepository).refresh();
+      await _location?.request(askPermission: false);
+      await (repo as ApiVolunteerRepository).loadProfile();
+      if (!mounted) return;
+      _syncParticipation();
+      if (_canParticipate) {
+        await (repo as ApiVolunteerRepository).refresh();
+        final previous = _report;
+        final refreshView = view;
+        if (previous != null &&
+            !_independentReview &&
+            !_busy &&
+            const {
+              VolunteerView.matches,
+              VolunteerView.finding,
+              VolunteerView.manual,
+              VolunteerView.matchDetails,
+              VolunteerView.contact,
+              VolunteerView.verify,
+              VolunteerView.identifier,
+              VolunteerView.verified,
+              VolunteerView.handover,
+              VolunteerView.verificationFailed,
+            }.contains(view)) {
+          final current = await (repo as ApiVolunteerRepository).loadReport(
+            previous.id,
+          );
+          if (mounted &&
+              identical(_report, previous) &&
+              !_busy &&
+              !_independentReview &&
+              view == refreshView) {
+            if (current.foundStatus != previous.foundStatus ||
+                (current.verification != null) !=
+                    (previous.verification != null)) {
+              _restoreReport(current);
+            } else {
+              _report = current;
+              _person = current.matchedPerson ?? _person;
+            }
+          }
+        }
+      }
       if (mounted) {
+        _syncParticipation();
         _push?.sync(Localizations.localeOf(context).languageCode, location);
       }
     } catch (_) {
@@ -171,7 +323,7 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
   }
 
   void _receiveNotification(VolunteerNotificationEvent event) {
-    if (!mounted || !_noticeDedup.accept(event)) return;
+    if (!mounted || !_canParticipate || !_noticeDedup.accept(event)) return;
     // A newly arriving important event is visible immediately, even if the
     // previous banner was not dismissed. Both remain in server-side history.
     _noticeOverlay?.remove();
@@ -187,6 +339,7 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
   }
 
   Future<void> _refreshEvent(VolunteerNotificationEvent event) async {
+    if (!_canParticipate) return;
     if (kDebugMode) {
       debugPrint(
         'Radd event ${event.id} T6/T7 ${DateTime.now().toUtc().toIso8601String()}',
@@ -326,13 +479,14 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _loadRemote();
-    } else if (mounted) {
+    } else if (mounted && _location?.continuesInBackground != true) {
       _push?.sync(Localizations.localeOf(context).languageCode, null);
     }
   }
 
   void _refresh() {
     if (!mounted) return;
+    _syncParticipation();
     setState(() {
       if (repo is ApiVolunteerRepository) {
         (repo as ApiVolunteerRepository).proximityLocation = location;
@@ -396,8 +550,17 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
 
   void _message(String text) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
-  Future<void> _run(Future<void> Function() action) async {
+  Future<void> _run(
+    Future<void> Function() action, {
+    bool requiresLocation = true,
+  }) async {
     if (_busy) return;
+    if (requiresLocation &&
+        repo is ApiVolunteerRepository &&
+        !_canParticipate) {
+      _message(s.vLocationHelp);
+      return;
+    }
     _update(() => _busy = true);
     try {
       await action();
@@ -419,6 +582,56 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     }
   }
 
+  Future<void> _logout() async {
+    await _location?.stop();
+    await widget.onLogout();
+  }
+
+  bool get _canParticipate =>
+      repo.isPreview ||
+      (account.eventAuthorized &&
+          (repo is! ApiVolunteerRepository ||
+              (repo as ApiVolunteerRepository).consentCurrent) &&
+          _location?.accessGranted == true);
+
+  bool get _locationBlocked =>
+      repo is ApiVolunteerRepository &&
+      !_canParticipate &&
+      view != VolunteerView.profile &&
+      view != VolunteerView.badge;
+
+  List<Widget> _locationRequired() => [
+    if (!account.eventAuthorized)
+      VolunteerInfo(s.vEventUnassigned, title: s.vBadge)
+    else ...[
+      VolunteerInfo(
+        _location?.servicesDisabled == true
+            ? s.vLocationServicesDisabled
+            : _location?.permanentlyDenied == true
+            ? s.vLocationDeniedForever
+            : s.vLocationHelp,
+        title: s.vLocationRequired,
+      ),
+      const SizedBox(height: 16),
+      VolunteerAction(
+        _location?.servicesDisabled == true ||
+                _location?.permanentlyDenied == true
+            ? s.vLocationSettings
+            : s.vAllowLocation,
+        onPressed: _location == null || _location!.requesting
+            ? null
+            : () async {
+                if (_location!.servicesDisabled ||
+                    _location!.permanentlyDenied) {
+                  await _location!.openSettings();
+                } else {
+                  await _location!.request();
+                }
+              },
+      ),
+    ],
+  ];
+
   void _details(VolunteerCase item) {
     if (repo is ApiVolunteerRepository) {
       _run(() async {
@@ -435,7 +648,8 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
       item.joinable &&
       location != null &&
       item.information?.coordinates != null &&
-      location!.distanceTo(item.information!.coordinates!) <= 500;
+      location!.distanceTo(item.information!.coordinates!) <=
+          repo.proximityRadiusMeters;
   Future<bool> _confirm(String title, String message, String action) =>
       showDialog<bool>(
         context: context,
@@ -569,7 +783,9 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
                     child: ListView(
                       key: ValueKey(view),
                       padding: const EdgeInsets.all(24),
-                      children: _initialDataPending
+                      children: _locationBlocked
+                          ? _locationRequired()
+                          : _initialDataPending
                           ? [const Center(child: CircularProgressIndicator())]
                           : _content(),
                     ),

@@ -91,6 +91,8 @@ extension _VolunteerAccountViews on _VolunteerWorkspaceState {
         onTap: _chooseLanguage,
       ),
     ),
+    const SizedBox(height: 24),
+    VolunteerPolicyLinks(),
     const SizedBox(height: 32),
     OutlinedButton.icon(
       style: OutlinedButton.styleFrom(
@@ -109,7 +111,9 @@ extension _VolunteerAccountViews on _VolunteerWorkspaceState {
                 confirm: s.logout,
                 icon: Icons.logout,
               );
-              if (confirmed == true && mounted) await _run(widget.onLogout);
+              if (confirmed == true && mounted) {
+                await _run(_logout, requiresLocation: false);
+              }
             },
     ),
   ];
@@ -195,7 +199,8 @@ class _VolunteerBadgeCardState extends State<VolunteerBadgeCard>
   }
 
   void _sync() {
-    if (widget.account.active && !MediaQuery.disableAnimationsOf(context)) {
+    if (widget.account.assignedToCurrentEvent &&
+        !MediaQuery.disableAnimationsOf(context)) {
       _animation.repeat();
     } else {
       _animation.stop();
@@ -214,7 +219,9 @@ class _VolunteerBadgeCardState extends State<VolunteerBadgeCard>
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, child) => CustomPaint(
-        foregroundPainter: a.active ? _BadgeBorder(_animation.value) : null,
+        foregroundPainter: a.assignedToCurrentEvent
+            ? _BadgeBorder(_animation.value)
+            : null,
         child: child,
       ),
       child: Container(
@@ -223,9 +230,11 @@ class _VolunteerBadgeCardState extends State<VolunteerBadgeCard>
           color: Colors.white,
           borderRadius: BorderRadius.circular(26),
           border: Border.all(
-            color: a.active ? const Color(0xFFB2E7DB) : volunteerBorder,
+            color: a.assignedToCurrentEvent
+                ? const Color(0xFFB2E7DB)
+                : const Color(0xFFB91C1C),
           ),
-          boxShadow: a.active
+          boxShadow: a.assignedToCurrentEvent
               ? const [BoxShadow(color: Color(0x2065CDB1), blurRadius: 18)]
               : null,
         ),
@@ -254,7 +263,9 @@ class _VolunteerBadgeCardState extends State<VolunteerBadgeCard>
                         ),
                       ),
                       Text(
-                        s.vAuthorized,
+                        a.assignedToCurrentEvent
+                            ? s.vEventAuthorized
+                            : s.vEventUnassigned,
                         style: const TextStyle(fontSize: 12, height: 1.4),
                       ),
                     ],
@@ -266,12 +277,17 @@ class _VolunteerBadgeCardState extends State<VolunteerBadgeCard>
             Align(
               alignment: AlignmentDirectional.centerEnd,
               child: VolunteerChip(
-                a.active ? s.vActive : s.vInactive,
-                color: a.active ? volunteerGreen : const Color(0xFFB91C1C),
+                a.assignedToCurrentEvent
+                    ? s.vEventAuthorized
+                    : s.vEventUnassigned,
+                color: a.assignedToCurrentEvent
+                    ? volunteerGreen
+                    : const Color(0xFFB91C1C),
                 dot: true,
               ),
             ),
             const Divider(height: 36),
+            Text('${s.vAccountStatus}: ${a.active ? s.vActive : s.vInactive}'),
             const SizedBox(height: 20),
             Text(
               s.vVolunteerName,

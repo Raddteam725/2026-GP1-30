@@ -13,10 +13,12 @@ from app.main import app
 from app.firebase import identity
 from app.cases import CaseService
 from app.case_models import CaseCreate
-from firestore_fake import Database, Bucket
+from firestore_fake import Database, Bucket, configured_event
 from test_cases import guardian_with_individual
 
 class TransactionDatabase(Database):
+    def delete(self, ref):
+        self.data.pop(ref.path, None)
     """Serializes test transactions and resolves timestamps/dotted updates.
 
     This verifies use of the transaction boundary under concurrent callers;
@@ -44,7 +46,7 @@ class TransactionDatabase(Database):
 @pytest.fixture
 def db(monkeypatch):
     db, storage = TransactionDatabase(), Bucket()
-    db.set(db.collection('events').document('test-event'), {'active': True})
+    db.set(db.collection('events').document('test-event'), configured_event())
     monkeypatch.setattr(volunteer, 'database', lambda: db)
     monkeypatch.setattr(service, 'database', lambda: db)
     monkeypatch.setattr(service, 'bucket', lambda: storage)
@@ -60,7 +62,10 @@ def db(monkeypatch):
         return run
     monkeypatch.setattr(volunteer.firestore, 'transactional', transactional)
     for uid in ['one', 'two']:
+        db.set(db.collection('events').document('test-event').collection('volunteers').document(uid), {})
         db.set(db.collection('users').document(uid), {'role': 'volunteer', 'active': True,
+            'terms_version': 'draft-2026-09', 'privacy_version': 'draft-2026-09',
+            'terms_accepted_at': datetime.now(timezone.utc), 'privacy_accepted_at': datetime.now(timezone.utc),
             'full_name': 'Volunteer ' + uid, 'volunteer_id': 'VOL-' + uid,
             'email': uid + '@example.test', 'phone': '+966500000001'})
     yield db
@@ -92,6 +97,8 @@ def test_closed_state_is_minimal_authoritative_and_scoped_to_previous_recipient(
 
 def test_profile_from_admin_document_and_no_self_registration(db):
     assert vol().profile()['volunteer_id'] == 'VOL-one'
+    from app.alerts import PROXIMITY_RADIUS_METERS
+    assert vol().profile()['proximity_radius_meters'] == PROXIMITY_RADIUS_METERS
     db.data['users/one']['active'] = False
     with pytest.raises(HTTPException) as inactive:
         vol().profile()
