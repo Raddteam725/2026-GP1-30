@@ -75,8 +75,9 @@ def _deliver_guardian(guardian_uid, *, kind, status, case_id, event_id):
     try:
         db = database()
         docs = [d for d in _registrations(db, guardian_uid).stream() if (d.to_dict() or {}).get("token")]
-        if (db.collection('users').document(guardian_uid).get().to_dict() or {}).get('role') != 'guardian':
-            return
+        profile = db.collection('users').document(guardian_uid).get().to_dict() or {}
+        if profile.get('role') != 'guardian' or profile.get('active') is False:
+            return  # A deactivated Guardian receives no push; history stays durable.
         now = datetime.now(timezone.utc)
         docs = [d for d in docs if d.to_dict().get('session_expires_at', 0) > now.timestamp()]
         if not docs:

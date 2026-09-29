@@ -18,7 +18,7 @@ String caseStatusLabel(String status, AppLocalizations s) => switch (status) {
   'reunited' => s.reunited,
   'resolved' => s.resolved,
   'cancelled' => s.cancelled,
-  'transferred_to_authority' => s.transferredToAuthority,
+  'referred_to_authority' => s.referredToAuthority,
   _ => s.unknownCaseStatus,
 };
 
@@ -75,7 +75,7 @@ const caseStatusColors = <String, Color>{
   'reunited': Color(0xFF16A34A),
   'resolved': Color(0xFF16A34A),
   'cancelled': Color(0xFF64748B),
-  'transferred_to_authority': Color(0xFFEA580C),
+  'referred_to_authority': Color(0xFFEA580C),
 };
 Color caseStatusColor(String status) => caseStatusColors[status] ?? mutedText;
 

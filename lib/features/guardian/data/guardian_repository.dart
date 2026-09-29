@@ -85,7 +85,34 @@ class RegistrationPeriod {
   final int hours;
 }
 
+/// The one Active event, exactly as the backend (and the Admin who manages
+/// it) describes it. Never constructed from a constant in the app: when no
+/// event is Active the backend fails closed and the UI says so.
+class ActiveEvent {
+  const ActiveEvent({
+    required this.id,
+    required this.name,
+    required this.status,
+    this.location,
+    this.startsAt,
+    this.endsAt,
+  });
+  final String id, name, status;
+  final String? location;
+  final DateTime? startsAt, endsAt;
+  factory ActiveEvent.fromJson(Map<String, dynamic> j) => ActiveEvent(
+    id: j['id'] as String,
+    name: (j['name'] as String?) ?? '',
+    status: (j['status'] as String?) ?? 'active',
+    location: j['location'] as String?,
+    startsAt: DateTime.tryParse(j['starts_at']?.toString() ?? ''),
+    endsAt: DateTime.tryParse(j['ends_at']?.toString() ?? ''),
+  );
+}
+
 abstract class GuardianRepository {
+  /// The Active event (name, location, dates) from the authoritative record.
+  Future<ActiveEvent> activeEvent();
   Future<List<RegistrationPeriod>> registrationPeriods();
 
   /// Server-owned role, resolved without assuming a Guardian profile.

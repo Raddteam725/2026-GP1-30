@@ -156,6 +156,8 @@ class _SessionScreenState extends State<SessionScreen> {
                 ? s.missingProfileRecovery
                 : _failure == 'unauthorized'
                 ? s.expiredSessionRecovery
+                : _failure == 'accountInactive'
+                ? s.accountDeactivated
                 : _failure == 'role'
                 ? s.roleRecovery
                 : s.sessionUnavailable,

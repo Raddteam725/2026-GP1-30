@@ -59,7 +59,7 @@ class GuardianPushRefresh extends ChangeNotifier with WidgetsBindingObserver {
           'reunited',
           'resolved',
           'cancelled',
-          'transferred_to_authority',
+          'referred_to_authority',
         }.contains(status);
   }
 

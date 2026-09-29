@@ -58,8 +58,8 @@ and storage paths, and transactionally sets a deletion fence. It deletes photo a
 embedding objects before deleting the registration (including any inline embedding).
 Storage failure preserves references and the fence for retry. Associated terminal
 case details are scrubbed to existing minimal statistics. Repeated runs are safe.
-Guardian and Volunteer accounts are not deleted. Terminal outcomes include
-`reunited`, `resolved`, `cancelled`, and internal `transferred_to_authority`.
+Guardian and Volunteer accounts are not deleted. Terminal outcomes are
+`reunited`, `resolved`, `cancelled`, and the Admin closure `referred_to_authority`.
 
 The existing opt-in local job invokes cleanup every 60 seconds. Deletion occurs
 on the next successful check, not necessarily at the exact expiry instant. Access

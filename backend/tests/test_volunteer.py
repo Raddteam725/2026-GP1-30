@@ -13,7 +13,7 @@ from app.main import app
 from app.firebase import identity
 from app.cases import CaseService
 from app.case_models import CaseCreate
-from firestore_fake import Database, Bucket, configured_event
+from firestore_fake import Database, Bucket, configured_event, server_now
 from test_cases import guardian_with_individual
 
 class TransactionDatabase(Database):
@@ -31,7 +31,7 @@ class TransactionDatabase(Database):
     def set(self, ref, value, merge=False):
         def resolve(v):
             if v is volunteer.firestore.SERVER_TIMESTAMP:
-                return datetime.now(timezone.utc)
+                return server_now()
             if isinstance(v, dict): return {k: resolve(x) for k, x in v.items()}
             return v
         super().set(ref, resolve(value), merge)

@@ -45,6 +45,22 @@ class TestRepository implements GuardianRepository {
   @override
   Future<List<String>> activeFoundReportIds() async => foundReportIds;
   List<String> foundReportIds = [];
+  ActiveEvent event = const ActiveEvent(
+    id: 'test-event',
+    name: 'Test Event',
+    status: 'active',
+    location: 'Test Venue',
+  );
+  bool failNextEvent = false;
+  @override
+  Future<ActiveEvent> activeEvent() async {
+    if (failNextEvent) {
+      failNextEvent = false;
+      throw const AppFailure('eventUnavailable');
+    }
+    return event;
+  }
+
   @override
   Future<List<RegistrationPeriod>> registrationPeriods() async => const [
     RegistrationPeriod('test-short', 2),
@@ -63,8 +79,16 @@ class TestRepository implements GuardianRepository {
   int caseFetches = 0;
   bool failNextMissingCase = false;
   int _caseCounter = 0;
+
+  /// Simulates an Admin deactivation: the backend answers every Guardian
+  /// request with 403 `account_inactive`.
+  bool deactivated = false;
   @override
-  Future<GuardianProfile> profile() async => person;
+  Future<GuardianProfile> profile() async {
+    if (deactivated) throw const AppFailure('accountInactive');
+    return person;
+  }
+
   @override
   Future<GuardianProfile> createProfile(String name, String phone) async =>
       person = GuardianProfile(

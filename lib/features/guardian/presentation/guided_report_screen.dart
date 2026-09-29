@@ -67,27 +67,27 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
     super.dispose();
   }
 
+  /// The predefined question sequence (Sprint-0 backlog): last-seen location
+  /// Yes/No, clothing, distinctive item Yes/No (+ description when Yes), and
+  /// optional additional information. A "No" to the location question simply
+  /// records no location -- no further location question is asked.
   int get _step {
     if (_answers['same_location'] == null) return 0;
-    if (_answers['same_location'] == false &&
-        (_answers['last_seen_description'] ?? '').isEmpty) {
-      return 1;
-    }
-    if ((_answers['clothing'] ?? '').isEmpty) return 2;
-    if (_answers['carrying_distinctive'] == null) return 3;
+    if ((_answers['clothing'] ?? '').isEmpty) return 1;
+    if (_answers['carrying_distinctive'] == null) return 2;
     if (_answers['carrying_distinctive'] == true &&
         (_answers['distinctive_description'] ?? '').isEmpty) {
-      return 4;
+      return 3;
     }
-    if (_answers['completed'] != true) return 5;
-    return 6;
+    if (_answers['completed'] != true) return 4;
+    return 5;
   }
 
   Future<void> _answer({bool? choice}) async {
     if (_busy) return;
     final step = _step;
     final s = AppLocalizations.of(context)!;
-    if ([1, 2, 4].contains(step) && _text.text.trim().isEmpty) {
+    if ([1, 3].contains(step) && _text.text.trim().isEmpty) {
       setState(() => _error = const AppFailure('answerRequired'));
       return;
     }
@@ -137,15 +137,13 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
           next['longitude'] = null;
         }
       } else if (step == 1) {
-        next['last_seen_description'] = _text.text.trim();
-      } else if (step == 2) {
         next['clothing'] = _text.text.trim();
-      } else if (step == 3) {
+      } else if (step == 2) {
         next['carrying_distinctive'] = choice;
         next['distinctive_description'] = '';
-      } else if (step == 4) {
+      } else if (step == 3) {
         next['distinctive_description'] = _text.text.trim();
-      } else if (step == 5) {
+      } else if (step == 4) {
         next['additional_information'] = _text.text.trim();
         next['completed'] = true;
       }
@@ -176,7 +174,6 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
     final s = AppLocalizations.of(context)!;
     final questions = [
       s.sameLocationQuestion,
-      s.lastSeenDescription,
       s.clothingQuestion,
       s.distinctiveQuestion,
       s.distinctiveDescription,
@@ -289,34 +286,36 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
                               : s.locationNotRecorded)
                         : null,
                   ),
-                if (_answers['same_location'] == false) ...[
-                  _assistant(questions[1]),
-                  if ((_answers['last_seen_description'] ?? '').isNotEmpty)
-                    _reply(_answers['last_seen_description'] as String),
+                // A report saved before the location question was reduced to
+                // Yes/No may still carry a textual last-seen answer: keep
+                // showing what the Guardian actually said, never ask it again.
+                if ((_answers['last_seen_description'] ?? '').isNotEmpty) ...[
+                  _assistant(s.lastSeenDescription),
+                  _reply(_answers['last_seen_description'] as String),
                 ],
-                if (step >= 2) ...[
-                  _assistant(questions[2]),
+                if (step >= 1) ...[
+                  _assistant(questions[1]),
                   if ((_answers['clothing'] ?? '').isNotEmpty)
                     _reply(_answers['clothing'] as String),
                 ],
-                if (step >= 3) ...[
-                  _assistant(questions[3]),
+                if (step >= 2) ...[
+                  _assistant(questions[2]),
                   if (_answers['carrying_distinctive'] != null)
                     _reply(
                       _answers['carrying_distinctive'] == true ? s.yes : s.no,
                     ),
                 ],
-                if (step >= 4 && _answers['carrying_distinctive'] == true) ...[
-                  _assistant(questions[4]),
+                if (step >= 3 && _answers['carrying_distinctive'] == true) ...[
+                  _assistant(questions[3]),
                   if ((_answers['distinctive_description'] ?? '').isNotEmpty)
                     _reply(_answers['distinctive_description'] as String),
                 ],
-                if (step >= 5) ...[
-                  _assistant(questions[5]),
+                if (step >= 4) ...[
+                  _assistant(questions[4]),
                   if ((_answers['additional_information'] ?? '').isNotEmpty)
                     _reply(_answers['additional_information'] as String),
                 ],
-                if (step == 6) _assistant(s.reportSaved),
+                if (step == 5) _assistant(s.reportSaved),
                 if (_answers['same_location'] != null)
                   Center(
                     child: Container(
@@ -550,7 +549,7 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
   /// Status" once every required answer has been saved.
   Widget _inputBar(AppLocalizations s, int step) {
     final Widget child;
-    if (step == 0 || step == 3) {
+    if (step == 0 || step == 2) {
       child = Row(
         children: [
           Expanded(
@@ -568,7 +567,7 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
           ),
         ],
       );
-    } else if (step < 6) {
+    } else if (step < 5) {
       child = Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
@@ -580,7 +579,7 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
               maxLines: 4,
               textInputAction: TextInputAction.newline,
               inputFormatters: [
-                LengthLimitingTextInputFormatter(step == 5 ? 2000 : 1000),
+                LengthLimitingTextInputFormatter(step == 4 ? 2000 : 1000),
               ],
               decoration: InputDecoration(
                 hintText: s.typeAnswer,
@@ -616,8 +615,8 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
                 shape: const CircleBorder(),
               ),
               child: Semantics(
-                label: step == 5 ? s.saveReport : s.send,
-                child: Icon(step == 5 ? Icons.check : Icons.send, size: 22),
+                label: step == 4 ? s.saveReport : s.send,
+                child: Icon(step == 4 ? Icons.check : Icons.send, size: 22),
               ),
             ),
           ),

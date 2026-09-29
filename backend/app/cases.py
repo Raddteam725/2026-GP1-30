@@ -206,6 +206,17 @@ class CaseService:
 # No Guardian status mutation endpoint. Volunteer/Admin services must call a
 # transactional transition with role/event authorization and verification proof.
 # validate_transition is the shared ordered-progression guard.
+#
+# Guardian-side contract for the Admin closure "Referred to Authority"
+# (status ADMIN_TERMINAL_OUTCOME, implemented by the Admin module): it is
+# terminal exactly like cancel()/resolve() above -- set `status`, `updated_at`
+# and `closed_at`; clear the individual's `active_case_id` (and
+# `active_found_report_id`); end a linked found report; write the Guardian's
+# notification record `users/{uid}/notifications/{case_id}-referred_to_authority`
+# (kind `status_changed`) and call push.notify_guardian with the same values.
+# Guardian screens, colours, labels (both languages), push validation and the
+# retention scrub already understand this status; nothing on the Guardian
+# side needs to change when that transition is implemented.
 # Guardian verification is account-level (GuardianService.account_verification),
 # not per-case: the case context comes from the Volunteer's own current case
 # (VolunteerWorkflow.verify_guardian). A case identifier alone is not proof of identity.

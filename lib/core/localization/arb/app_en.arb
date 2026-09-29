@@ -33,7 +33,7 @@
   "password": "Password",
   "fullName": "Full Name",
   "phone": "Phone Number",
-  "phoneHelp": "Include country code, e.g. +966501234567",
+  "phoneHelp": "Saudi phone number, e.g. 0501234567 or +966501234567",
   "login": "Log In",
   "createAccount": "Create Account",
   "createTitle": "Create Your Account",
@@ -70,7 +70,7 @@
   "requiredField": "This field is required.",
   "invalidName": "Use a name of no more than 120 characters.",
   "invalidEmail": "Enter a valid email address.",
-  "invalidPhone": "Enter + followed by your country code and phone number (8–15 digits).",
+  "invalidPhone": "Enter a valid Saudi phone number, e.g. 0501234567 or +966501234567.",
   "passwordHelp": "Use at least 8 characters, including an uppercase English letter, a lowercase English letter, a number, and a special character such as !, @, #, or $.",
   "confirmRequired": "Both confirmations are required.",
   "invalidCredentials": "Invalid email or password.",
@@ -101,10 +101,10 @@
   "cameraDenied": "Camera access was denied. Allow camera permission to take a photo. If requests are blocked, enable it in Android app permissions.",
   "cameraUnavailable": "The camera is unavailable. Please try again.",
   "capture": "Capture Photo",
-  "photoRequired": "Take a photo before saving.",
+  "photoRequired": "Photo required.",
   "photoTooLarge": "The photo is too large. Please retake it.",
   "age": "Age",
-  "invalidAge": "Enter a whole-number age between 0 and 130.",
+  "invalidAge": "Enter a valid age.",
   "gender": "Gender",
   "female": "Female",
   "male": "Male",
@@ -176,6 +176,7 @@
   "expiredSessionRecovery": "Your session could not be verified. Choose your role to sign in again.",
   "roleRecovery": "This account could not be verified for the selected role. Return to role selection or sign in with the correct account.",
   "sessionUnavailable": "We could not verify your account profile because the account service is unavailable. Retry, or return to role selection to access sign-in. Your account has not been deleted.",
+  "accountDeactivated": "This account has been deactivated by the event administration. Contact the event organizers for assistance.",
   "completeGuardianProfile": "Complete Guardian profile",
   "returnToRoles": "Return to Role Selection",
   "startupFailed": "Unable to start Radd",
@@ -434,7 +435,7 @@
   "casesAwaitingVerification": "Cases awaiting verification",
   "resolved": "Resolved",
   "cancelled": "Cancelled",
-  "transferredToAuthority": "Transferred to Authority",
+  "referredToAuthority": "Referred to Authority",
   "casesSubtitle": "Track your missing-person cases",
   "resolveReport": "Resolve Report",
   "resolveReportConfirm": "Resolve this report? Only do this if you found the individual independently, outside of Radd.",
@@ -560,6 +561,14 @@
   "registrationPeriodDefault": "Longest available period (default)",
   "registrationPeriodHours": "{hours} hours",
   "registrationPeriodUnavailable": "Registration periods are not available for this event. Please try again later.",
+  "registeringForEvent": "Registering for the active event: {event}",
+  "@registeringForEvent": {
+    "placeholders": {
+      "event": {
+        "type": "String"
+      }
+    }
+  },
   "@registrationPeriodHours": {
     "placeholders": {
       "hours": {

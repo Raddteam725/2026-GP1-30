@@ -17,6 +17,11 @@ Image.MAX_IMAGE_PIXELS = 20_000_000
 def assert_guardian_role(token, profile):
     if token.get("role") not in (None, "guardian") or profile.get("role") != "guardian":
         raise HTTPException(403, detail="guardian_required")
+    # Admin-managed account status: a deactivated Guardian cannot use any
+    # authenticated function (every Guardian operation passes through here
+    # via profile()). Absent means enabled; only an explicit False deactivates.
+    if profile.get("active") is False:
+        raise HTTPException(403, detail="account_inactive")
 
 def owned_registration(data, uid):
     if not data or data.get("guardian_id") != uid:
@@ -78,9 +83,19 @@ class GuardianService:
         if not doc.exists:
             raise HTTPException(404, detail="profile_missing")
         role = doc.to_dict().get("role")
+        # Admin accounts use the web Admin Portal (app.admin), never the mobile
+        # roles; resolving one here is a role mismatch, not a mobile session.
         if role not in ("guardian", "volunteer") or self.token.get("role") not in (None, role):
             raise HTTPException(403, detail="role_unresolved")
         return {"role": role}
+
+    def current_event(self):
+        """The one Active event, for any resolvable mobile role (Guardian or
+        Volunteer): the same authoritative record Admin manages. Fails closed
+        (503 event_unavailable) when no event is Active -- never a placeholder."""
+        from .events import event_summary
+        self.account_role()
+        return event_summary(active_event(self.db))
 
     def profile(self):
         doc = self.user.get()

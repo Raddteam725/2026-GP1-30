@@ -216,3 +216,81 @@ def test_guided_report_distinctive_description_is_consistent_with_the_flag():
     with pytest.raises(ValidationError):
         GuidedReport(completed=True, same_location=True, latitude=1, longitude=1, clothing="shirt", carrying_distinctive=True)
     assert GuidedReport(carrying_distinctive=True, distinctive_description="a red bag")
+
+
+# --- Latest Sprint-0 rules: the Guided Assistant's documented questions only,
+# and Saudi phone numbers for Guardian registration ---------------------------
+
+def test_guided_report_completes_without_a_textual_last_seen_answer(storage):
+    # "No" to the location question records no location and is not a blocker:
+    # the only required answers are location Yes/No, clothing and the
+    # distinctive-item Yes/No (plus its description when Yes).
+    s, individual_id = guardian_with_individual("owner")
+    cs = CaseService(s)
+    case_id = cs.create(CaseCreate(individual_id=individual_id))["id"]
+    report = GuidedReport(same_location=False, clothing="Blue shirt", carrying_distinctive=False, completed=True)
+    saved = cs.save_report(case_id, report)["guided_report"]
+    assert saved["completed"] is True and saved["latitude"] is None and saved["last_seen_description"] == ""
+    with pytest.raises(ValidationError):  # Clothing is still required to complete.
+        GuidedReport(same_location=False, carrying_distinctive=False, completed=True)
+    with pytest.raises(ValidationError):  # Coordinates only ever accompany a "Yes".
+        GuidedReport(same_location=False, latitude=24.7, longitude=46.7, clothing="x", carrying_distinctive=False)
+
+@pytest.mark.parametrize("phone,canonical", [
+    ("+966512345678", "+966512345678"), ("0512345678", "+966512345678"),  # mobile, either form
+    ("00966 51 234 5678", "+966512345678"), ("966-51-234-5678", "+966512345678"),
+    ("٠٥١٢٣٤٥٦٧٨", "+966512345678"),  # Arabic-Indic digits
+    ("+966112345678", "+966112345678"), ("0112345678", "+966112345678"),  # Riyadh landline
+    ("+201234567890", None), ("+9665123456789", None), ("05123", None), ("+96601234567", None), ("", None)])
+def test_guardian_registration_accepts_any_saudi_number_and_stores_it_canonically(phone, canonical):
+    from app.models import ProfileUpdate, normalize_saudi_phone
+    assert normalize_saudi_phone(phone) == canonical
+    if canonical:
+        assert ProfileUpdate(full_name="G", phone=phone).phone == canonical
+    else:
+        with pytest.raises(ValidationError):
+            ProfileUpdate(full_name="G", phone=phone)
+
+def test_terminal_vocabulary_is_the_documented_one():
+    assert TERMINAL_STATUSES == ("reunited", "resolved", "cancelled", "referred_to_authority")
+    assert "transferred_to_authority" not in TERMINAL_STATUSES
+
+def test_deactivated_guardian_is_refused_everywhere_and_receives_no_push(storage, monkeypatch):
+    # Admin account management sets users/{uid}.active = false (the Admin
+    # module writes it); the Guardian side must refuse every authenticated
+    # function and stop push delivery while the durable history remains.
+    db, _ = storage
+    s, individual_id = guardian_with_individual("owner")
+    cs = CaseService(s)
+    case_id = cs.create(CaseCreate(individual_id=individual_id))["id"]
+    s.register_fcm_token("owner-device")
+    sent = []
+    monkeypatch.setattr(push.messaging, "send_each", lambda messages, app=None: sent.extend(messages))
+    monkeypatch.setattr(push, "firebase_app", lambda: None)
+    db.data["users/owner"]["active"] = False
+    # Every request builds a fresh service (main.service/cases_service), so
+    # the account check runs on each of them.
+    for action in (s.profile, s.list, lambda: CaseService(s), s.account_verification):
+        with pytest.raises(HTTPException) as error:
+            action()
+        assert error.value.status_code == 403 and error.value.detail == "account_inactive"
+    push.notify_guardian("owner", kind="status_update", status="search_in_progress", case_id=case_id, event_id="test-event")
+    assert sent == []
+    assert db.data[f"users/owner/notifications/{case_id}-search_in_progress"]["status"] == "search_in_progress"
+    db.data["users/owner"]["active"] = True  # Reactivation: absent or True means enabled.
+    assert s.profile()["full_name"] == "Test Guardian"
+
+def test_referred_to_authority_is_terminal_for_the_guardian(storage):
+    # The Admin module performs the transition; the Guardian side treats the
+    # result exactly like any other closure: no cancel/resolve, no guided edits.
+    db, _ = storage
+    s, individual_id = guardian_with_individual("owner")
+    cs = CaseService(s)
+    case_id = cs.create(CaseCreate(individual_id=individual_id))["id"]
+    db.data[f"cases/{case_id}"].update(status="referred_to_authority", closed_at=db.data[f"cases/{case_id}"]["created_at"])
+    assert cs.list()[0]["status"] == "referred_to_authority"
+    for action in (lambda: cs.cancel(case_id), lambda: cs.resolve(case_id),
+                   lambda: cs.save_report(case_id, GuidedReport(same_location=False))):
+        with pytest.raises(HTTPException) as error:
+            action()
+        assert error.value.status_code == 409 and error.value.detail == "case_closed"
