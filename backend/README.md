@@ -52,6 +52,16 @@ period options. Photo age is not an eligibility rule. Photo replacement and even
 extension never renew an existing registration. Unknown legacy periods are not
 invented or automatically deleted.
 
+The Guardian may change the retention period of an existing registration from
+the profile (`PUT /v1/individuals/{id}` with `registration_period_id`;
+`GET /v1/individuals/{id}/retention-options` lists what may be chosen): the
+start never moves, the new deadline is `registration_started_at + duration`,
+it must still be in the future (409 `retention_deadline_passed`) and within
+the event (422 `invalid_registration_period`), and the usual edit lock applies
+(409 `active_case`). A profile edit or photo replacement without
+`registration_period_id` leaves the deadline untouched. Individual responses
+carry `registration_period_id`/`registration_expires_at`.
+
 `cleanup.expire_photos()` retains its scheduler-compatible name but now deletes
 expired identifiable registrations (photo, embedding and profile), deferring while
 an associated missing case is nonterminal. It fences registration changes before

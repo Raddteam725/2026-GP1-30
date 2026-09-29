@@ -151,7 +151,7 @@ void main() {
     auth.active = true;
     await route(t, AppRoutes.addIndividual);
     expect(find.byType(IndividualFormScreen), findsOneWidget);
-    await scrollToText(t, 'Registration period');
+    await scrollToText(t, 'Data retention period');
     expect(find.byKey(const ValueKey('active-event')), findsOneWidget);
     expect(find.textContaining('Test Event'), findsOneWidget);
   });
@@ -163,7 +163,7 @@ void main() {
     auth.active = true;
     repo.failNextEvent = true;
     await route(t, AppRoutes.addIndividual);
-    await scrollToText(t, 'Registration period');
+    await scrollToText(t, 'Data retention period');
     expect(find.byKey(const ValueKey('active-event')), findsNothing);
     expect(find.textContaining('Test Event'), findsNothing);
   });

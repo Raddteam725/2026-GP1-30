@@ -19,7 +19,8 @@ const _detailFailures = {
   'photo_expired': 'photoExpired',
   'registration_unavailable': 'photoExpired',
   'registration_configuration_required': 'eventUnavailable',
-  'invalid_registration_period': 'eventUnavailable',
+  'invalid_registration_period': 'retentionInvalid',
+  'retention_deadline_passed': 'retentionPassed',
   'account_inactive': 'accountInactive',
 };
 
@@ -199,6 +200,12 @@ class GuardianApi implements GuardianRepository {
   Future<void> deleteIndividual(String id) async {
     await _request('DELETE', _path(id));
   }
+
+  @override
+  Future<RetentionOptions> retentionOptions(String id) async =>
+      RetentionOptions.fromJson(
+        _json(await _request('GET', '${_path(id)}/retention-options')),
+      );
 
   @override
   Future<Uint8List> photo(String id) async =>

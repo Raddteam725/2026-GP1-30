@@ -359,7 +359,7 @@ abstract class AppLocalizations {
   /// No description provided for @privacyInfoBody.
   ///
   /// In en, this message translates to:
-  /// **'When you create a Guardian account and use Radd, the system processes information required to create and use your account, as well as information you provide about individuals registered under your care, including their identifying information and photographs.\n\nWhen a missing-person report is submitted, Radd may also process case-related information, such as details about the missing individual, descriptive information provided to support the search, and last-seen information. If you choose to use your device location as the last-seen location and grant location permission, location coordinates may be used for this purpose.\n\nThis information is used to support registration, reporting, searching, identification, verification, and reunification during the event.'**
+  /// **'When you create a Guardian account and use Radd, the system processes information required to create and use your account, as well as information you provide about individuals registered under your care, including their identifying information and photographs.\n\nWhen a missing-person report is submitted, Radd may also process case-related information, such as details about the missing individual, descriptive information provided to support the search, and last-seen information. If you choose to use your device location as the last-seen location and grant location permission, location coordinates may be used for this purpose.\n\nThis information is used to support registration, reporting, searching, identification, verification, and reunification during the event.\n\nYour account information (name, email address, and phone number) is kept for as long as your Guardian account exists. It is not deleted by the retention rules that apply to registered individuals\' data.'**
   String get privacyInfoBody;
 
   /// No description provided for @privacyRegisteredPhotosTitle.
@@ -371,7 +371,7 @@ abstract class AppLocalizations {
   /// No description provided for @privacyRegisteredPhotosBody.
   ///
   /// In en, this message translates to:
-  /// **'The reference photograph and facial embedding belong to the individual’s identifiable event information. Their availability follows the registration period selected from the Active Event’s configured options, or the longest valid option by default. They do not expire solely because of photo capture age.\n\nWhen the period expires, identifiable information is deleted unless an associated active missing-person case requires it. In that case deletion is deferred until the case is terminal. Replacing a photograph does not extend the registration. AI suggestions never replace human confirmation and Guardian verification.'**
+  /// **'The reference photograph taken when you register an individual, and any facial data derived from it, are part of that individual\'s registered data. They are kept for the retention period you choose at registration and are deleted together with the rest of that data when the period ends. Taking a new photograph later replaces the previous one but does not change the retention period.\n\nPhotographs are used only to help identify the individual during the event. AI suggestions never replace human review and Guardian verification.'**
   String get privacyRegisteredPhotosBody;
 
   /// No description provided for @privacyVolunteerPhotosTitle.
@@ -431,7 +431,7 @@ abstract class AppLocalizations {
   /// No description provided for @privacyRetentionBody.
   ///
   /// In en, this message translates to:
-  /// **'Registered individual identifiable event information, including the reference photograph and facial embedding, follows the selected event registration period. If no shorter option is selected, the longest valid configured period applies, without exceeding the event end date. Replacing a photograph or extending the event does not extend an existing registration. Deletion is deferred while an associated missing-person case remains active and is performed after it becomes terminal.\n\nFound-person photographs are separate temporary identification images. They are deleted when the attempt ends without a confirmed match or immediately after match confirmation.\n\nCase records follow their applicable retention policy; only permitted non-identifying statistics remain afterward.'**
+  /// **'When you register an individual, you choose how long their data (identifying details, photograph, and facial data) is kept, from the options configured for the current event. If you do not choose, the longest available option applies. The retention period cannot go beyond the end of the event. You can change it later from the individual\'s profile, as long as the new deadline is still ahead and within the event.\n\nWhen the period ends, the data is deleted automatically. If a missing-person report is still active at that time, deletion waits until the report is closed.\n\nPhotographs taken by Volunteers of a found individual are temporary and are deleted as soon as the identification attempt ends.\n\nCase records are deleted after the case\'s retention period; only the limited statistical information described below remains.'**
   String get privacyRetentionBody;
 
   /// No description provided for @privacyStatisticsTitle.
@@ -443,7 +443,7 @@ abstract class AppLocalizations {
   /// No description provided for @privacyStatisticsBody.
   ///
   /// In en, this message translates to:
-  /// **'After the case retention period ends and identifiable personal data is deleted, Radd retains only the minimum data required for statistical reporting.\n\nThis retained data includes the case identifier, final status, timestamps, age group, and the Volunteer reference required for per-Volunteer reunification statistics.\n\nThe retained data does not include names, photographs, contact information, facial data, or precise location.'**
+  /// **'After a case\'s retention period ends and its identifying data is deleted, Radd keeps only the minimum information needed for statistical reporting: the case reference, its final outcome, when it was created and closed, the individual\'s age group, and the event. This information is aggregated or anonymized where applicable. For cases that ended in a reunion, the reference to the Volunteer who completed the handover may be kept so that reunification statistics per Volunteer can be reported.\n\nNo names, photographs, contact details, facial data, or precise locations are kept.'**
   String get privacyStatisticsBody;
 
   /// No description provided for @privacyAgreementTitle.
@@ -2999,13 +2999,13 @@ abstract class AppLocalizations {
   /// No description provided for @registrationPeriodTitle.
   ///
   /// In en, this message translates to:
-  /// **'Registration period'**
+  /// **'Data retention period'**
   String get registrationPeriodTitle;
 
   /// No description provided for @registrationPeriodHint.
   ///
   /// In en, this message translates to:
-  /// **'The period starts when registration succeeds and cannot exceed the event end. Replacing the photograph does not extend it.'**
+  /// **'Choose how long this individual\'s data should be kept. It will be deleted automatically when the selected period ends, in accordance with the Privacy Notice.'**
   String get registrationPeriodHint;
 
   /// No description provided for @registrationPeriodDefault.
@@ -3025,6 +3025,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Registration periods are not available for this event. Please try again later.'**
   String get registrationPeriodUnavailable;
+
+  /// No description provided for @registrationPeriodBoundary.
+  ///
+  /// In en, this message translates to:
+  /// **'The period starts at registration and cannot go beyond the end of the event. If a missing-person report is still active when it ends, deletion waits until the report is closed.'**
+  String get registrationPeriodBoundary;
+
+  /// No description provided for @retentionEditBoundary.
+  ///
+  /// In en, this message translates to:
+  /// **'Counted from the original registration date. You can extend it or shorten it, as long as the new deadline is still ahead and within the event.'**
+  String get retentionEditBoundary;
+
+  /// No description provided for @registrationPeriodDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =1{1 day} other{{days} days}}'**
+  String registrationPeriodDays(int days);
+
+  /// No description provided for @retentionUntil.
+  ///
+  /// In en, this message translates to:
+  /// **'Data kept until {date}'**
+  String retentionUntil(String date);
+
+  /// No description provided for @retentionPassedError.
+  ///
+  /// In en, this message translates to:
+  /// **'That period would already have ended. Choose a longer period.'**
+  String get retentionPassedError;
+
+  /// No description provided for @retentionInvalidError.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected retention period is not available for this event.'**
+  String get retentionInvalidError;
+
+  /// No description provided for @retentionOptionUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} ({reason})'**
+  String retentionOptionUnavailable(String label, String reason);
+
+  /// No description provided for @retentionOptionPassed.
+  ///
+  /// In en, this message translates to:
+  /// **'already passed'**
+  String get retentionOptionPassed;
+
+  /// No description provided for @retentionOptionBeyondEvent.
+  ///
+  /// In en, this message translates to:
+  /// **'after the event ends'**
+  String get retentionOptionBeyondEvent;
+
+  /// No description provided for @currentEvent.
+  ///
+  /// In en, this message translates to:
+  /// **'Current event'**
+  String get currentEvent;
+
+  /// No description provided for @eventDates.
+  ///
+  /// In en, this message translates to:
+  /// **'{start} – {end}'**
+  String eventDates(String start, String end);
 
   /// No description provided for @registeringForEvent.
   ///

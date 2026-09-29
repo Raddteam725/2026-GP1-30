@@ -222,7 +222,7 @@ void main() {
       await start(t);
       auth.active = true;
       await route(t, AppRoutes.addIndividual);
-      await scrollToText(t, 'Registration period');
+      await scrollToText(t, 'Data retention period');
       final selector = find.byKey(const ValueKey('registration-period'));
       await t.ensureVisible(selector);
       expect(
@@ -232,7 +232,7 @@ void main() {
       await t.tap(selector);
       await t.pumpAndSettle();
       expect(find.text('2 hours'), findsOneWidget);
-      expect(find.text('48 hours'), findsOneWidget);
+      expect(find.text('2 days'), findsOneWidget);
       await t.tap(find.text('2 hours'));
       await t.pumpAndSettle();
       expect(t.state<FormFieldState<String>>(selector).value, 'test-short');

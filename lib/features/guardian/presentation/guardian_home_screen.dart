@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../../app/app_locale_scope.dart';
 import '../../../app/app_services.dart';
@@ -12,6 +13,14 @@ import '../data/coalesced_refresh.dart';
 import '../data/guardian_repository.dart';
 import 'individual_widgets.dart';
 import 'case_widgets.dart';
+
+typedef _HomeData = ({
+  GuardianProfile profile,
+  List<Individual> people,
+  bool hasUnread,
+  List<MissingCase> cases,
+  ActiveEvent? event,
+});
 
 class GuardianHomeScreen extends StatefulWidget {
   const GuardianHomeScreen({super.key, this.initialTab = 0});
@@ -63,7 +72,7 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
 
   late int _tab = widget.initialTab;
   int _revision = 0;
-  Future<(GuardianProfile, List<Individual>, bool, List<MissingCase>)>? _data;
+  Future<_HomeData>? _data;
   bool _loggingOut = false;
   Object? _logoutError;
   @override
@@ -72,8 +81,7 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
     _data ??= _load();
   }
 
-  Future<(GuardianProfile, List<Individual>, bool, List<MissingCase>)>
-  _load() async {
+  Future<_HomeData> _load() async {
     final repo = AppServices.of(context).guardian;
     final values = await Future.wait<Object>([
       repo.profile(),
@@ -81,12 +89,23 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
       repo.notifications(),
       repo.cases(),
     ]);
+    // The Active event, from the same authoritative record registration and
+    // reporting use. No event (or an invalid event configuration) is a
+    // normal state here: Home still renders and says so -- never a
+    // placeholder name.
+    ActiveEvent? event;
+    try {
+      event = await repo.activeEvent();
+    } catch (_) {
+      event = null;
+    }
     final notifications = values[2] as List<GuardianNotification>;
     return (
-      values[0] as GuardianProfile,
-      values[1] as List<Individual>,
-      notifications.any((n) => !n.read),
-      values[3] as List<MissingCase>,
+      profile: values[0] as GuardianProfile,
+      people: values[1] as List<Individual>,
+      hasUnread: notifications.any((n) => !n.read),
+      cases: values[3] as List<MissingCase>,
+      event: event,
     );
   }
 
@@ -189,14 +208,13 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
-    return FutureBuilder<
-      (GuardianProfile, List<Individual>, bool, List<MissingCase>)
-    >(
+    return FutureBuilder<_HomeData>(
       future: _data,
       builder: (context, state) {
-        final profile = state.data?.$1, people = state.data?.$2 ?? [];
-        final hasUnread = state.data?.$3 ?? false;
-        final cases = state.data?.$4 ?? const <MissingCase>[];
+        final profile = state.data?.profile, people = state.data?.people ?? [];
+        final hasUnread = state.data?.hasUnread ?? false;
+        final cases = state.data?.cases ?? const <MissingCase>[];
+        final event = state.data?.event;
         final activeCases = cases.where((c) => c.active).toList();
         final caseByIndividual = {
           for (final c in activeCases) c.individualId: c,
@@ -241,6 +259,7 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
                 hasUnread,
                 caseByIndividual,
                 activeCases,
+                event,
               )
             else
               ..._individualsTab(s, people, caseByIndividual),
@@ -257,6 +276,7 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
     bool hasUnread,
     Map<String, MissingCase> caseByIndividual,
     List<MissingCase> activeCases,
+    ActiveEvent? event,
   ) {
     Widget card(Individual person) => HomeIndividualCard(
       individual: person,
@@ -324,7 +344,9 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
           ),
         ],
       ),
-      const SizedBox(height: 28),
+      const SizedBox(height: 20),
+      _eventCard(s, event),
+      const SizedBox(height: 20),
       Semantics(
         button: true,
         child: InkWell(
@@ -444,6 +466,80 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
         ],
       ],
     ];
+  }
+
+  /// The one place after sign-in that tells the Guardian which event they
+  /// are in (registrations and reports are scoped to it): name, location and
+  /// dates from the backend's event record. Without an Active event the card
+  /// says registration/reporting is unavailable instead of inventing one.
+  Widget _eventCard(AppLocalizations s, ActiveEvent? event) {
+    final locale = Localizations.localeOf(context).languageCode;
+    String day(DateTime value) =>
+        DateFormat.yMMMd(locale).format(value.toLocal());
+    if (event == null) {
+      return GuardianPanel(
+        key: const ValueKey('home-event-unavailable'),
+        child: Row(
+          children: [
+            const Icon(Icons.event_busy_outlined, color: mutedText),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                s.eventUnavailable,
+                style: const TextStyle(fontSize: 13, color: mutedText),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return GuardianPanel(
+      key: const ValueKey('home-event'),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.secondary.withValues(alpha: .1),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.event, color: AppColors.secondary),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  s.currentEvent,
+                  style: const TextStyle(fontSize: 12, color: mutedText),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  event.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                    fontSize: 16,
+                  ),
+                ),
+                if (event.location != null && event.location!.isNotEmpty)
+                  Text(
+                    event.location!,
+                    style: const TextStyle(fontSize: 13, color: mutedText),
+                  ),
+                if (event.startsAt != null && event.endsAt != null)
+                  Text(
+                    s.eventDates(day(event.startsAt!), day(event.endsAt!)),
+                    style: const TextStyle(fontSize: 13, color: mutedText),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   List<Widget> _individualsTab(
