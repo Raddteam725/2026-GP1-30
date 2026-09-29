@@ -101,7 +101,7 @@ backend/.venv/Scripts/python -m pytest backend/tests -q
 
 ## Team
 
-See [AUTHORS](AUTHORS).
+See [AUTHORS](AUTHORS.md).
 
 **Supervisor:** Dr. Henda Ouertani
 
