@@ -29,8 +29,80 @@ Personal data is kept only for as long as it is needed and is deleted automatica
 
 ---
 
+## Technologies
+
+| Area | Technology |
+|---|---|
+| Mobile application | Flutter · Dart (Android) |
+| Backend API | Python 3.11+ · FastAPI · Uvicorn |
+| Authentication | Firebase Authentication |
+| Database | Cloud Firestore |
+| File storage | Firebase Cloud Storage |
+| Notifications | Firebase Cloud Messaging |
+| Testing | flutter test · pytest |
+
+---
+
+## Running the Project
+
+Full instructions, including credentials and two-device testing, are in **[TEAM_SETUP.md](TEAM_SETUP.md)**.
+
+**Requirements:** Flutter SDK, Android Studio with an emulator or a physical Android device, Python 3.11 or later, and access to the project's Firebase instance.
+
+**1. Install dependencies**
+
+```bash
+flutter pub get
+py -m venv backend/.venv
+backend/.venv/Scripts/python -m pip install -r backend/requirements.lock
+```
+
+**2. Provide Firebase credentials**
+
+The backend needs a Firebase service-account key. Keep the JSON file **outside** the repository and point the launcher at its folder.
+
+**3. Start the backend**
+
+```bash
+backend/.venv/Scripts/python backend/run_dev.py --credentials-dir "<folder containing the key>"
+```
+
+The API runs on `http://127.0.0.1:8000`. `GET /health` returns 200 when it is up.
+
+**4. Run the app**
+
+```bash
+flutter run -d <device-id> -t lib/main.dart
+```
+
+Use `flutter devices` to list available devices. Android emulators reach the local backend through `10.0.2.2:8000`.
+
+**Running the tests**
+
+```bash
+flutter analyze
+flutter test
+backend/.venv/Scripts/python -m pytest backend/tests -q
+```
+
+---
+
+## Repository Structure
+
+| Path | Contents |
+|---|---|
+| `lib/` | Flutter application source |
+| `backend/` | FastAPI backend and its tests |
+| `test/` | Flutter widget and unit tests |
+| `docs/` | Development and verification notes |
+| `assets/` | Images and static assets |
+
+---
+
 ## Team
 
-Tala Alqahtani · Yara Zakzouk · Latifah Alsaif · Leen Almutairi
+See [AUTHORS](AUTHORS).
 
 **Supervisor:** Dr. Henda Ouertani
+
+King Saud University · College of Computer and Information Sciences · Department of Information Technology

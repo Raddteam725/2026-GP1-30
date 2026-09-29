@@ -257,7 +257,7 @@ abstract class AppLocalizations {
   /// No description provided for @phoneHelp.
   ///
   /// In en, this message translates to:
-  /// **'Include country code, e.g. +966501234567'**
+  /// **'Saudi phone number, e.g. 0501234567 or +966501234567'**
   String get phoneHelp;
 
   /// No description provided for @login.
@@ -479,7 +479,7 @@ abstract class AppLocalizations {
   /// No description provided for @invalidPhone.
   ///
   /// In en, this message translates to:
-  /// **'Enter + followed by your country code and phone number (8–15 digits).'**
+  /// **'Enter a valid Saudi phone number, e.g. 0501234567 or +966501234567.'**
   String get invalidPhone;
 
   /// No description provided for @passwordHelp.
@@ -665,7 +665,7 @@ abstract class AppLocalizations {
   /// No description provided for @photoRequired.
   ///
   /// In en, this message translates to:
-  /// **'Take a photo before saving.'**
+  /// **'Photo required.'**
   String get photoRequired;
 
   /// No description provided for @photoTooLarge.
@@ -683,7 +683,7 @@ abstract class AppLocalizations {
   /// No description provided for @invalidAge.
   ///
   /// In en, this message translates to:
-  /// **'Enter a whole-number age between 0 and 130.'**
+  /// **'Enter a valid age.'**
   String get invalidAge;
 
   /// No description provided for @gender.
@@ -1027,6 +1027,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'We could not verify your account profile because the account service is unavailable. Retry, or return to role selection to access sign-in. Your account has not been deleted.'**
   String get sessionUnavailable;
+
+  /// No description provided for @accountDeactivated.
+  ///
+  /// In en, this message translates to:
+  /// **'This account has been deactivated by the event administration. Contact the event organizers for assistance.'**
+  String get accountDeactivated;
 
   /// No description provided for @completeGuardianProfile.
   ///
@@ -2450,11 +2456,11 @@ abstract class AppLocalizations {
   /// **'Cancelled'**
   String get cancelled;
 
-  /// No description provided for @transferredToAuthority.
+  /// No description provided for @referredToAuthority.
   ///
   /// In en, this message translates to:
-  /// **'Transferred to Authority'**
-  String get transferredToAuthority;
+  /// **'Referred to Authority'**
+  String get referredToAuthority;
 
   /// No description provided for @casesSubtitle.
   ///
@@ -3019,6 +3025,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Registration periods are not available for this event. Please try again later.'**
   String get registrationPeriodUnavailable;
+
+  /// No description provided for @registeringForEvent.
+  ///
+  /// In en, this message translates to:
+  /// **'Registering for the active event: {event}'**
+  String registeringForEvent(String event);
 
   /// No description provided for @vFoundReportTitle.
   ///

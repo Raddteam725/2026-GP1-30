@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../shared/saudi_phone.dart';
 import 'guardian_repository.dart';
 
 /// Maps a backend error `detail` string to the specific AppFailure code the
@@ -19,6 +20,7 @@ const _detailFailures = {
   'registration_unavailable': 'photoExpired',
   'registration_configuration_required': 'eventUnavailable',
   'invalid_registration_period': 'eventUnavailable',
+  'account_inactive': 'accountInactive',
 };
 
 class GuardianApi implements GuardianRepository {
@@ -130,7 +132,7 @@ class GuardianApi implements GuardianRepository {
             '/guardian',
             body: {
               'full_name': name.trim(),
-              'phone': phone.trim(),
+              'phone': normalizeSaudiPhone(phone) ?? phone.trim(),
               'age_confirmed': true,
               'privacy_accepted': true,
             },
@@ -144,10 +146,16 @@ class GuardianApi implements GuardianRepository {
           await _request(
             'PATCH',
             '/guardian',
-            body: {'full_name': name.trim(), 'phone': phone.trim()},
+            body: {
+              'full_name': name.trim(),
+              'phone': normalizeSaudiPhone(phone) ?? phone.trim(),
+            },
           ),
         ),
       );
+  @override
+  Future<ActiveEvent> activeEvent() async =>
+      ActiveEvent.fromJson(_json(await _request('GET', '/event')));
   @override
   Future<List<RegistrationPeriod>> registrationPeriods() async {
     final data = jsonDecode(

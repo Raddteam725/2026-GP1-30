@@ -39,6 +39,9 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
   List<RegistrationPeriod>? _periods;
   String? _periodId;
   bool _requestedPeriods = false, _periodError = false;
+  // The Active event this registration is automatically associated with --
+  // read from the backend's authoritative event record, never assumed.
+  ActiveEvent? _event;
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -49,9 +52,9 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
   }
 
   Future<void> _loadPeriods() async {
+    final guardian = AppServices.of(context).guardian;
     try {
-      final periods = await AppServices.of(context).guardian
-          .registrationPeriods();
+      final periods = await guardian.registrationPeriods();
       if (!mounted) return;
       setState(() {
         _periods = periods;
@@ -59,6 +62,14 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
       });
     } catch (_) {
       if (mounted) setState(() => _periodError = true);
+    }
+    try {
+      final event = await guardian.activeEvent();
+      if (mounted) setState(() => _event = event);
+    } catch (_) {
+      // No Active event: the periods panel already explains registration is
+      // unavailable and saving stays disabled; nothing is invented here.
+      if (mounted) setState(() => _event = null);
     }
   }
 
@@ -379,6 +390,32 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
+                  if (_event != null) ...[
+                    // The Active event this registration is associated with,
+                    // as the backend describes it -- never a built-in name.
+                    Row(
+                      key: const ValueKey('active-event'),
+                      children: [
+                        const Icon(
+                          Icons.event,
+                          size: 18,
+                          color: AppColors.secondary,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            s.registeringForEvent(_event!.name),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.secondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   Text(s.registrationPeriodHint),
                   if (_periodError) ...[
                     Text(s.registrationPeriodUnavailable),

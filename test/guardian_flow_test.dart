@@ -180,7 +180,7 @@ void main() {
         findsNothing,
       );
       await tapText(t, 'Save');
-      expect(find.text('Take a photo before saving.'), findsOneWidget);
+      expect(find.text('Photo required.'), findsOneWidget);
       expect(repo.records, isEmpty);
       final s = AppLocalizations.of(
         t.element(find.byType(IndividualFormScreen)),
@@ -212,7 +212,7 @@ void main() {
       await t.enterText(find.byType(TextFormField).at(2), 'Family friend');
       await tapText(t, 'Save');
       // The relationship is now satisfied; only the still-missing photo blocks saving.
-      expect(find.text('Take a photo before saving.'), findsOneWidget);
+      expect(find.text('Photo required.'), findsOneWidget);
       expect(repo.records, isEmpty);
     },
   );

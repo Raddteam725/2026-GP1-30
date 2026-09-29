@@ -41,12 +41,13 @@ const caseStages = [
   'reunited',
 ];
 // Reachable from any active case (never sequential); 'reunited' is both the
-// last ordered stage above and a terminal outcome on its own.
+// last ordered stage above and a terminal outcome on its own. Guardians
+// cancel/resolve; Volunteers reunite; an Admin refers to the authority.
 const terminalStatuses = {
   'reunited',
   'resolved',
   'cancelled',
-  'transferred_to_authority',
+  'referred_to_authority',
 };
 
 class GuardianNotification {

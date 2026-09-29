@@ -92,7 +92,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get phone => 'Phone Number';
 
   @override
-  String get phoneHelp => 'Include country code, e.g. +966501234567';
+  String get phoneHelp =>
+      'Saudi phone number, e.g. 0501234567 or +966501234567';
 
   @override
   String get login => 'Log In';
@@ -222,7 +223,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get invalidPhone =>
-      'Enter + followed by your country code and phone number (8–15 digits).';
+      'Enter a valid Saudi phone number, e.g. 0501234567 or +966501234567.';
 
   @override
   String get passwordHelp =>
@@ -322,7 +323,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get capture => 'Capture Photo';
 
   @override
-  String get photoRequired => 'Take a photo before saving.';
+  String get photoRequired => 'Photo required.';
 
   @override
   String get photoTooLarge => 'The photo is too large. Please retake it.';
@@ -331,7 +332,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get age => 'Age';
 
   @override
-  String get invalidAge => 'Enter a whole-number age between 0 and 130.';
+  String get invalidAge => 'Enter a valid age.';
 
   @override
   String get gender => 'Gender';
@@ -515,6 +516,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get sessionUnavailable =>
       'We could not verify your account profile because the account service is unavailable. Retry, or return to role selection to access sign-in. Your account has not been deleted.';
+
+  @override
+  String get accountDeactivated =>
+      'This account has been deactivated by the event administration. Contact the event organizers for assistance.';
 
   @override
   String get completeGuardianProfile => 'Complete Guardian profile';
@@ -1276,7 +1281,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cancelled => 'Cancelled';
 
   @override
-  String get transferredToAuthority => 'Transferred to Authority';
+  String get referredToAuthority => 'Referred to Authority';
 
   @override
   String get casesSubtitle => 'Track your missing-person cases';
@@ -1609,6 +1614,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get registrationPeriodUnavailable =>
       'Registration periods are not available for this event. Please try again later.';
+
+  @override
+  String registeringForEvent(String event) {
+    return 'Registering for the active event: $event';
+  }
 
   @override
   String get vFoundReportTitle => 'Found Individual Report';

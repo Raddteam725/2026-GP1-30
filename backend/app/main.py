@@ -69,6 +69,12 @@ def health():
 def session(s=Depends(service)):
     return s.account_role()
 
+@app.get("/v1/event")
+def current_event(s=Depends(service)):
+    # The Active event as Guardian and Volunteer see it -- name, location,
+    # dates, hours, status -- read from the same record the Admin manages.
+    return s.current_event()
+
 @app.get("/v1/guardian")
 def profile(s=Depends(service)):
     return s.profile()

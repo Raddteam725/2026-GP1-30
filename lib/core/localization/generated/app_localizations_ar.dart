@@ -92,7 +92,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get phone => 'رقم الهاتف';
 
   @override
-  String get phoneHelp => 'أدخل رمز الدولة، مثل ‎+966501234567';
+  String get phoneHelp => 'رقم هاتف سعودي، مثل ‎0501234567 أو ‎+966501234567';
 
   @override
   String get login => 'تسجيل الدخول';
@@ -216,7 +216,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get invalidEmail => 'أدخل بريداً إلكترونياً صحيحاً.';
 
   @override
-  String get invalidPhone => 'أدخل + ثم رمز الدولة ورقم الهاتف (8–15 رقماً).';
+  String get invalidPhone =>
+      'أدخل رقم هاتف سعودي صحيح، مثل ‎0501234567 أو ‎+966501234567.';
 
   @override
   String get passwordHelp =>
@@ -314,7 +315,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get capture => 'التقاط الصورة';
 
   @override
-  String get photoRequired => 'التقط صورة قبل الحفظ.';
+  String get photoRequired => 'الصورة مطلوبة.';
 
   @override
   String get photoTooLarge => 'الصورة كبيرة جداً. يرجى إعادة التقاطها.';
@@ -323,7 +324,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get age => 'العمر';
 
   @override
-  String get invalidAge => 'أدخل العمر كعدد صحيح بين 0 و130.';
+  String get invalidAge => 'أدخل عمرًا صحيحًا.';
 
   @override
   String get gender => 'الجنس';
@@ -505,6 +506,10 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get sessionUnavailable =>
       'تعذر التحقق من ملف حسابك لأن خدمة الحسابات غير متاحة. أعد المحاولة أو ارجع إلى اختيار الدور للوصول إلى تسجيل الدخول. لم يتم حذف حسابك.';
+
+  @override
+  String get accountDeactivated =>
+      'تم إيقاف هذا الحساب من قِبل إدارة الفعالية. تواصل مع منظّمي الفعالية للمساعدة.';
 
   @override
   String get completeGuardianProfile => 'إكمال ملف ولي الأمر';
@@ -1258,7 +1263,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get cancelled => 'ملغي';
 
   @override
-  String get transferredToAuthority => 'تم التحويل للجهة المختصة';
+  String get referredToAuthority => 'تمت الإحالة إلى الجهة المختصة';
 
   @override
   String get casesSubtitle => 'تابع بلاغاتك عن الأفراد المفقودين';
@@ -1582,6 +1587,11 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get registrationPeriodUnavailable =>
       'فترات التسجيل غير متاحة لهذه الفعالية حاليًا. حاول لاحقًا.';
+
+  @override
+  String registeringForEvent(String event) {
+    return 'التسجيل في الفعالية النشطة: $event';
+  }
 
   @override
   String get vFoundReportTitle => 'بلاغ العثور على شخص';

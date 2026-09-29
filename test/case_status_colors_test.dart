@@ -16,7 +16,7 @@ void main() {
     'reunited': Color(0xFF16A34A),
     'resolved': Color(0xFF16A34A),
     'cancelled': Color(0xFF64748B),
-    'transferred_to_authority': Color(0xFFEA580C),
+    'referred_to_authority': Color(0xFFEA580C),
   };
 
   test('Every canonical case status maps to exactly its required colour', () {
