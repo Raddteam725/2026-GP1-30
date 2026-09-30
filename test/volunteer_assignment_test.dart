@@ -19,6 +19,63 @@ import 'package:radd/features/guardian/data/guardian_api.dart';
 import 'volunteer_location_test.dart' show LocationPlatform;
 
 void main() {
+  for (final language in ['en', 'ar']) {
+    testWidgets('Badge uses refreshed assigned event name in $language', (
+      tester,
+    ) async {
+      var assigned = true;
+      var name = 'Current event / الفعالية الحالية';
+      final repo = ApiVolunteerRepository(
+        token: () async => 'test-token',
+        baseUrl: 'http://test',
+        client: MockClient(
+          (_) async => http.Response(
+            jsonEncode({
+              'uid': 'test',
+              'full_name': 'Volunteer',
+              'volunteer_id': 'V-1',
+              'active': true,
+              'assigned': assigned,
+              'event_id': 'event',
+              'event_name': name,
+            }),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          ),
+        ),
+      );
+      addTearDown(repo.dispose);
+      Future<void> render() async {
+        await repo.loadProfile();
+        await tester.pumpWidget(
+          harness(
+            Scaffold(
+              body: SingleChildScrollView(
+                child: VolunteerBadgeCard(account: repo.account!),
+              ),
+            ),
+            language,
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+
+      await render();
+      final prefix = language == 'ar' ? 'الفعالية: ' : 'Event: ';
+      expect(find.text('$prefix$name'), findsOneWidget);
+      name = 'Updated event';
+      await render();
+      expect(find.text('$prefix$name'), findsOneWidget);
+      expect(find.textContaining('Current event /'), findsNothing);
+      assigned =
+          false; // Even a stale server name must not survive assignment loss.
+      await render();
+      expect(repo.account!.eventName, isNull);
+      expect(find.text('$prefix$name'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
   testWidgets('Fresh API profile with assignment authorizes the Digital ID', (
     tester,
   ) async {

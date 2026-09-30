@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'volunteer_capture.dart';
-import 'volunteer_consent_screen.dart';
+import 'volunteer_policy_screen.dart';
 import 'volunteer_notification_banner.dart';
 import '../domain/volunteer_notification_event.dart';
 
@@ -184,8 +184,7 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
   String? _participationEventId;
   void _syncParticipation() {
     if (!mounted || repo is! ApiVolunteerRepository) return;
-    if (!(repo as ApiVolunteerRepository).consentCurrent ||
-        (repo as ApiVolunteerRepository).account == null ||
+    if ((repo as ApiVolunteerRepository).account == null ||
         !account.eventAuthorized ||
         (_participationEventId != null &&
             _participationEventId != account.eventId)) {
@@ -208,8 +207,7 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
           ..clear()
           ..add(VolunteerView.home);
       }
-      if (!(repo as ApiVolunteerRepository).consentCurrent ||
-          (repo as ApiVolunteerRepository).account == null ||
+      if ((repo as ApiVolunteerRepository).account == null ||
           !account.eventAuthorized) {
         return;
       }
@@ -630,10 +628,7 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
 
   bool get _canParticipate =>
       repo.isPreview ||
-      (account.eventAuthorized &&
-          (repo is! ApiVolunteerRepository ||
-              (repo as ApiVolunteerRepository).consentCurrent) &&
-          _location?.accessGranted == true);
+      (account.eventAuthorized && _location?.accessGranted == true);
 
   bool get _locationBlocked =>
       repo is ApiVolunteerRepository &&
@@ -645,20 +640,28 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     if (!account.eventAuthorized)
       VolunteerInfo(s.vEventUnassigned, title: s.vBadge)
     else ...[
-      VolunteerInfo(
-        _location?.servicesDisabled == true
-            ? s.vLocationServicesDisabled
-            : _location?.permanentlyDenied == true
-            ? s.vLocationDeniedForever
-            : s.vLocationHelp,
-        title: s.vLocationRequired,
+      VolunteerInfo(s.vLocationPrivacyBody, title: s.vLocationPrivacyTitle),
+      TextButton(
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => const VolunteerPolicyScreen(),
+          ),
+        ),
+        child: Text(s.vViewPrivacyPolicy),
       ),
+      if (_location?.servicesDisabled == true ||
+          _location?.permanentlyDenied == true)
+        VolunteerInfo(
+          _location?.servicesDisabled == true
+              ? s.vLocationServicesDisabled
+              : s.vLocationDeniedForever,
+        ),
       const SizedBox(height: 16),
       VolunteerAction(
         _location?.servicesDisabled == true ||
                 _location?.permanentlyDenied == true
             ? s.vLocationSettings
-            : s.vAllowLocation,
+            : s.continueLabel,
         onPressed: _location == null || _location!.requesting
             ? null
             : () async {

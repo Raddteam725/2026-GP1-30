@@ -42,10 +42,12 @@ def event_access(db, uid, tx=None):
         event = active_event(db, tx)
     except HTTPException as error:
         if error.detail == 'event_unavailable':
-            return {'event_id': None, 'assigned': False}
+            return {'event_id': None, 'assigned': False, 'event_name': None}
         raise
-    return {'event_id': event.id,
-            'assigned': assignment_ref(db, event.id, uid).get(transaction=tx).exists}
+    assigned = assignment_ref(db, event.id, uid).get(transaction=tx).exists
+    name = (event.to_dict() or {}).get('name')
+    return {'event_id': event.id, 'assigned': assigned,
+            'event_name': name if assigned and isinstance(name, str) and name.strip() else None}
 
 
 def eligible_for_event(db, uid, event_id):

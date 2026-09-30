@@ -291,7 +291,7 @@ def test_registration_rotation_logout_history_and_refresh_never_replay(db, sends
     assert sends.call_args.args[0].android.notification.channel_id == 'radd_volunteer_alerts'
 
 
-def test_consent_change_blocks_queued_push_and_new_notification_history(db, sends, monkeypatch):
+def test_unused_consent_fields_do_not_block_queued_push_or_notification_history(db, sends, monkeypatch):
     from app import delivery_queue
     device('one')
     pending = []
@@ -301,6 +301,6 @@ def test_consent_change_blocks_queued_push_and_new_notification_history(db, send
     db.data['users/one']['privacy_version'] = 'obsolete'
     for send in pending:
         send()
-    assert sends.call_count == 0
+    assert sends.call_count == 1
     _, next_id = case()
-    assert not db.collection('users').document('one').collection('volunteer_notifications').document(next_id + '-new').get().exists
+    assert db.collection('users').document('one').collection('volunteer_notifications').document(next_id + '-new').get().exists

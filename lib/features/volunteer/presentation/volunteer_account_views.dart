@@ -91,8 +91,6 @@ extension _VolunteerAccountViews on _VolunteerWorkspaceState {
         onTap: _chooseLanguage,
       ),
     ),
-    const SizedBox(height: 24),
-    VolunteerPolicyLinks(),
     const SizedBox(height: 32),
     OutlinedButton.icon(
       style: OutlinedButton.styleFrom(
@@ -286,6 +284,14 @@ class _VolunteerBadgeCardState extends State<VolunteerBadgeCard>
                 dot: true,
               ),
             ),
+            if (a.eventAuthorized &&
+                (a.eventName?.trim().isNotEmpty ?? false)) ...[
+              const SizedBox(height: 12),
+              Text(
+                s.vBadgeEventName(a.eventName!),
+                textAlign: TextAlign.center,
+              ),
+            ],
             const Divider(height: 36),
             Text('${s.vAccountStatus}: ${a.active ? s.vActive : s.vInactive}'),
             const SizedBox(height: 20),

@@ -114,7 +114,7 @@ void main() {
     expect(locationPlatform.requests, 0); // Explanation precedes OS dialog.
     expect(find.text('Manual Review'), findsNothing);
     // Use the existing Radd action's label independently of button subclass.
-    final label = find.text('Allow Location');
+    final label = find.text('Continue');
     expect(label, findsOneWidget);
     await tester.tap(label);
     await tester.pumpAndSettle();
@@ -127,6 +127,11 @@ void main() {
     locationPlatform.services.add(ServiceStatus.disabled);
     await tester.pumpAndSettle();
     expect(find.text('Manual Review'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('Open Settings'),
+      150,
+      scrollable: find.byType(Scrollable).last,
+    );
     expect(find.text('Open Settings'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('radd-tab-4')));
     await tester.pumpAndSettle();
