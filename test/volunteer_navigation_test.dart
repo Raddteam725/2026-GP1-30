@@ -183,7 +183,7 @@ void main() {
         await press(tester, s.vProceedVerification);
         await tester.scrollUntilVisible(find.text(s.vUseIdentifier), 250);
         await press(tester, s.vUseIdentifier);
-        await tester.enterText(find.byType(TextFormField), 'wrong');
+        await tester.enterText(find.byType(TextFormField), '000000');
         await Scrollable.ensureVisible(
           tester.element(find.byType(CheckboxListTile)),
           alignment: 0.5,
@@ -199,7 +199,7 @@ void main() {
         );
         await tester.scrollUntilVisible(find.text(s.vUseIdentifier), 250);
         await press(tester, s.vUseIdentifier);
-        await tester.enterText(find.byType(TextFormField), 'RD-8042');
+        await tester.enterText(find.byType(TextFormField), '804200');
         await Scrollable.ensureVisible(
           tester.element(find.byType(CheckboxListTile)),
           alignment: 0.5,

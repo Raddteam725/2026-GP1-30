@@ -8,6 +8,7 @@ import '../core/localization/generated/app_localizations.dart';
 import '../core/routing/app_router.dart';
 import '../core/routing/app_routes.dart';
 import '../core/theme/app_theme.dart';
+import '../features/guardian/presentation/guardian_notice_host.dart';
 import '../shared/widgets/feature_page.dart';
 import '../shared/widgets/primary_button.dart';
 
@@ -166,8 +167,11 @@ class _RaddAppState extends State<RaddApp> {
                     ),
                   ],
                 )
-              : child!,
+              // One transient-notice host above every route: Guardian
+              // foreground updates surface here as a top banner.
+              : GuardianNoticeHost(navigatorKey: _navigatorKey, child: child!),
         ),
+        navigatorObservers: [GuardianNoticeHost.routeObserver],
         initialRoute: AppRoutes.root,
         onGenerateRoute: AppRouter.onGenerateRoute,
       ),

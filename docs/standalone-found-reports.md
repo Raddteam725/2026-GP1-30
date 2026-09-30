@@ -68,6 +68,12 @@ reports created before short codes existed receive one, once, when the Guardian
 list is fetched. The existing requirement to see that authenticated account
 remains. No fake Missing Case identifier is used.
 
+Missing Cases use the same user-facing pattern: `cases/{id}.verification_code`
+(6 digits, unique among the event's active cases, assigned at creation or
+backfilled once on the Guardian's first read, removed at any terminal outcome).
+The Guardian QR tab's "Show Verification Code" sheet displays it; the Volunteer
+types it on the same `verify-identifier` endpoint. The RD-… id is internal only.
+
 If a Missing Case exists first, confirmation links the FR to that case and continues
 its Match Confirmed → verification → Reunited path. If an identified FR exists first,
 a later genuine Guardian report creates the genuine RD origin and links it to the

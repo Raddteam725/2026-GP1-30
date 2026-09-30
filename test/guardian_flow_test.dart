@@ -996,11 +996,20 @@ void main() {
         ),
         findsOneWidget,
       );
-      await tapText(t, 'Show Case Identifier');
-      expect(find.text('ACTIVE CASE IDENTIFIER'), findsOneWidget);
-      expect(find.textContaining(case1.id), findsWidgets);
+      // The fallback the Guardian reads out is the case's 6-digit code; the
+      // RD-… id stays a reference chip, never the value shown to type.
+      await tapText(t, 'Show Verification Code');
+      expect(find.text('ACTIVE CASE VERIFICATION CODE'), findsOneWidget);
+      expect(find.text(case1.verificationCode!), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.textContaining(case1.id),
+        ),
+        findsNothing,
+      );
       await tapText(t, 'Close');
-      expect(find.text('ACTIVE CASE IDENTIFIER'), findsNothing);
+      expect(find.text('ACTIVE CASE VERIFICATION CODE'), findsNothing);
     },
   );
   for (final locale in ['en', 'ar']) {

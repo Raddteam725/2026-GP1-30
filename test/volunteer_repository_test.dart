@@ -79,12 +79,23 @@ void main() {
       await expectLater(repo.beginVerification(a, report), throwsStateError);
       await repo.confirmMatch(a, report, item.person);
       await repo.beginVerification(a, report);
+      // The Guardian reads the case's 6-digit code; the RD-… id is not it.
+      expect(
+        await repo.verify(
+          a,
+          report,
+          VerificationMethod.caseIdentifier,
+          item.verificationCode!,
+        ),
+        isFalse, // authenticated account not confirmed as shown
+      );
       expect(
         await repo.verify(
           a,
           report,
           VerificationMethod.caseIdentifier,
           item.id,
+          authenticatedAccountShown: true,
         ),
         isFalse,
       );
@@ -93,7 +104,7 @@ void main() {
           a,
           report,
           VerificationMethod.caseIdentifier,
-          'RD-8049',
+          '804900', // another case's code
           authenticatedAccountShown: true,
         ),
         isFalse,
@@ -105,7 +116,7 @@ void main() {
           a,
           report,
           VerificationMethod.caseIdentifier,
-          item.id,
+          item.verificationCode!,
           authenticatedAccountShown: true,
         ),
         isTrue,

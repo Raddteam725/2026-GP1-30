@@ -16,11 +16,13 @@ import 'case_widgets.dart';
 import 'guardian_components.dart';
 import 'individual_widgets.dart';
 
-/// Case Identifier: the case-specific alternative when the QR cannot be
-/// displayed or scanned. The Volunteer compares it with the identifier of
-/// their own current case; the identifier alone never proves identity.
+/// Verification Code: the case-specific alternative when the QR cannot be
+/// displayed or scanned. The Guardian reads the 6-digit code of THIS active
+/// case to the Volunteer, who types it into their own current case; the
+/// code alone never proves identity. The internal RD-… id is not shown here.
 Future<void> showCaseIdentifier(BuildContext context, MissingCase value) async {
   final s = AppLocalizations.of(context)!;
+  final code = value.verificationCode;
   await showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -73,17 +75,28 @@ Future<void> showCaseIdentifier(BuildContext context, MissingCase value) async {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  SelectableText(
-                    caseDisplayId(value.id),
-                    textDirection: TextDirection.ltr,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1,
-                      color: AppColors.primary,
+                  if (code == null || code.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        s.foundReportCodeUnavailable,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: mutedText, fontSize: 13),
+                      ),
+                    )
+                  else
+                    SelectableText(
+                      code,
+                      textDirection: TextDirection.ltr,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 6,
+                        color: AppColors.primary,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),

@@ -10,12 +10,18 @@ class MissingCase {
     this.updatedAt,
     this.stages = const {},
     this.report,
+    this.verificationCode,
   });
   final String id, individualId, name, status, eventId;
   final int age;
   final DateTime? createdAt, updatedAt;
   final Map<String, dynamic> stages;
   final Map<String, dynamic>? report;
+
+  /// The 6-digit code the Guardian reads to the Volunteer when the QR cannot
+  /// be scanned. Belongs to this active case only; [id] stays internal and
+  /// is never the value a person types. Null once the case is terminal.
+  final String? verificationCode;
   bool get active => !terminalStatuses.contains(status);
   bool get verificationEligible => status == 'awaiting_guardian_verification';
   bool get reportSubmitted => report?['completed'] == true;
@@ -30,6 +36,7 @@ class MissingCase {
     updatedAt: DateTime.tryParse(j['updated_at']?.toString() ?? ''),
     stages: (j['stage_timestamps'] as Map<String, dynamic>?) ?? {},
     report: j['guided_report'] as Map<String, dynamic>?,
+    verificationCode: j['verification_code']?.toString(),
   );
 }
 

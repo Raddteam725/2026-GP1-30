@@ -34,17 +34,86 @@ Future<void> guardianBackgroundMessageHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 }
 
+/// A foreground workflow update worth a transient banner while the Guardian
+/// is inside the app. Carries navigation context only (the existing push
+/// payload fields); the Guardian screens fetch authoritative state
+/// themselves, and the notification history stays the durable record.
+class GuardianNotice {
+  const GuardianNotice({
+    required this.id,
+    required this.caseId,
+    required this.status,
+    required this.kind,
+  });
+  final String id, caseId, status, kind;
+
+  /// Outcomes only the Guardian can produce (cancel/resolve) and the
+  /// Guardian's own report creation: the screen they are on already shows
+  /// the result, so no transient banner repeats it. Everything else on the
+  /// reunification path is driven by a Volunteer or an Admin.
+  static const selfInitiatedKinds = {'case_created'};
+  static const selfInitiatedStatuses = {'cancelled', 'resolved'};
+  bool get selfInitiated =>
+      selfInitiatedKinds.contains(kind) ||
+      selfInitiatedStatuses.contains(status);
+
+  static GuardianNotice? fromData(Map<String, dynamic> data) {
+    if (!GuardianPushRefresh.valid(data)) return null;
+    final caseId = data['case_id'] as String, status = data['status'] as String;
+    final supplied = data['notification_id'];
+    return GuardianNotice(
+      id: supplied is String && supplied.isNotEmpty
+          ? supplied
+          : '$caseId-$status',
+      caseId: caseId,
+      status: status,
+      kind: data['kind']?.toString() ?? 'status_update',
+    );
+  }
+}
+
 /// Notifies any listening, currently-open screen that server state may have
 /// changed, without this module needing to know which screens exist or how
 /// they fetch data. A screen reacts by re-running its OWN existing reload --
 /// this never carries data itself, only a "something changed, go check" tick.
+///
+/// [notices] is the separate, foreground-only stream behind the transient
+/// Guardian banner: fed exclusively by a real received push (see
+/// GuardianPushService._receive) after this class's own duplicate
+/// suppression accepted it -- never by screen rebuilds, tab changes, history
+/// loads or app resume, so old events are never replayed as banners.
 class GuardianPushRefresh extends ChangeNotifier with WidgetsBindingObserver {
   GuardianPushRefresh._();
   static final instance = GuardianPushRefresh._();
   String? caseId;
   final Set<String> _events = {};
   final Set<String> _ids = {};
+  final Set<String> _ownActions = {};
+  final StreamController<GuardianNotice> _notices =
+      StreamController<GuardianNotice>.broadcast();
+  Stream<GuardianNotice> get notices => _notices.stream;
   bool concerns(String id) => caseId == null || caseId == id;
+
+  /// Records a status the Guardian just produced themselves on a case they
+  /// are looking at (report created, cancelled, resolved): the matching push
+  /// still refreshes screens and stays in history, but raises no banner.
+  void markOwnAction(String caseId, String status) {
+    _ownActions.add('$caseId|$status');
+    if (_ownActions.length > 64) _ownActions.remove(_ownActions.first);
+  }
+
+  bool isOwnAction(GuardianNotice notice) =>
+      notice.selfInitiated ||
+      _ownActions.contains('${notice.caseId}|${notice.status}');
+
+  /// Publishes an accepted foreground push as a transient notice. Only
+  /// [GuardianPushService._receive] (a real push) calls this.
+  void announce(Map<String, dynamic> data) {
+    final notice = GuardianNotice.fromData(data);
+    if (notice == null || isOwnAction(notice)) return;
+    _notices.add(notice);
+  }
+
   static bool valid(Map<String, dynamic> data) {
     final role = data['role'], id = data['case_id'], status = data['status'];
     return (role == null || role == 'guardian') &&
@@ -85,6 +154,7 @@ class GuardianPushRefresh extends ChangeNotifier with WidgetsBindingObserver {
     caseId = null;
     _events.clear();
     _ids.clear();
+    _ownActions.clear();
   }
 
   void ping() {
@@ -144,6 +214,10 @@ class GuardianPushService {
         'Radd Guardian FCM $id T6/T7 ${DateTime.now().toUtc().toIso8601String()}',
       );
     }
+    // Screens have been told to refetch (acceptPush); additionally surface
+    // this newly received update as a transient in-app banner. Duplicates
+    // never reach here, so a banner is shown at most once per event.
+    GuardianPushRefresh.instance.announce(message.data);
   }
 
   // FirebaseMessaging.instance is a device-level singleton that is never

@@ -132,8 +132,11 @@ def test_qr_verification_and_missing_case_identifier_fallback_are_unchanged(db):
     assert 'verification_code' not in db.data['found_reports/' + linked['id']]
     assert guardian_found_reports(guardian_c) == []
     vol('two').begin_verification(linked['id'])
+    case_code = db.data['cases/' + case_id]['verification_code']
+    assert len(case_code) == 6 and case_code != '123456'
     assert not vol('two').verify_guardian_identifier(linked['id'], '123456')['verified']
-    assert vol('two').verify_guardian_identifier(linked['id'], '#' + case_id.lower())['verified']
+    assert not vol('two').verify_guardian_identifier(linked['id'], '#' + case_id.lower())['verified']  # RD id refused
+    assert vol('two').verify_guardian_identifier(linked['id'], '# ' + case_code)['verified']
     # Standalone (a different Guardian): the QR path is untouched by the short code.
     guardian, identifier, report = standalone(db, guardian_uid='other-guardian')
     vol().begin_verification(report['id'])

@@ -269,21 +269,26 @@ def test_admin_provision_command_uses_auth_identity_and_refuses_guardian_overwri
 
 # --- Case Identifier: the case-specific alternative to the Guardian QR -----
 
+def case_code(db, case_id):
+    """The 6-digit value the Guardian's app shows for the case (never the RD-… id)."""
+    return db.data['cases/' + case_id]['verification_code']
+
 def test_case_identifier_alternative_verification_is_case_specific_and_recorded(db):
     _, case_id, report = matching()
     report_id = report['id']
     vol().begin_verification(report_id)
-    # A different (e.g. sibling) case's identifier is rejected: nothing is
-    # recorded on this case and handover stays blocked.
-    assert vol().verify_guardian_identifier(report_id, 'RD-OTHER')['verified'] is False
+    # A wrong code (e.g. a sibling case's) is rejected: nothing is recorded on
+    # this case and handover stays blocked. The internal id is not a code.
+    assert vol().verify_guardian_identifier(report_id, '000000')['verified'] is False
+    assert vol().verify_guardian_identifier(report_id, case_id)['verified'] is False
     assert db.data['cases/' + case_id].get('guardian_verification') is None
     with pytest.raises(HTTPException): vol().handover_found(report_id)
-    # The identifier exactly as the Guardian's app displays it ("#RD-…", any case).
-    result = vol().verify_guardian_identifier(report_id, '#' + case_id.lower())
+    # The code exactly as the Guardian's app displays it (spacing tolerated).
+    result = vol().verify_guardian_identifier(report_id, '# ' + case_code(db, case_id))
     assert result['verified'] is True
     assert result['report']['verification']['method'] == 'case_identifier'
     assert 'token_hash' not in str(result)
-    assert vol().verify_guardian_identifier(report_id, case_id)['verified'] is True  # lost-response retry
+    assert vol().verify_guardian_identifier(report_id, case_code(db, case_id))['verified'] is True  # lost-response retry
     handed = vol().handover_found(report_id)
     assert handed['status'] == 'reunited'
     # The handover record keeps saying HOW the Guardian was verified.
@@ -292,13 +297,14 @@ def test_case_identifier_alternative_verification_is_case_specific_and_recorded(
 
 def test_case_identifier_verification_requires_the_awaiting_stage_and_the_confirming_volunteer(db):
     _, case_id, report = matching()
-    with pytest.raises(HTTPException): vol().verify_guardian_identifier(report['id'], case_id)  # still match_confirmed
+    code = case_code(db, case_id)
+    with pytest.raises(HTTPException): vol().verify_guardian_identifier(report['id'], code)  # still match_confirmed
     vol().begin_verification(report['id'])
-    with pytest.raises(HTTPException): vol('two').verify_guardian_identifier(report['id'], case_id)
+    with pytest.raises(HTTPException): vol('two').verify_guardian_identifier(report['id'], code)
     app.dependency_overrides[identity] = lambda: {'uid': 'one'}
     with TestClient(app) as client:
-        assert client.post(f"/v1/volunteer/found-reports/{report['id']}/verify-identifier", json={'case_id': case_id, 'uid': 'x'}).status_code == 422
-        response = client.post(f"/v1/volunteer/found-reports/{report['id']}/verify-identifier", json={'case_id': case_id})
+        assert client.post(f"/v1/volunteer/found-reports/{report['id']}/verify-identifier", json={'case_id': code, 'uid': 'x'}).status_code == 422
+        response = client.post(f"/v1/volunteer/found-reports/{report['id']}/verify-identifier", json={'case_id': code})
         assert response.status_code == 200 and response.json()['verified'] is True
     app.dependency_overrides.clear()
 
@@ -418,8 +424,8 @@ def test_expired_registration_retains_reference_for_active_case(db):
 def test_wrong_identifier_after_valid_one_clears_receipt(db):
     _, case_id, report = matching()
     vol().begin_verification(report['id'])
-    assert vol().verify_guardian_identifier(report['id'], case_id)['verified']
-    assert not vol().verify_guardian_identifier(report['id'], 'RD-WRONG')['verified']
+    assert vol().verify_guardian_identifier(report['id'], case_code(db, case_id))['verified']
+    assert not vol().verify_guardian_identifier(report['id'], '000000')['verified']
     with pytest.raises(HTTPException): vol().handover_found(report['id'])
 
 def test_unknown_account_challenge_rejects_instead_of_crashing(db):

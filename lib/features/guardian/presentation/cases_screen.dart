@@ -331,9 +331,12 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
     });
     try {
       final guardian = AppServices.of(context).guardian;
-      await (resolve
+      final outcome = await (resolve
           ? guardian.resolveCase(widget.id)
           : guardian.cancelCase(widget.id));
+      // Their own explicit action, already reflected on this screen: no
+      // transient banner for the push that follows (history keeps it).
+      GuardianPushRefresh.instance.markOwnAction(outcome.id, outcome.status);
       if (mounted) _reload();
     } catch (e) {
       if (mounted) setState(() => _error = e);

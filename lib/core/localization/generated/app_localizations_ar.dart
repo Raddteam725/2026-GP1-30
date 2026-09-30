@@ -842,28 +842,28 @@ class AppLocalizationsAr extends AppLocalizations {
   String get vUnableScan => 'يتعذر عرض رمز QR؟';
 
   @override
-  String get vUseIdentifier => 'استخدام رقم الحالة';
+  String get vUseIdentifier => 'استخدام رمز التحقق';
 
   @override
-  String get vVerifyIdentifier => 'التحقق من رقم الحالة';
+  String get vVerifyIdentifier => 'التحقق من الرمز';
 
   @override
   String get vIdentifierHelp =>
-      'اطلب من ولي الأمر عرض رقم الحالة من حسابه المسجّل دخوله في رادّ إذا تعذر عرض رمز QR.';
+      'اطلب من ولي الأمر قراءة رمز التحقق المكوّن من 6 أرقام من حسابه المسجّل دخوله في رد عندما يتعذّر عليه عرض رمز الاستجابة السريعة.';
 
   @override
-  String get vGuardianIdentifier => 'رقم الحالة لدى ولي الأمر';
+  String get vGuardianIdentifier => 'رمز تحقق ولي الأمر';
 
   @override
   String get vExactIdentifier =>
-      'يجب أن يتطابق الرقمان. قارنه بالحالة المعروضة على جهاز ولي الأمر نفسه.';
+      'اطلب من ولي الأمر قراءة رمز التحقق المكوّن من 6 أرقام الظاهر لهذا البلاغ في حسابه المسجّل دخوله في رد، وأدخله كما هو.';
 
   @override
   String get vAuthenticatedAccount =>
       'يعرض ولي الأمر هذه الحالة من حسابه المسجّل دخوله في رادّ.';
 
   @override
-  String get vVerify => 'التحقق من الرقم';
+  String get vVerify => 'التحقق من الرمز';
 
   @override
   String get vVerificationFailed => 'فشل التحقق';
@@ -897,7 +897,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get vQrMethod => 'رمز QR الخاص بالحالة';
 
   @override
-  String get vIdentifierMethod => 'رقم الحالة';
+  String get vIdentifierMethod => 'رمز التحقق';
 
   @override
   String get vContinueHandover => 'المتابعة إلى التسليم';
@@ -1234,14 +1234,20 @@ class AppLocalizationsAr extends AppLocalizations {
   String get refreshCode => 'إنشاء رمز جديد';
 
   @override
-  String get showCaseIdentifier => 'عرض معرّف البلاغ';
+  String get showCaseIdentifier => 'عرض رمز التحقق';
 
   @override
-  String get caseIdentifier => 'معرّف البلاغ';
+  String get caseIdentifier => 'رمز التحقق';
 
   @override
   String get caseIdentifierHint =>
-      'شارك هذا المرجع مع أحد أعضاء الفريق المخوّلين. المرجع وحده لا يثبت هويتك.';
+      'اقرأ هذا الرمز لمتطوع مخوّل عندما يتعذّر مسح رمز الاستجابة السريعة. الرمز وحده لا يثبت هويتك.';
+
+  @override
+  String get caseUpdateBanner => 'تحديث الحالة';
+
+  @override
+  String get viewCase => 'عرض الحالة';
 
   @override
   String get eventUnavailable =>
@@ -1476,14 +1482,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get caseIdentifierInstruction =>
-      'اعرض هذا المعرّف للمتطوع للتحقق البديل.';
+      'اقرأ هذا الرمز المكوّن من 6 أرقام للمتطوع للتحقق البديل.';
 
   @override
   String get caseIdentifierUsage =>
-      'يُستخدم لتحديد البلاغ النشط والتحقق منه عندما يتعذر عرض رمز QR أو مسحه.';
+      'يُستخدم للتحقق من هذا البلاغ النشط عندما يتعذّر عرض رمز الاستجابة السريعة أو مسحه. هذا الرمز خاص بهذا البلاغ فقط.';
 
   @override
-  String get activeCaseIdentifier => 'معرّف البلاغ النشط';
+  String get activeCaseIdentifier => 'رمز التحقق للبلاغ النشط';
 
   @override
   String get noActiveCaseQrNote =>

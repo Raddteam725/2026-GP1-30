@@ -6,6 +6,7 @@ import '../../../core/localization/generated/app_localizations.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/feature_page.dart';
+import '../data/guardian_push_service.dart';
 import '../data/guardian_repository.dart';
 import 'guardian_components.dart';
 import 'individual_widgets.dart';
@@ -364,6 +365,9 @@ Future<bool> startReportMissing(
   try {
     final value = await AppServices.of(context).guardian
         .reportMissing(individual.id);
+    // The Guardian just did this and is about to see the case: its own
+    // push must refresh screens, not raise a transient banner.
+    GuardianPushRefresh.instance.markOwnAction(value.id, value.status);
     if (!context.mounted) return true;
     await Navigator.of(context)
         .pushNamed(AppRoutes.guidedReport, arguments: value.id);

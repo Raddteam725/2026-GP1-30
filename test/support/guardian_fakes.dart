@@ -261,6 +261,8 @@ class TestRepository implements GuardianRepository {
       createdAt: now,
       updatedAt: now,
       stages: {'report_received': now.toIso8601String()},
+      // Server-assigned in production; a fixed, recognizable 6-digit value here.
+      verificationCode: '80${_caseCounter.toString().padLeft(4, '0')}',
     );
     caseRecords.add(value);
     records
@@ -306,6 +308,7 @@ class TestRepository implements GuardianRepository {
       updatedAt: DateTime.now().toUtc(),
       stages: current.stages,
       report: report,
+      verificationCode: current.verificationCode,
     );
     caseRecords
       ..removeWhere((c) => c.id == id)
@@ -359,6 +362,7 @@ class TestRepository implements GuardianRepository {
       updatedAt: DateTime.now().toUtc(),
       stages: current.stages,
       report: current.report,
+      // Terminal: the backend drops the code with the outcome.
     );
     caseRecords
       ..removeWhere((c) => c.id == id)

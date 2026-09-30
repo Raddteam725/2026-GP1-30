@@ -624,8 +624,9 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     return null;
   }
 
-  /// No Missing Case behind this report: the fallback identifier is the
-  /// report's short Guardian-read verification code, not a case identifier.
+  /// No Missing Case behind this report: the code belongs to the standalone
+  /// Found Report itself rather than to a linked case (wording only; the
+  /// entry is a 6-digit code in both contexts).
   bool get _standaloneVerification =>
       _report?.caseId == null && _associatedCase == null;
 
@@ -1018,22 +1019,18 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
             TextFormField(
               controller: _identifier,
               textDirection: TextDirection.ltr,
-              // Standalone: the Guardian reads a short numeric code, so
-              // offer the number pad; a linked Missing Case keeps its
-              // alphanumeric case identifier.
-              keyboardType: _standaloneVerification
-                  ? TextInputType.number
-                  : TextInputType.text,
+              // Missing Case or standalone Found Report alike: the Guardian
+              // reads a 6-digit verification code, never an RD-/FR- id. The
+              // workflow context (this report, its linked case if any)
+              // decides which record the code is checked against.
+              keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                labelText: _standaloneVerification
-                    ? s.vFoundReportIdentifier
-                    : s.vGuardianIdentifier,
+                labelText: s.vGuardianIdentifier,
                 prefixIcon: const Icon(Icons.pin_outlined),
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) return s.vRequired;
-                if (_standaloneVerification &&
-                    !isVerificationCode(normalizeVerificationCode(value))) {
+                if (!isVerificationCode(normalizeVerificationCode(value))) {
                   return s.vVerificationCodeFormat;
                 }
                 return null;
@@ -1070,9 +1067,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
               if (_identifierForm.currentState!.validate()) {
                 _verification(
                   VerificationMethod.caseIdentifier,
-                  _standaloneVerification
-                      ? normalizeVerificationCode(_identifier.text)
-                      : _identifier.text,
+                  normalizeVerificationCode(_identifier.text),
                 );
               }
             },

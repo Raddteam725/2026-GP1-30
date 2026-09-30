@@ -853,28 +853,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get vUnableScan => 'Unable to display the QR code?';
 
   @override
-  String get vUseIdentifier => 'Use Case Identifier';
+  String get vUseIdentifier => 'Use Verification Code';
 
   @override
-  String get vVerifyIdentifier => 'Verify Case Identifier';
+  String get vVerifyIdentifier => 'Verify Code';
 
   @override
   String get vIdentifierHelp =>
-      'Ask the Guardian to display the case identifier from their authenticated Radd account when they cannot display the QR code.';
+      'Ask the Guardian to read the 6-digit verification code from their signed-in Radd account when they cannot display the QR code.';
 
   @override
-  String get vGuardianIdentifier => 'Guardian Case Identifier';
+  String get vGuardianIdentifier => 'Guardian Verification Code';
 
   @override
   String get vExactIdentifier =>
-      'The identifiers must match. Compare it with the case shown on the Guardian’s own device.';
+      'Ask the Guardian to read the 6-digit verification code shown for this case in their signed-in Radd account, and enter it exactly.';
 
   @override
   String get vAuthenticatedAccount =>
       'The Guardian is showing this case in their authenticated Radd account.';
 
   @override
-  String get vVerify => 'Verify Identifier';
+  String get vVerify => 'Verify Code';
 
   @override
   String get vVerificationFailed => 'Verification Failed';
@@ -910,7 +910,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get vQrMethod => 'Case-specific QR code';
 
   @override
-  String get vIdentifierMethod => 'Case identifier';
+  String get vIdentifierMethod => 'Verification code';
 
   @override
   String get vContinueHandover => 'Continue to Handover';
@@ -1253,14 +1253,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get refreshCode => 'Generate new code';
 
   @override
-  String get showCaseIdentifier => 'Show Case Identifier';
+  String get showCaseIdentifier => 'Show Verification Code';
 
   @override
-  String get caseIdentifier => 'Case Identifier';
+  String get caseIdentifier => 'Verification Code';
 
   @override
   String get caseIdentifierHint =>
-      'Share this reference with an authorized team member. The reference alone does not verify your identity.';
+      'Read this code to an authorized Volunteer when the QR code cannot be scanned. The code alone does not verify your identity.';
+
+  @override
+  String get caseUpdateBanner => 'Case Update';
+
+  @override
+  String get viewCase => 'View Case';
 
   @override
   String get eventUnavailable =>
@@ -1501,14 +1507,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get caseIdentifierInstruction =>
-      'Show this identifier to the Volunteer for alternative verification.';
+      'Read this 6-digit code to the Volunteer for alternative verification.';
 
   @override
   String get caseIdentifierUsage =>
-      'Used to locate and verify the active case when the QR code cannot be displayed or scanned.';
+      'Used to verify this active case when the QR code cannot be displayed or scanned. It belongs to this case only.';
 
   @override
-  String get activeCaseIdentifier => 'Active case identifier';
+  String get activeCaseIdentifier => 'Active case verification code';
 
   @override
   String get noActiveCaseQrNote =>

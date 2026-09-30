@@ -430,20 +430,27 @@ class VolunteerWorkflow:
         # Compare the identifier from the authenticated Guardian's account with
         # this authorized context: a real Missing Case or standalone Found Report.
         # The distinct method/context receipt is required by handover.
-        presented = case_id.strip().lstrip('#').upper()
         @firestore.transactional
         def verify(tx):
             case = self.reunification_context(report_id, tx)
             cd = case.to_dict()
             if cd['status'] != 'awaiting_guardian_verification':
                 raise HTTPException(409, detail='invalid_transition')
-            if case.reference.path.startswith('found_reports/'):
-                # Standalone: the short code stored on THIS report only (never
-                # the document id, never a lookup across other reports).
-                expected = str(cd.get('verification_code') or '')
-                matched = bool(expected) and secrets.compare_digest(found_lifecycle.normalize_code(case_id), expected)
-            else:
-                matched = presented == case.id.upper()
+            # Missing Case or standalone Found Report alike: the 6-digit code
+            # stored on THIS workflow's record only -- never the RD-/FR-
+            # document id, never a lookup across other cases or reports. The
+            # context (this Volunteer's current report) chooses the record;
+            # the code never chooses the context.
+            expected = str(cd.get('verification_code') or '')
+            presented_code = found_lifecycle.normalize_code(case_id)
+            matched = bool(expected) and secrets.compare_digest(presented_code, expected)
+            # Safe diagnostic (development log): which record was compared,
+            # its stage, whether it holds a code and the SHAPE of the typed
+            # value -- never the code, the id beyond a prefix, or any PII.
+            logging.getLogger('uvicorn.error').info(
+                'Radd verify-identifier context=%s record=%s… status=%s stored_code=%s presented_len=%d presented_digits=%s matched=%s',
+                'found_report' if case.reference.path.startswith('found_reports/') else 'missing_case', case.id[:9], cd.get('status'),
+                'len=%d' % len(expected) if expected else 'absent', len(presented_code), presented_code.isdigit(), matched)
             if not matched:
                 tx.update(case.reference, {'guardian_verification': None})
                 return False
@@ -523,7 +530,8 @@ class VolunteerWorkflow:
                 return
             tx.update(case.reference, {'status': 'reunited', 'updated_at': now, 'stage_timestamps.reunited': now,
                 'handed_over_at': now, 'handed_over_by': self.uid, 'closed_at': now,
-                'age_group': cd.get('age_group') or age_group(cd['age'])})
+                'age_group': cd.get('age_group') or age_group(cd['age']),
+                'verification_code': firestore.DELETE_FIELD})
             tx.update(self.db.collection('found_reports').document(report_id), {'status': found_lifecycle.REUNITED, 'handed_over_at': now, 'handed_over_by': self.uid, 'verification_method': proof.get('method'), 'updated_at': now})
             if person.exists and person.to_dict().get('active_case_id') == case.id:
                 tx.update(person.reference, {'active_case_id': None, 'active_found_report_id': firestore.DELETE_FIELD, 'updated_at': now})

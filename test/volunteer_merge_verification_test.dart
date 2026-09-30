@@ -30,7 +30,7 @@ void main() {
             request.url.path,
             '/v1/volunteer/found-reports/FR-real/verify-identifier',
           );
-          expect(jsonDecode(request.body), {'case_id': '#RD-real'});
+          expect(jsonDecode(request.body), {'case_id': '482913'});
           body = {
             'verified': true,
             'report': {
@@ -64,12 +64,7 @@ void main() {
       photo: '',
     );
     await expectLater(
-      repo.verify(
-        account,
-        report,
-        VerificationMethod.caseIdentifier,
-        '#RD-real',
-      ),
+      repo.verify(account, report, VerificationMethod.caseIdentifier, '482913'),
       throwsStateError,
     );
     expect(calls, 1);
@@ -78,7 +73,7 @@ void main() {
         account,
         report,
         VerificationMethod.caseIdentifier,
-        '#RD-real',
+        '482913',
         authenticatedAccountShown: true,
       ),
       isTrue,

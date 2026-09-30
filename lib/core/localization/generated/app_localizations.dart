@@ -1673,31 +1673,31 @@ abstract class AppLocalizations {
   /// No description provided for @vUseIdentifier.
   ///
   /// In en, this message translates to:
-  /// **'Use Case Identifier'**
+  /// **'Use Verification Code'**
   String get vUseIdentifier;
 
   /// No description provided for @vVerifyIdentifier.
   ///
   /// In en, this message translates to:
-  /// **'Verify Case Identifier'**
+  /// **'Verify Code'**
   String get vVerifyIdentifier;
 
   /// No description provided for @vIdentifierHelp.
   ///
   /// In en, this message translates to:
-  /// **'Ask the Guardian to display the case identifier from their authenticated Radd account when they cannot display the QR code.'**
+  /// **'Ask the Guardian to read the 6-digit verification code from their signed-in Radd account when they cannot display the QR code.'**
   String get vIdentifierHelp;
 
   /// No description provided for @vGuardianIdentifier.
   ///
   /// In en, this message translates to:
-  /// **'Guardian Case Identifier'**
+  /// **'Guardian Verification Code'**
   String get vGuardianIdentifier;
 
   /// No description provided for @vExactIdentifier.
   ///
   /// In en, this message translates to:
-  /// **'The identifiers must match. Compare it with the case shown on the Guardian’s own device.'**
+  /// **'Ask the Guardian to read the 6-digit verification code shown for this case in their signed-in Radd account, and enter it exactly.'**
   String get vExactIdentifier;
 
   /// No description provided for @vAuthenticatedAccount.
@@ -1709,7 +1709,7 @@ abstract class AppLocalizations {
   /// No description provided for @vVerify.
   ///
   /// In en, this message translates to:
-  /// **'Verify Identifier'**
+  /// **'Verify Code'**
   String get vVerify;
 
   /// No description provided for @vVerificationFailed.
@@ -1775,7 +1775,7 @@ abstract class AppLocalizations {
   /// No description provided for @vIdentifierMethod.
   ///
   /// In en, this message translates to:
-  /// **'Case identifier'**
+  /// **'Verification code'**
   String get vIdentifierMethod;
 
   /// No description provided for @vContinueHandover.
@@ -2393,20 +2393,32 @@ abstract class AppLocalizations {
   /// No description provided for @showCaseIdentifier.
   ///
   /// In en, this message translates to:
-  /// **'Show Case Identifier'**
+  /// **'Show Verification Code'**
   String get showCaseIdentifier;
 
   /// No description provided for @caseIdentifier.
   ///
   /// In en, this message translates to:
-  /// **'Case Identifier'**
+  /// **'Verification Code'**
   String get caseIdentifier;
 
   /// No description provided for @caseIdentifierHint.
   ///
   /// In en, this message translates to:
-  /// **'Share this reference with an authorized team member. The reference alone does not verify your identity.'**
+  /// **'Read this code to an authorized Volunteer when the QR code cannot be scanned. The code alone does not verify your identity.'**
   String get caseIdentifierHint;
+
+  /// No description provided for @caseUpdateBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Case Update'**
+  String get caseUpdateBanner;
+
+  /// No description provided for @viewCase.
+  ///
+  /// In en, this message translates to:
+  /// **'View Case'**
+  String get viewCase;
 
   /// No description provided for @eventUnavailable.
   ///
@@ -2825,19 +2837,19 @@ abstract class AppLocalizations {
   /// No description provided for @caseIdentifierInstruction.
   ///
   /// In en, this message translates to:
-  /// **'Show this identifier to the Volunteer for alternative verification.'**
+  /// **'Read this 6-digit code to the Volunteer for alternative verification.'**
   String get caseIdentifierInstruction;
 
   /// No description provided for @caseIdentifierUsage.
   ///
   /// In en, this message translates to:
-  /// **'Used to locate and verify the active case when the QR code cannot be displayed or scanned.'**
+  /// **'Used to verify this active case when the QR code cannot be displayed or scanned. It belongs to this case only.'**
   String get caseIdentifierUsage;
 
   /// No description provided for @activeCaseIdentifier.
   ///
   /// In en, this message translates to:
-  /// **'Active case identifier'**
+  /// **'Active case verification code'**
   String get activeCaseIdentifier;
 
   /// No description provided for @noActiveCaseQrNote.

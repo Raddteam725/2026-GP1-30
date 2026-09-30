@@ -165,7 +165,7 @@ def report_missing(value: CaseCreate, s=Depends(cases_service)):
 
 @app.get("/v1/cases/{case_id}")
 def case(case_id: str, s=Depends(cases_service)):
-    return public_case(s.owned(case_id))
+    return s.get(case_id)
 
 @app.put("/v1/cases/{case_id}/guided-report")
 def guided_report(case_id: str, value: GuidedReport, s=Depends(cases_service)):

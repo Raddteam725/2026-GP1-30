@@ -118,8 +118,14 @@ class VolunteerCase {
     this.information,
     Set<String>? joinedBy,
     this.confirmedBy,
+    this.verificationCode,
   }) : joinedBy = {...?joinedBy};
   final String id;
+
+  /// Preview/mock only: the 6-digit code the Guardian's device shows for
+  /// this case. The real API never sends a case's code to a Volunteer; the
+  /// backend compares what the Volunteer typed.
+  final String? verificationCode;
   RegisteredPerson person;
   final DateTime createdAt;
   DateTime updatedAt;

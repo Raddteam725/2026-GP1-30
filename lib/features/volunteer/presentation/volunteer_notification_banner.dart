@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/localization/generated/app_localizations.dart';
-import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/notice_banner.dart';
 import '../domain/volunteer_models.dart';
 import '../domain/volunteer_notification_event.dart';
 
@@ -40,76 +40,20 @@ class VolunteerNotificationBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
     final priority = event.kind == AlertKind.priority;
-    return Semantics(
-      liveRegion: true,
-      child: Material(
-        key: ValueKey('volunteer-notice-${event.id}'),
-        color: Colors.white,
-        elevation: 6,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(
-            color: priority ? const Color(0xFFF7B500) : AppColors.border,
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    backgroundColor: priority
-                        ? const Color(0xFFFFF8E4)
-                        : AppColors.secondary.withValues(alpha: .1),
-                    child: Icon(
-                      priority
-                          ? Icons.warning_amber_rounded
-                          : Icons.notifications_none,
-                      color: priority
-                          ? const Color(0xFF996A00)
-                          : AppColors.secondary,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      volunteerAlertTitle(s, event.kind),
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: onDismiss,
-                    tooltip: s.close,
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(volunteerAlertMessage(s, event.kind)),
-              const SizedBox(height: 4),
-              Text(
-                event.caseId,
-                textDirection: TextDirection.ltr,
-                style: const TextStyle(color: AppColors.primary, fontSize: 12),
-              ),
-              Align(
-                alignment: AlignmentDirectional.centerEnd,
-                child: TextButton(
-                  onPressed: onOpen,
-                  child: Text(event.opensCase ? s.vViewCase : s.notifications),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    // Same shared card the Guardian workspace uses (NoticeBanner); only the
+    // Volunteer wording, key and action differ.
+    return NoticeBanner(
+      materialKey: ValueKey('volunteer-notice-${event.id}'),
+      title: volunteerAlertTitle(s, event.kind),
+      message: volunteerAlertMessage(s, event.kind),
+      context: event.caseId,
+      contextTextDirection: TextDirection.ltr,
+      highlighted: priority,
+      icon: priority ? Icons.warning_amber_rounded : Icons.notifications_none,
+      actionLabel: event.opensCase ? s.vViewCase : s.notifications,
+      closeTooltip: s.close,
+      onOpen: onOpen,
+      onDismiss: onDismiss,
     );
   }
 }
