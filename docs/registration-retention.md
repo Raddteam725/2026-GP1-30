@@ -27,7 +27,10 @@ localized unavailable message. The Admin Portal is not implemented.
 If selection is omitted, the longest currently valid option applies. The server
 revalidates on submission, so an option becoming invalid while a form is open is
 rejected. Clients cannot supply authoritative timestamps. Photo replacement,
-event extension and later option edits do not change an established expiry.
+event extension and Admin edits of the option list do not change an established
+expiry. The Guardian may change the chosen period from the individual's profile
+(`registration_retention.reschedule`): the start is kept, the new deadline must
+still be in the future and within the event, and the active-case edit lock applies.
 Replacing a photo clears any old embedding; an eventual real embedding pipeline
 must use the same stored expiry. No face-matching engine was added.
 

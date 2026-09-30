@@ -139,6 +139,12 @@ def delete_individual(item_id: str, s=Depends(service)):
     s.delete(item_id)
     return Response(status_code=204)
 
+@app.get("/v1/individuals/{item_id}/retention-options")
+def retention_options(item_id: str, s=Depends(service)):
+    if "/" in item_id or not item_id:
+        raise HTTPException(404)
+    return s.retention_options(item_id)
+
 @app.get("/v1/individuals/{item_id}/photo")
 def photograph(item_id: str, s=Depends(service)):
     return Response(content=s.photo(item_id), media_type="image/jpeg", headers={"Cache-Control": "no-store"})

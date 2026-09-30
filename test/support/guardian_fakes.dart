@@ -66,6 +66,66 @@ class TestRepository implements GuardianRepository {
     RegistrationPeriod('test-short', 2),
     RegistrationPeriod('test-long', 48),
   ];
+
+  /// Options the backend would offer an existing registration (deadlines
+  /// counted from a fixed start). `retentionOptionsRequests` counts calls.
+  int retentionOptionsRequests = 0;
+  bool failNextRetentionOptions = false;
+  DateTime retentionStart = DateTime.utc(2026, 9, 29, 8);
+  @override
+  Future<RetentionOptions> retentionOptions(String id) async {
+    retentionOptionsRequests++;
+    if (failNextRetentionOptions) {
+      failNextRetentionOptions = false;
+      throw const AppFailure('photoExpired');
+    }
+    final p = records.singleWhere((i) => i.id == id);
+    // Mirrors the backend contract: every configured option with the
+    // deadline counted from the ORIGINAL start; 'test-min' already passed
+    // and 'test-month' would end after the event, so both are unavailable.
+    return RetentionOptions(
+      currentPeriodId: p.registrationPeriodId,
+      expiresAt: p.registrationExpiresAt,
+      editable: p.activeCaseId == null,
+      options: [
+        RetentionOption(
+          'test-min',
+          1,
+          retentionStart.add(const Duration(hours: 1)),
+          available: false,
+          reason: 'deadline_passed',
+        ),
+        RetentionOption(
+          'test-short',
+          2,
+          retentionStart.add(const Duration(hours: 2)),
+        ),
+        RetentionOption(
+          'test-long',
+          48,
+          retentionStart.add(const Duration(hours: 48)),
+        ),
+        RetentionOption(
+          'test-week',
+          168,
+          retentionStart.add(const Duration(hours: 168)),
+        ),
+        RetentionOption(
+          'test-month',
+          720,
+          retentionStart.add(const Duration(hours: 720)),
+          available: false,
+          reason: 'beyond_event',
+        ),
+      ],
+    );
+  }
+
+  /// The period id the last save carried (null = unchanged / default).
+  String? lastSavedPeriodId;
+
+  /// Makes the next saveIndividual fail with this backend reason.
+  AppFailure? rejectNextSave;
   @override
   Future<String> accountRole() async => 'guardian';
   GuardianProfile person = const GuardianProfile(
@@ -111,9 +171,35 @@ class TestRepository implements GuardianRepository {
     Uint8List? photo,
   }) async {
     final existing = id == null ? null : records.singleWhere((i) => i.id == id);
+    if (rejectNextSave != null) {
+      final failure = rejectNextSave!;
+      rejectNextSave = null;
+      throw failure;
+    }
+    lastSavedPeriodId = input.registrationPeriodId;
+    final periodId =
+        input.registrationPeriodId ?? existing?.registrationPeriodId;
+    final hours = switch (periodId) {
+      'test-min' => 1,
+      'test-short' => 2,
+      'test-long' => 48,
+      'test-week' => 168,
+      'test-month' => 720,
+      _ => null,
+    };
+    // Backend rule mirrored for the edit path only: a choice whose deadline
+    // (from the original start) has passed or lies after the event is refused.
+    if (existing != null && input.registrationPeriodId != null) {
+      if (periodId == 'test-min') throw const AppFailure('retentionPassed');
+      if (periodId == 'test-month') throw const AppFailure('retentionInvalid');
+    }
     final p = Individual(
       id: id ?? 'test-id',
       activeCaseId: existing?.activeCaseId,
+      registrationPeriodId: periodId,
+      registrationExpiresAt: hours == null
+          ? existing?.registrationExpiresAt
+          : retentionStart.add(Duration(hours: hours)),
       fullName: input.fullName,
       age: input.age,
       gender: input.gender,

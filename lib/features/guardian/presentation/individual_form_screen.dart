@@ -12,6 +12,7 @@ import '../../auth/presentation/form_validation.dart';
 import '../data/guardian_repository.dart';
 import 'individual_widgets.dart';
 import 'guardian_components.dart';
+import 'retention_period_panel.dart';
 import '../../../core/theme/app_colors.dart';
 
 class IndividualFormScreen extends StatefulWidget {
@@ -36,16 +37,21 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
   Uint8List? _photo;
   bool _busy = false, _photoError = false;
   Object? _error;
-  List<RegistrationPeriod>? _periods;
-  String? _periodId;
+  // Retention choices: for a new registration, the event's currently valid
+  // options (deadline previewed from now); for an existing one, the backend's
+  // options counted from the original registration, with the current choice.
+  List<RetentionChoice>? _choices;
+  String? _periodId, _currentPeriodId;
   bool _requestedPeriods = false, _periodError = false;
+  // Edit mode: the backend says whether retention may change (no active case).
+  bool _retentionEditable = true;
   // The Active event this registration is automatically associated with --
   // read from the backend's authoritative event record, never assumed.
   ActiveEvent? _event;
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_requestedPeriods && widget.individual == null) {
+    if (!_requestedPeriods) {
       _requestedPeriods = true;
       _loadPeriods();
     }
@@ -53,16 +59,42 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
 
   Future<void> _loadPeriods() async {
     final guardian = AppServices.of(context).guardian;
+    final existing = widget.individual;
     try {
-      final periods = await guardian.registrationPeriods();
-      if (!mounted) return;
-      setState(() {
-        _periods = periods;
-        _periodError = periods.isEmpty;
-      });
+      if (existing == null) {
+        final periods = await guardian.registrationPeriods();
+        final now = DateTime.now();
+        if (!mounted) return;
+        setState(() {
+          _choices = [
+            for (final p in periods)
+              RetentionChoice(p.id, p.hours, now.add(Duration(hours: p.hours))),
+          ];
+          _periodError = periods.isEmpty;
+        });
+      } else {
+        final options = await guardian.retentionOptions(existing.id);
+        if (!mounted) return;
+        setState(() {
+          _choices = [
+            for (final o in options.options)
+              RetentionChoice(
+                o.id,
+                o.hours,
+                o.expiresAt,
+                available: o.available,
+                reason: o.reason,
+              ),
+          ];
+          _currentPeriodId = _periodId = options.currentPeriodId;
+          _retentionEditable = options.editable;
+          _periodError = options.options.isEmpty;
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => _periodError = true);
     }
+    if (existing != null) return;
     try {
       final event = await guardian.activeEvent();
       if (mounted) setState(() => _event = event);
@@ -94,7 +126,7 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
 
   Future<void> _save() async {
     if (_busy) return;
-    if (widget.individual == null && (_periods == null || _periodError)) return;
+    if (widget.individual == null && (_choices == null || _periodError)) return;
     final valid = _form.currentState!.validate();
     setState(() => _photoError = _photo == null && widget.individual == null);
     if (_photoError) {
@@ -114,7 +146,11 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
     try {
       await AppServices.of(context).guardian.saveIndividual(
         IndividualInput(
-          registrationPeriodId: widget.individual == null ? _periodId : null,
+          // Edit: only a CHANGED retention choice is sent -- any other edit
+          // (including a new photograph) leaves the deadline untouched.
+          registrationPeriodId: widget.individual == null
+              ? _periodId
+              : (_periodId != _currentPeriodId ? _periodId : null),
           fullName: _name.text,
           age: int.parse(_age.text.trim()),
           gender: _gender!,
@@ -380,7 +416,10 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          if (!editing)
+          // Retention: chosen at registration, changeable from Edit while no
+          // case locks the profile (the backend enforces both). A failed
+          // options load is shown with a retry in BOTH modes -- never hidden.
+          if (_periodError && (!editing || _retentionEditable))
             GuardianPanel(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,67 +429,29 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
-                  if (_event != null) ...[
-                    // The Active event this registration is associated with,
-                    // as the backend describes it -- never a built-in name.
-                    Row(
-                      key: const ValueKey('active-event'),
-                      children: [
-                        const Icon(
-                          Icons.event,
-                          size: 18,
-                          color: AppColors.secondary,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            s.registeringForEvent(_event!.name),
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.secondary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  Text(s.registrationPeriodHint),
-                  if (_periodError) ...[
-                    Text(s.registrationPeriodUnavailable),
-                    TextButton(
-                      onPressed: _busy ? null : _loadPeriods,
-                      child: Text(s.retry),
-                    ),
-                  ] else if (_periods == null)
-                    const LinearProgressIndicator()
-                  else
-                    DropdownButtonFormField<String>(
-                      key: const ValueKey('registration-period'),
-                      initialValue: _periodId,
-                      isExpanded: true,
-                      hint: Text(s.registrationPeriodDefault),
-                      items: [
-                        for (final period in _periods!)
-                          DropdownMenuItem(
-                            value: period.id,
-                            child: Text(
-                              s.registrationPeriodHours(period.hours),
-                            ),
-                          ),
-                      ],
-                      onChanged: _busy
-                          ? null
-                          : (value) => setState(() => _periodId = value),
-                    ),
+                  Text(s.registrationPeriodUnavailable),
+                  TextButton(
+                    onPressed: _busy ? null : _loadPeriods,
+                    child: Text(s.retry),
+                  ),
                 ],
               ),
+            )
+          else if (_choices == null && !_periodError)
+            const LinearProgressIndicator()
+          else if (_choices != null && (!editing || _retentionEditable))
+            RetentionPeriodPanel(
+              choices: _choices!,
+              selectedId: _periodId,
+              editing: editing,
+              enabled: !_busy,
+              eventName: editing ? null : _event?.name,
+              onChanged: (value) => setState(() => _periodId = value),
             ),
           if (_error != null) ErrorNotice(message: failureMessage(_error!, s)),
           PrimaryButton(
             label: editing ? s.saveChanges : s.save,
-            onPressed: !editing && (_periods == null || _periodError)
+            onPressed: !editing && (_choices == null || _periodError)
                 ? null
                 : _save,
             isLoading: _busy,

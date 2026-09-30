@@ -36,7 +36,7 @@ def ensure_deletable(data):
     if data.get("active_case_id") or data.get("active_found_report_id"):
         raise HTTPException(409, detail="active_case")
 
-from .registration_retention import registration_available, establish
+from .registration_retention import registration_available, establish, reschedule, edit_options
 
 
 def photo_expired(data, db=None, tx=None, *, case_context=False):
@@ -48,7 +48,12 @@ def public_individual(doc, db=None):
     return {**{k: data[k] for k in ("full_name", "age", "gender", "relationship")},
         "relationship_other": data.get("relationship_other"),
         "id": doc.id, "active_case_id": data.get("active_case_id"),
+        # The retention the Guardian chose: shown on the profile and editable
+        # there (see GuardianService.retention_options / save).
+        "registration_started_at": data.get("registration_started_at"),
         "registration_expires_at": data.get("registration_expires_at"),
+        "registration_period_id": data.get("registration_period_id"),
+        "registration_duration_hours": data.get("registration_duration_hours"),
         "photo_expired": photo_expired(data, db)}
 
 def normalize_photo(encoded):
@@ -256,12 +261,17 @@ class GuardianService:
                 ensure_deletable(current_data)
             else:
                 current_data = {}
-            event = active_event(self.db, tx) if existing is None else None
+            event = active_event(self.db, tx) if existing is None or value.registration_period_id is not None else None
             if existing and not registration_available(current_data, self.db, tx):
                 raise HTTPException(409, detail='registration_unavailable')
-            if existing and value.registration_period_id is not None:
-                raise HTTPException(422, detail='registration_period_immutable')
             data = value.model_dump(exclude={"photo_base64", "registration_period_id"})
+            if existing and value.registration_period_id is not None:
+                # Retention change from the profile: the start never moves,
+                # the new deadline must be in the future and within the event.
+                if current_data.get("event_id") != event.id:
+                    raise HTTPException(409, detail='registration_unavailable')
+                if value.registration_period_id != current_data.get("registration_period_id"):
+                    data.update(reschedule(event, current_data, value.registration_period_id))
             data.update(guardian_id=self.uid, updated_at=firestore.SERVER_TIMESTAMP)
             if new_path:
                 data["photo_path"] = new_path
@@ -286,6 +296,20 @@ class GuardianService:
         if new_path and old_embedding:
             self.cleanup(old_embedding)
         return public_individual(ref.get(), self.db)
+
+    def retention_options(self, item_id):
+        """What the Guardian may change this registration's retention to."""
+        data = self.get(item_id).to_dict()
+        event = active_event(self.db)
+        if data.get("event_id") != event.id or not registration_available(data, self.db):
+            raise HTTPException(409, detail='registration_unavailable')
+        return {"individual_id": item_id, "event_id": event.id,
+                "event_ends_at": event.to_dict().get("ends_at"),
+                "started_at": data.get("registration_started_at"),
+                "expires_at": data.get("registration_expires_at"),
+                "current_period_id": data.get("registration_period_id"),
+                "editable": not (data.get("active_case_id") or data.get("active_found_report_id")),
+                "options": edit_options(event, data)}
 
     def delete(self, item_id):
         doc = self.get(item_id, include_deleting=True)

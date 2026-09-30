@@ -50,9 +50,9 @@
   "privacyTitle": "Privacy Notice",
   "privacyIntro": "At Radd, we respect your privacy and the privacy of individuals registered under your care. The data processed by the system may include personal information and photographs relating to children, older adults, or other individuals who may require assistance if they become separated during an event.\n\nThis notice explains what information Radd uses, why and how it is used during the search, identification, and reunification process, who may access it, how long it is retained, and when it is deleted.",
   "privacyInfoTitle": "Information We Collect and Use",
-  "privacyInfoBody": "When you create a Guardian account and use Radd, the system processes information required to create and use your account, as well as information you provide about individuals registered under your care, including their identifying information and photographs.\n\nWhen a missing-person report is submitted, Radd may also process case-related information, such as details about the missing individual, descriptive information provided to support the search, and last-seen information. If you choose to use your device location as the last-seen location and grant location permission, location coordinates may be used for this purpose.\n\nThis information is used to support registration, reporting, searching, identification, verification, and reunification during the event.",
+  "privacyInfoBody": "When you create a Guardian account and use Radd, the system processes information required to create and use your account, as well as information you provide about individuals registered under your care, including their identifying information and photographs.\n\nWhen a missing-person report is submitted, Radd may also process case-related information, such as details about the missing individual, descriptive information provided to support the search, and last-seen information. If you choose to use your device location as the last-seen location and grant location permission, location coordinates may be used for this purpose.\n\nThis information is used to support registration, reporting, searching, identification, verification, and reunification during the event.\n\nYour account information (name, email address, and phone number) is kept for as long as your Guardian account exists. It is not deleted by the retention rules that apply to registered individuals' data.",
   "privacyRegisteredPhotosTitle": "Registered Individuals' Photographs",
-  "privacyRegisteredPhotosBody": "The reference photograph and facial embedding belong to the individual’s identifiable event information. Their availability follows the registration period selected from the Active Event’s configured options, or the longest valid option by default. They do not expire solely because of photo capture age.\n\nWhen the period expires, identifiable information is deleted unless an associated active missing-person case requires it. In that case deletion is deferred until the case is terminal. Replacing a photograph does not extend the registration. AI suggestions never replace human confirmation and Guardian verification.",
+  "privacyRegisteredPhotosBody": "The reference photograph taken when you register an individual, and any facial data derived from it, are part of that individual's registered data. They are kept for the retention period you choose at registration and are deleted together with the rest of that data when the period ends. Taking a new photograph later replaces the previous one but does not change the retention period.\n\nPhotographs are used only to help identify the individual during the event. AI suggestions never replace human review and Guardian verification.",
   "privacyVolunteerPhotosTitle": "Photographs Captured by Volunteers",
   "privacyVolunteerPhotosBody": "When a person is found or becomes separated, an authorized Volunteer may capture their photograph through Radd solely within the identification and reunification workflow.\n\nThe photograph may be used for identification, including comparison against eligible registered profiles to assist in identifying potential matches. Photograph capture is restricted to authorized Volunteers while assisting a found or separated individual.\n\nA photograph captured by a Volunteer is deleted when the identification attempt concludes, whether or not a match is confirmed.",
   "privacyLocationTitle": "Location Information",
@@ -62,9 +62,9 @@
   "privacyAccessTitle": "Access to and Protection of Information",
   "privacyAccessBody": "Photographs and personal information are not available for unrestricted public browsing. Access to protected information is limited to authorized users according to their roles and only to the extent required to perform their functions within the search, identification, verification, and reunification process.\n\nAuthorization is enforced for requests that access or modify protected data rather than relying only on the visibility of interface controls.",
   "privacyRetentionTitle": "Retention and Deletion of Photographs and Case Data",
-  "privacyRetentionBody": "Registered individual identifiable event information, including the reference photograph and facial embedding, follows the selected event registration period. If no shorter option is selected, the longest valid configured period applies, without exceeding the event end date. Replacing a photograph or extending the event does not extend an existing registration. Deletion is deferred while an associated missing-person case remains active and is performed after it becomes terminal.\n\nFound-person photographs are separate temporary identification images. They are deleted when the attempt ends without a confirmed match or immediately after match confirmation.\n\nCase records follow their applicable retention policy; only permitted non-identifying statistics remain afterward.",
+  "privacyRetentionBody": "When you register an individual, you choose how long their data (identifying details, photograph, and facial data) is kept, from the options configured for the current event. If you do not choose, the longest available option applies. The retention period cannot go beyond the end of the event. You can change it later from the individual's profile, as long as the new deadline is still ahead and within the event.\n\nWhen the period ends, the data is deleted automatically. If a missing-person report is still active at that time, deletion waits until the report is closed.\n\nPhotographs taken by Volunteers of a found individual are temporary and are deleted as soon as the identification attempt ends.\n\nCase records are deleted after the case's retention period; only the limited statistical information described below remains.",
   "privacyStatisticsTitle": "Data Retained for Statistics and Reporting",
-  "privacyStatisticsBody": "After the case retention period ends and identifiable personal data is deleted, Radd retains only the minimum data required for statistical reporting.\n\nThis retained data includes the case identifier, final status, timestamps, age group, and the Volunteer reference required for per-Volunteer reunification statistics.\n\nThe retained data does not include names, photographs, contact information, facial data, or precise location.",
+  "privacyStatisticsBody": "After a case's retention period ends and its identifying data is deleted, Radd keeps only the minimum information needed for statistical reporting: the case reference, its final outcome, when it was created and closed, the individual's age group, and the event. This information is aggregated or anonymized where applicable. For cases that ended in a reunion, the reference to the Volunteer who completed the handover may be kept so that reunification statistics per Volunteer can be reported.\n\nNo names, photographs, contact details, facial data, or precise locations are kept.",
   "privacyAgreementTitle": "Your Agreement",
   "privacyAgreementBody": "By accepting this Privacy Notice, you confirm that you have read this notice and agree to the collection, use, access, retention, and deletion of information and photographs as described above.",
   "requiredField": "This field is required.",
@@ -563,11 +563,56 @@
   "vAiReady": "Your found report is saved. Start AI-assisted identification, or use Manual Review when needed.",
   "vAiError": "Identification could not be completed. Please try again or continue with Manual Review.",
   "vNoEligibleRegistrations": "No registered individuals are currently eligible for review in this event.",
-  "registrationPeriodTitle": "Registration period",
-  "registrationPeriodHint": "The period starts when registration succeeds and cannot exceed the event end. Replacing the photograph does not extend it.",
+  "registrationPeriodTitle": "Data retention period",
+  "registrationPeriodHint": "Choose how long this individual's data should be kept. It will be deleted automatically when the selected period ends, in accordance with the Privacy Notice.",
   "registrationPeriodDefault": "Longest available period (default)",
   "registrationPeriodHours": "{hours} hours",
   "registrationPeriodUnavailable": "Registration periods are not available for this event. Please try again later.",
+  "registrationPeriodBoundary": "The period starts at registration and cannot go beyond the end of the event. If a missing-person report is still active when it ends, deletion waits until the report is closed.",
+  "retentionEditBoundary": "Counted from the original registration date. You can extend it or shorten it, as long as the new deadline is still ahead and within the event.",
+  "registrationPeriodDays": "{days, plural, =1{1 day} other{{days} days}}",
+  "@registrationPeriodDays": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "retentionUntil": "Data kept until {date}",
+  "@retentionUntil": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "retentionPassedError": "That period would already have ended. Choose a longer period.",
+  "retentionInvalidError": "The selected retention period is not available for this event.",
+  "retentionOptionUnavailable": "{label} ({reason})",
+  "@retentionOptionUnavailable": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "retentionOptionPassed": "already passed",
+  "retentionOptionBeyondEvent": "after the event ends",
+  "currentEvent": "Current event",
+  "eventDates": "{start} – {end}",
+  "@eventDates": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
   "registeringForEvent": "Registering for the active event: {event}",
   "@registeringForEvent": {
     "placeholders": {

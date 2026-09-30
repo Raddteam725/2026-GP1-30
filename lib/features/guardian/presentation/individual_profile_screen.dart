@@ -186,6 +186,17 @@ class _IndividualProfileScreenState extends State<IndividualProfileScreen> {
                       _row(s.gender, genderLabel(p.gender, s)),
                       const Divider(height: 24),
                       _row(s.relationship, relationshipDisplay(p, s)),
+                      if (p.registrationExpiresAt != null) ...[
+                        const Divider(height: 24),
+                        // The deletion deadline the Guardian chose; changed
+                        // through Edit like every other profile field.
+                        _row(
+                          s.registrationPeriodTitle,
+                          s.retentionUntil(
+                            caseDate(context, p.registrationExpiresAt),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
