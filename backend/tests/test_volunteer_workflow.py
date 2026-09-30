@@ -122,7 +122,12 @@ def test_qr_uses_existing_guardian_challenge_and_handover_survives_restart(db):
     assert vol().verify_guardian(report_id, challenge['payload'])['verified']  # lost-response retry
     # New service instance represents an app restart; receipt is in Firestore.
     assert vol().found_list()[0]['verification']['method'] == 'qr'
+    participation = list(db.data['cases/' + case_id].get('joined_by', []))
+    assert vol().list(True)[0]['id'] == case_id
     result = vol().handover_found(report_id)
+    assert vol().list(True) == vol('two').list(True) == []
+    assert vol().list() == vol('two').list() == []
+    assert db.data['cases/' + case_id].get('joined_by', []) == participation
     assert result['status'] == 'reunited'
     assert result['handed_over_by'] == 'one'
     assert result['handed_over_at'] is not None
