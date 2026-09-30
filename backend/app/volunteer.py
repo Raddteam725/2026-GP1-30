@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 from .firebase import identity, database, bucket
-from .case_models import STAGES
+from .case_models import STAGES, TERMINAL_STATUSES
 from .push import notify_guardian
 from .service import photo_expired, GuardianService
 from .models import FcmRegistration, FcmUnregister
@@ -95,6 +95,9 @@ class VolunteerService(VolunteerWorkflow):
         result = []
         for doc in docs:
             data = doc.to_dict()
+            # Active workload only; preserve completed records and participation history.
+            if data.get('status') in TERMINAL_STATUSES:
+                continue
             joined = self.uid in data.get('joined_by', [])
             include = (joined if data.get('status') in JOINABLE else data.get('confirmed_by') == self.uid) if mine else (data.get('status') in JOINABLE and not joined)
             if include and self.visible(data):

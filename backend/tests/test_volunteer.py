@@ -150,7 +150,7 @@ def test_shared_guardian_case_first_second_join_and_isolation(db):
     assert not {'guardian_id', 'individual_path', 'joined_by', 'phone', 'photo_path'} & response.keys()
     assert first.photo(case_id).startswith(b'\xff\xd8')
 
-@pytest.mark.parametrize('status', ['match_confirmed', 'awaiting_guardian_verification', 'reunited'])
+@pytest.mark.parametrize('status', ['match_confirmed', 'awaiting_guardian_verification'])
 def test_only_confirmer_retains_case_after_match(db, status):
     _, case_id = case()
     vol().start_search(case_id)
@@ -188,3 +188,26 @@ def test_client_uid_never_controls_join(db):
         response = client.post(f'/v1/volunteer/cases/{case_id}/start-search', json={'uid': 'two'})
         assert response.status_code == 200
     assert db.data['cases/' + case_id]['joined_by'] == ['one']
+
+
+@pytest.mark.parametrize('status', volunteer.TERMINAL_STATUSES)
+def test_terminal_workload_api_excludes_all_participants_without_erasing_history(db, status):
+    from copy import deepcopy
+    guardian, case_id = case()
+    vol().start_search(case_id)
+    vol('two').start_search(case_id)
+    assert vol().list(True)[0]['id'] == vol('two').list(True)[0]['id'] == case_id
+    db.data['cases/' + case_id].update(status=status, confirmed_by='two')
+    stored = deepcopy(db.data['cases/' + case_id])
+    with TestClient(app) as client:
+        for uid in ['one', 'two']:
+            app.dependency_overrides[identity] = lambda uid=uid: {'uid': uid}
+            for _ in range(2):
+                for path in ['mine', 'available']:
+                    response = client.get('/v1/volunteer/cases/' + path)
+                    assert response.status_code == 200
+                    assert response.json() == []
+            with pytest.raises(HTTPException): vol(uid).start_search(case_id)
+    assert db.data['cases/' + case_id] == stored
+    assert stored['joined_by'] == ['one', 'two']
+    assert CaseService(guardian).list()[0]['status'] == status

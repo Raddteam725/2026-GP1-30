@@ -72,6 +72,69 @@ void main() {
     headers: {'content-type': 'application/json; charset=utf-8'},
   );
 
+  test(
+    'Handover removes completed workload and counts before and after refetch',
+    () async {
+      var completed = false;
+      var mineReads = 0;
+      final repo = ApiVolunteerRepository(
+        token: () async => 'token',
+        baseUrl: 'http://test',
+        client: MockClient((request) async {
+          final path = request.url.path;
+          if (path == '/v1/volunteer') return json(profile());
+          if (path.endsWith('/handover')) {
+            completed = true;
+            return json({
+              'id': 'FR-test',
+              'created_at': '2026-09-01T08:00:00Z',
+              'volunteer_uid': 'server-uid',
+              'case_id': 'RD-real',
+              'status': 'reunited',
+              'photo_available': false,
+            });
+          }
+          if (path.endsWith('/cases/mine')) {
+            mineReads++;
+            return json(
+              completed
+                  ? []
+                  : [
+                      caseData(
+                        joined: true,
+                        status: 'awaiting_guardian_verification',
+                        confirmed: true,
+                      ),
+                    ],
+            );
+          }
+          return json([]);
+        }),
+      );
+      addTearDown(repo.dispose);
+      await repo.refresh();
+      expect(repo.myCases('server-uid').length, 1);
+      expect(repo.availableFor('server-uid'), isEmpty);
+      final report = FoundReport(
+        id: 'FR-test',
+        volunteerUid: 'server-uid',
+        photo: '',
+      )..caseId = 'RD-real';
+      await repo.handover(repo.account!, report);
+      // The successful response updates the local model even before list recovery.
+      expect(repo.myCases('server-uid'), isEmpty);
+      expect(repo.availableFor('server-uid'), isEmpty);
+      for (var i = 0; i < 20 && mineReads < 2; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      expect(mineReads, greaterThanOrEqualTo(2));
+      await repo.refresh();
+      expect(repo.myCases('server-uid').length, 0);
+      expect(repo.availableFor('server-uid').length, 0);
+      expect(repo.cases, isEmpty);
+    },
+  );
+
   test('Volunteer proximity uses the authenticated backend radius', () async {
     final repo = ApiVolunteerRepository(
       token: () async => 'test-token',

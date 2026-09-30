@@ -517,8 +517,19 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     super.dispose();
   }
 
+  Future<void> _refreshCaseLists() async {
+    final repository = repo;
+    if (!_canParticipate || repository is! ApiVolunteerRepository) return;
+    try {
+      await repository.refreshEvent();
+    } catch (error) {
+      if (kDebugMode) debugPrint('Radd case-list refresh failed: $error');
+    }
+  }
+
   void _open(VolunteerView page) {
     _update(() => _stack.add(page));
+    if (page == VolunteerView.cases) unawaited(_refreshCaseLists());
   }
 
   void _replace(VolunteerView page) {
@@ -544,6 +555,7 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
         ..clear()
         ..add(VolunteerView.values[tab]);
     });
+    if (view == VolunteerView.cases) unawaited(_refreshCaseLists());
   }
 
   void _message(String text) =>
