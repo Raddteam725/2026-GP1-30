@@ -64,8 +64,6 @@ def db(monkeypatch):
     for uid in ['one', 'two']:
         db.set(db.collection('events').document('test-event').collection('volunteers').document(uid), {})
         db.set(db.collection('users').document(uid), {'role': 'volunteer', 'active': True,
-            'terms_version': 'draft-2026-09', 'privacy_version': 'draft-2026-09',
-            'terms_accepted_at': datetime.now(timezone.utc), 'privacy_accepted_at': datetime.now(timezone.utc),
             'full_name': 'Volunteer ' + uid, 'volunteer_id': 'VOL-' + uid,
             'email': uid + '@example.test', 'phone': '+966500000001'})
     yield db

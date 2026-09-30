@@ -109,3 +109,16 @@ def test_event_switch_between_profile_and_query_cannot_expose_unassigned_event(d
     with pytest.raises(HTTPException) as error:
         service.list()
     assert error.value.detail == 'event_access_required'
+
+
+def test_badge_event_name_uses_current_assigned_event_not_user_snapshot(db):
+    from app.events import active_event, event_summary
+    db.data['users/one']['event_name'] = 'Stale profile name'
+    db.data['events/test-event']['name'] = 'Current event'
+    assert vol().profile()['event_name'] == event_summary(active_event(db))['name']
+    db.data['events/test-event']['name'] = 'Renamed event'
+    assert vol().profile()['event_name'] == 'Renamed event'
+    del db.data['events/test-event/volunteers/one']
+    assert vol().profile(require_assignment=False)['event_name'] is None
+    db.data['events/test-event']['active'] = False
+    assert vol().profile(require_assignment=False)['event_name'] is None

@@ -81,22 +81,6 @@ class ApiVolunteerRepository extends VolunteerRepository {
   final http.Client _client;
   final String _base;
   VolunteerAccount? account;
-  bool consentCurrent = false;
-  String? requiredTermsVersion, requiredPrivacyVersion;
-
-  Future<void> acceptConsent(String terms, String privacy) async {
-    await _request(
-      'POST',
-      '/consent',
-      body: {
-        'accepted': true,
-        'terms_version': terms,
-        'privacy_version': privacy,
-      },
-    );
-    await loadProfile();
-  }
-
   List<VolunteerCase> _cases = [];
   List<RegisteredPerson> _profiles = [];
   List<FoundReport> _reports = [];
@@ -159,11 +143,9 @@ class ApiVolunteerRepository extends VolunteerRepository {
     }
     if (_base.isEmpty) throw StateError('backend-unavailable');
     final eventRequest =
-        path.isNotEmpty &&
-        path != '/consent' &&
-        path != '/fcm-registrations/unregister';
+        path.isNotEmpty && path != '/fcm-registrations/unregister';
     final requestEventId = account?.eventId;
-    if (eventRequest && (!consentCurrent || account?.eventAuthorized != true)) {
+    if (eventRequest && account?.eventAuthorized != true) {
       throw StateError('event-access-required');
     }
     final uri = Uri.parse('$_base/v1/volunteer$path');
@@ -243,12 +225,6 @@ class ApiVolunteerRepository extends VolunteerRepository {
       try {
         detail = (jsonDecode(response.body) as Map)['detail'] as String?;
       } catch (_) {}
-      if (detail == 'volunteer_consent_required') {
-        consentCurrent = false;
-        clearEventData();
-        notifyListeners();
-        await loadProfile();
-      }
       if (detail == 'event_access_required') {
         clearEventData();
         final old = account;
@@ -309,10 +285,6 @@ class ApiVolunteerRepository extends VolunteerRepository {
   Future<VolunteerAccount> loadProfile() async {
     final data =
         jsonDecode((await _request('GET', '')).body) as Map<String, dynamic>;
-    consentCurrent = data['consent_current'] == true;
-    requiredTermsVersion = data['required_terms_version'] as String?;
-    requiredPrivacyVersion = data['required_privacy_version'] as String?;
-    if (!consentCurrent) clearEventData();
     final name = data['full_name'] as String;
     final radius = data['proximity_radius_meters'];
     if (radius is num && radius.isFinite && radius > 0) {
@@ -327,6 +299,9 @@ class ApiVolunteerRepository extends VolunteerRepository {
       phone: data['phone'] as String?,
       assigned: data['assigned'] == true,
       eventId: data['event_id'] as String?,
+      eventName: data['assigned'] == true && data['event_id'] != null
+          ? data['event_name'] as String?
+          : null,
     );
     if (!result.active) {
       clearProtectedData();
@@ -380,7 +355,7 @@ class ApiVolunteerRepository extends VolunteerRepository {
     try {
       final user = eventOnly ? account! : await loadProfile();
       if (!eventOnly) version = _dataVersion;
-      if (!consentCurrent || !user.eventAuthorized) return;
+      if (!user.eventAuthorized) return;
       if (!current()) return;
       // Independent resources publish independently. Photos and FCM registration
       // must never hold case lists or navigation behind their network round trips.

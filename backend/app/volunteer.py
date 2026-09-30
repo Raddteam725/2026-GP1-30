@@ -9,7 +9,6 @@ from .service import photo_expired, GuardianService
 from .models import FcmRegistration, FcmUnregister
 from .volunteer_alerts import safe_dispatch
 from .alerts import PROXIMITY_RADIUS_METERS
-from . import volunteer_consent
 from .volunteer_access import event_access, require_event
 from pydantic import BaseModel, Field, ConfigDict
 import hashlib
@@ -34,7 +33,7 @@ class VolunteerService(VolunteerWorkflow):
         self.user = self.db.collection('users').document(self.uid)
         self.cases = self.db.collection('cases')
 
-    def profile(self, tx=None, require_active=True, require_assignment=True, require_consent=True):
+    def profile(self, tx=None, require_active=True, require_assignment=True):
         data = self.user.get(transaction=tx).to_dict() or {}
         if data.get('role') != 'volunteer' or self.token.get('role') not in (None, 'volunteer'):
             raise HTTPException(403, detail='volunteer_required')
@@ -42,12 +41,10 @@ class VolunteerService(VolunteerWorkflow):
             raise HTTPException(403, detail='volunteer_profile_incomplete')
         if require_active and data['active'] is not True:
             raise HTTPException(403, detail='volunteer_inactive')
-        if require_consent and not volunteer_consent.current(data):
-            raise HTTPException(403, detail='volunteer_consent_required')
-        access = event_access(self.db, self.uid, tx) if require_active and volunteer_consent.current(data) else {'event_id': None, 'assigned': False}
+        access = event_access(self.db, self.uid, tx) if require_active else {'event_id': None, 'assigned': False}
         if require_assignment and not access['assigned']:
             raise HTTPException(403, detail='event_access_required')
-        return {'uid': self.uid, **volunteer_consent.state(data), **access, 'proximity_radius_meters': PROXIMITY_RADIUS_METERS,
+        return {'uid': self.uid, **access, 'proximity_radius_meters': PROXIMITY_RADIUS_METERS,
                 **{k: data.get(k) for k in ('full_name', 'email', 'phone', 'volunteer_id', 'active')}}
 
     def register_device(self, value):
@@ -68,7 +65,7 @@ class VolunteerService(VolunteerWorkflow):
 
     def unregister_device(self, value):
         # Unregistration may be needed after deactivation; only this UID's device.
-        self.profile(require_active=False, require_assignment=False, require_consent=False)
+        self.profile(require_active=False, require_assignment=False)
         ref = self.user.collection('fcm_registrations').document(hashlib.sha256(value.token.encode()).hexdigest())
         ref.delete()
         return {'unregistered': True}
@@ -198,11 +195,7 @@ def unregister_device(value: FcmUnregister, s=Depends(service)):
 
 @router.get('')
 def profile(s=Depends(service)):
-    return s.profile(require_assignment=False, require_consent=False)
-
-@router.post('/consent')
-def accept_consent(value: volunteer_consent.ConsentInput, s=Depends(service)):
-    return volunteer_consent.accept(s, value)
+    return s.profile(require_assignment=False)
 
 @router.get('/cases/available')
 def available(s=Depends(service)):

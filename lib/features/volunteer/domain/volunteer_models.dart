@@ -30,12 +30,13 @@ class VolunteerAccount {
     this.phone,
     this.assigned = false,
     this.eventId,
+    this.eventName,
   });
   final String uid, volunteerId;
   final LocalizedData name;
   final bool active;
   final bool assigned;
-  final String? eventId;
+  final String? eventId, eventName;
   bool get assignedToCurrentEvent => assigned && eventId != null;
   bool get eventAuthorized => active && assignedToCurrentEvent;
   final String? email, phone;
