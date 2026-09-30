@@ -55,11 +55,18 @@ and their `case_id` remain compatible. Standalone fallback records
 `method: found_identifier`; linked Missing Cases retain `case_identifier`; QR is
 `qr`. The identifier input accepts `identifier` and the legacy `case_id` alias.
 
-Guardian QR now lists identifiers returned by authenticated
-`GET /v1/guardian/found-reports`, scoped to that Guardian and current event. The
-Volunteer compares the full FR identifier displayed in the authenticated Guardian
-app; the existing requirement to see that authenticated account remains. No fake
-Missing Case identifier is used.
+Guardian QR lists the active standalone reports returned by authenticated
+`GET /v1/guardian/found-reports`, scoped to that Guardian and current event. Each
+entry carries `verification_code`: a 6-digit code stored on the report document
+(`found_reports/{id}.verification_code`) when identity is confirmed, unchanged for
+the report's whole active life, and dropped by the Reunited allowlist. The Guardian
+card shows that code, never the internal `FR-…` document id. The Volunteer enters
+the code on `verify-identifier`; the server compares it only against the code of
+the Volunteer's own current report (no cross-report lookup), tolerating spaces,
+`#`, dashes and Arabic-Indic digits. The full report id is not accepted. Active
+reports created before short codes existed receive one, once, when the Guardian
+list is fetched. The existing requirement to see that authenticated account
+remains. No fake Missing Case identifier is used.
 
 If a Missing Case exists first, confirmation links the FR to that case and continues
 its Match Confirmed → verification → Reunited path. If an identified FR exists first,
@@ -140,8 +147,9 @@ After the updated backend and APK are running:
 3. Open Manual Review without invoking AI. Choose a new, valid registration for the
    configured Active Event (the 17 legacy registrations remain excluded).
 4. Confirm Identity, then Guardian Contact → Proceed to Verification.
-5. Guardian opens QR in their authenticated account. Scan that real QR, or compare
-   the full Found Report identifier shown there using the fallback option.
+5. Guardian opens QR in their authenticated account. Scan that real QR, or enter
+   the 6-digit verification code shown under Found Individual Report there using
+   the fallback option.
 6. Invalid verification must prevent handover. Valid verification alone must not
    mark Reunited; explicitly confirm handover afterward.
 7. The standalone report becomes Reunited and disappears from active FR lists;

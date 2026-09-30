@@ -136,7 +136,7 @@ class GuardianQrScreen extends StatefulWidget {
 
 class _GuardianQrScreenState extends State<GuardianQrScreen> {
   Future<List<MissingCase>>? _cases;
-  Future<List<String>>? _foundReports;
+  Future<List<GuardianFoundReport>>? _foundReports;
   List<MissingCase> _active = const [];
   String? _selectedId;
   GuardianVerification? _code;
@@ -173,7 +173,7 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
   }
 
   Future<List<MissingCase>> _loadCases() async {
-    _foundReports = AppServices.of(context).guardian.activeFoundReportIds();
+    _foundReports = AppServices.of(context).guardian.activeFoundReports();
     final generation = ++_caseRequest;
     final all = await AppServices.of(context).guardian.cases();
     // Most relevant first: the case currently awaiting this Guardian's
@@ -330,7 +330,7 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
           style: const TextStyle(color: mutedText, fontSize: 14, height: 1.4),
         ),
         const SizedBox(height: 20),
-        FutureBuilder<List<String>>(
+        FutureBuilder<List<GuardianFoundReport>>(
           future: _foundReports,
           builder: (context, state) {
             if (state.hasError) {
@@ -341,17 +341,8 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
             }
             return Column(
               children: [
-                for (final id in state.data ?? <String>[])
-                  GuardianPanel(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(s.vFoundReportTitle),
-                        Text(s.vFoundIdentifierHelp),
-                        SelectableText(id, textDirection: TextDirection.ltr),
-                      ],
-                    ),
-                  ),
+                for (final report in state.data ?? <GuardianFoundReport>[])
+                  _foundReportCard(s, report),
               ],
             );
           },
@@ -419,6 +410,61 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
         ),
         const SizedBox(height: 8),
       ],
+    );
+  }
+
+  /// Standalone Found Report: the short code the Guardian reads to the
+  /// Volunteer when the QR cannot be scanned. The internal report id is
+  /// deliberately not displayed.
+  Widget _foundReportCard(AppLocalizations s, GuardianFoundReport report) {
+    final code = report.verificationCode;
+    return GuardianPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            s.vFoundReportTitle,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            s.foundReportCodeHint,
+            style: const TextStyle(color: mutedText, fontSize: 13, height: 1.4),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            s.foundReportCode.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1,
+              color: mutedText,
+            ),
+          ),
+          const SizedBox(height: 4),
+          if (code == null || code.isEmpty)
+            Text(
+              s.foundReportCodeUnavailable,
+              style: const TextStyle(color: mutedText, fontSize: 13),
+            )
+          else
+            SelectableText(
+              code,
+              textDirection: TextDirection.ltr,
+              style: const TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 6,
+                color: AppColors.primary,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
+        ],
+      ),
     );
   }
 

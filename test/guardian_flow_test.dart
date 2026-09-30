@@ -250,14 +250,37 @@ void main() {
   );
   for (final language in ['en', 'ar']) {
     testWidgets(
-      'Guardian can display standalone Found Report identifier without missing case in $language',
+      'Guardian sees the short Found Report verification code, never the internal id, without a missing case in $language',
       (t) async {
         await start(t, locale: language);
         auth.active = true;
-        repo.foundReportIds = ['FR-test-context'];
+        repo.foundReports = [
+          const GuardianFoundReport(
+            id: 'FR-test-context',
+            status: 'awaiting_guardian_verification',
+            verificationCode: '482913',
+          ),
+          const GuardianFoundReport(
+            id: 'FR-legacy-no-code',
+            status: 'identity_confirmed',
+          ),
+        ];
         await route(t, AppRoutes.qrCode);
         expect(repo.caseRecords, isEmpty);
-        expect(find.text('FR-test-context'), findsOneWidget);
+        final s = AppLocalizations.of(
+          t.element(find.byType(GuardianQrScreen).first),
+        )!;
+        expect(find.text('482913'), findsOneWidget);
+        expect(find.textContaining('FR-test-context'), findsNothing);
+        expect(find.textContaining('FR-legacy-no-code'), findsNothing);
+        expect(find.text(s.foundReportCodeUnavailable), findsOneWidget);
+        expect(find.text(s.vFoundReportTitle), findsNWidgets(2));
+        // The QR itself stays available below the report cards (lazy list).
+        await t.scrollUntilVisible(
+          find.byType(QrImageView),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
         expect(find.byType(QrImageView), findsOneWidget);
         expect(t.takeException(), isNull);
       },

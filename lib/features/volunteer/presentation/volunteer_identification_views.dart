@@ -1,5 +1,31 @@
 part of 'volunteer_workspace.dart';
 
+/// Length of the short Guardian-read verification code of a standalone Found
+/// Report (server-defined; the internal FR-… report id is never typed).
+const verificationCodeLength = 6;
+
+/// Drops separators a Guardian may read aloud or a keyboard may insert
+/// (spaces, '#', dashes) and maps Arabic-Indic numerals to ASCII digits.
+/// Any other character is kept so that it fails validation.
+String normalizeVerificationCode(String value) {
+  final out = StringBuffer();
+  for (final rune in value.runes) {
+    if (rune == 0x20 || rune == 0x23 || rune == 0x2D || rune == 0x09) continue;
+    if (rune >= 0x0660 && rune <= 0x0669) {
+      out.writeCharCode(0x30 + rune - 0x0660); // Arabic-Indic ٠..٩
+    } else if (rune >= 0x06F0 && rune <= 0x06F9) {
+      out.writeCharCode(0x30 + rune - 0x06F0); // Eastern Arabic-Indic ۰..۹
+    } else {
+      out.writeCharCode(rune);
+    }
+  }
+  return out.toString();
+}
+
+bool isVerificationCode(String normalized) =>
+    normalized.length == verificationCodeLength &&
+    normalized.runes.every((r) => r >= 0x30 && r <= 0x39);
+
 extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
   List<Widget> _reportView() => [
     VolunteerInfo(s.vCaptureNotice),
@@ -598,6 +624,11 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     return null;
   }
 
+  /// No Missing Case behind this report: the fallback identifier is the
+  /// report's short Guardian-read verification code, not a case identifier.
+  bool get _standaloneVerification =>
+      _report?.caseId == null && _associatedCase == null;
+
   List<Widget> _matchDetails() {
     final person = _person!;
     final info =
@@ -987,18 +1018,30 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
             TextFormField(
               controller: _identifier,
               textDirection: TextDirection.ltr,
+              // Standalone: the Guardian reads a short numeric code, so
+              // offer the number pad; a linked Missing Case keeps its
+              // alphanumeric case identifier.
+              keyboardType: _standaloneVerification
+                  ? TextInputType.number
+                  : TextInputType.text,
               decoration: InputDecoration(
-                labelText: _report?.caseId == null
+                labelText: _standaloneVerification
                     ? s.vFoundReportIdentifier
                     : s.vGuardianIdentifier,
                 prefixIcon: const Icon(Icons.pin_outlined),
               ),
-              validator: (value) =>
-                  value == null || value.trim().isEmpty ? s.vRequired : null,
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) return s.vRequired;
+                if (_standaloneVerification &&
+                    !isVerificationCode(normalizeVerificationCode(value))) {
+                  return s.vVerificationCodeFormat;
+                }
+                return null;
+              },
             ),
             const SizedBox(height: 16),
             Text(
-              _report?.caseId == null
+              _standaloneVerification
                   ? s.vFoundIdentifierHelp
                   : s.vExactIdentifier,
             ),
@@ -1027,7 +1070,9 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
               if (_identifierForm.currentState!.validate()) {
                 _verification(
                   VerificationMethod.caseIdentifier,
-                  _identifier.text,
+                  _standaloneVerification
+                      ? normalizeVerificationCode(_identifier.text)
+                      : _identifier.text,
                 );
               }
             },

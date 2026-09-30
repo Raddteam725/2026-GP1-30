@@ -8,6 +8,23 @@ import '../domain/volunteer_models.dart';
 import '../domain/volunteer_notification_event.dart';
 import 'volunteer_repository.dart';
 
+/// Backend workflow refusals (HTTP 409/422 `detail`) that the Volunteer
+/// screens can explain, mapped to the StateError codes they throw. Anything
+/// else stays a generic failure.
+const knownWorkflowFailures = {
+  'already_matched': 'already-matched',
+  'resume_existing_report': 'resume-existing-report',
+  'profile_unavailable': 'profile-unavailable',
+  'identification_ended': 'identification-ended',
+  'identification_unavailable': 'identification-unavailable',
+  'match_already_confirmed': 'match-already-confirmed',
+  'match_required': 'match-required',
+  'guardian_verification_required': 'guardian-verification-required',
+  'invalid_transition': 'invalid-transition',
+  'case_not_joinable': 'case-not-joinable',
+  'capture_required': 'capture-required',
+};
+
 /// Unsupported found/AI/verification operations retain fail-closed behavior.
 class ApiVolunteerRepository extends VolunteerRepository {
   ApiVolunteerRepository({
@@ -263,12 +280,23 @@ class ApiVolunteerRepository extends VolunteerRepository {
       throw StateError('photo-deletion-pending');
     }
     if (response.statusCode >= 400) {
-      throw StateError(switch (response.statusCode) {
-        401 => 'unauthorized',
-        403 => 'volunteer-required',
-        404 => 'not-found',
-        _ => 'backend-unavailable',
-      });
+      // A known workflow refusal keeps its meaning so the screen can tell
+      // the Volunteer what actually happened (never the backend text itself).
+      String? detail;
+      if (response.statusCode == 409 || response.statusCode == 422) {
+        try {
+          detail = (jsonDecode(response.body) as Map)['detail'] as String?;
+        } catch (_) {}
+      }
+      throw StateError(
+        knownWorkflowFailures[detail] ??
+            switch (response.statusCode) {
+              401 => 'unauthorized',
+              403 => 'volunteer-required',
+              404 => 'not-found',
+              _ => 'backend-unavailable',
+            },
+      );
     }
     if (eventRequest &&
         (account?.eventAuthorized != true ||

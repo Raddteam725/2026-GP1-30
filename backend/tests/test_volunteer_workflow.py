@@ -30,6 +30,11 @@ def matching(uid='one'):
     result = vol(uid).confirm(report['id'], profile['id'])
     return guardian, case_id, result
 
+def code_of(db, report_id):
+    """The short fallback code the Guardian reads out for a standalone report
+    (what the Guardian endpoint shows); the document id is never accepted."""
+    return db.data['found_reports/' + report_id]['verification_code']
+
 def test_found_upload_is_real_private_idempotent_and_ai_explicitly_unavailable(db):
     report = submit()
     retry = submit()
@@ -555,7 +560,7 @@ def test_found_first_links_later_guardian_case_without_search_or_reverification(
     report = submit()
     vol().confirm(report['id'], profile['id'])
     vol().begin_verification(report['id'])
-    assert vol().verify_guardian_identifier(report['id'], report['id'])['verified']
+    assert vol().verify_guardian_identifier(report['id'], code_of(db, report['id']))['verified']
     case = CaseService(guardian).create(CaseCreate(individual_id=identifier))
     assert case['status'] == 'awaiting_guardian_verification'
     assert vol().found_owned(report['id']).to_dict()['case_id'] == case['id']
@@ -584,7 +589,7 @@ def test_standalone_expiry_defers_only_deletion_and_reunited_minimizes(db, monke
     vol().begin_verification(report['id'])
     assert not vol().verify_guardian_identifier(report['id'], 'wrong')['verified']
     with pytest.raises(HTTPException): vol().handover_found(report['id'])
-    assert vol().verify_guardian_identifier(report['id'], report['id'])['verified']
+    assert vol().verify_guardian_identifier(report['id'], code_of(db, report['id']))['verified']
     vol().handover_found(report['id'])
     data = db.data['found_reports/'+report['id']]
     assert set(data) == {'origin', 'event_id', 'status', 'created_at', 'updated_at', 'handed_over_at', 'handed_over_by', 'verification_method'}
@@ -639,7 +644,7 @@ def test_standalone_identifier_payload_and_guardian_qr_are_context_bound(db):
     report = submit()
     vol().confirm(report['id'], profile['id'])
     vol().begin_verification(report['id'])
-    verified = vol().verify_guardian_identifier(report['id'], report['id'])
+    verified = vol().verify_guardian_identifier(report['id'], code_of(db, report['id']))
     receipt = verified['report']['verification']
     assert receipt['context_id'] == report['id']
     assert receipt['context_type'] == 'found_report'
@@ -653,13 +658,14 @@ def test_completed_standalone_cannot_be_reidentified_or_reverified(db):
     report = submit()
     vol().confirm(report['id'], profile['id'])
     vol().begin_verification(report['id'])
-    vol().verify_guardian_identifier(report['id'], report['id'])
+    code = code_of(db, report['id'])
+    vol().verify_guardian_identifier(report['id'], code)
     vol().handover_found(report['id'])
     before = dict(db.data['found_reports/'+report['id']])
     for action in (lambda: vol().confirm(report['id'], profile['id']),
                    lambda: vol().end_identification(report['id']),
                    lambda: vol().candidates(report['id']),
-                   lambda: vol().verify_guardian_identifier(report['id'], report['id'])):
+                   lambda: vol().verify_guardian_identifier(report['id'], code)):
         with pytest.raises(HTTPException): action()
     assert db.data['found_reports/'+report['id']] == before
 
@@ -698,7 +704,7 @@ def test_manual_only_found_report_is_atomic_private_photo_free_and_reunites(db, 
     if method == 'qr':
         assert vol().verify_guardian(report['id'], guardian.account_verification()['payload'])['verified']
     else:
-        assert vol().verify_guardian_identifier(report['id'], report['id'])['verified']
+        assert vol().verify_guardian_identifier(report['id'], code_of(db, report['id']))['verified']
     assert vol().handover_found(report['id'])['status'] == 'reunited'
     completed = db.data['found_reports/' + report['id']]
     assert 'guardian_id' not in completed and 'individual_id' not in completed
@@ -757,3 +763,69 @@ def test_missing_case_hold_is_not_general_manual_eligibility(db):
     with pytest.raises(HTTPException):
         vol().submit_manual(volunteer_workflow.ManualFoundInput(request_id='expired-manual-001', profile_id=profile['id']))
     assert not any(p.startswith('found_reports/') for p in db.data)
+
+
+# --- Standalone continuation: Confirm Identity on a registration that is
+# already inside an active standalone report must resume, never duplicate --
+
+def manual(uid='one', profile_id=None, request_id='manual-request-00001'):
+    return vol(uid).submit_manual(volunteer_workflow.ManualFoundInput(request_id=request_id, profile_id=profile_id))
+
+
+def test_confirm_identity_again_resumes_own_awaiting_report_without_duplicate_or_reset(db):
+    guardian, identifier = guardian_with_individual('guardian')
+    profile = vol().profiles_list()[0]
+    first = manual(profile_id=profile['id'])
+    assert first['status'] == 'identity_confirmed' and first['case_id'] is None
+    vol().begin_verification(first['id'])
+    stored = dict(db.data['found_reports/' + first['id']])
+    # The Volunteer lost local state and confirms the same individual again
+    # from Manual Review (a different request id): the existing report comes
+    # back at its real stage; no second report, no status reset.
+    again = manual(profile_id=profile['id'], request_id='manual-request-00002')
+    assert again['id'] == first['id']
+    assert again['status'] == again['found_status'] == 'awaiting_guardian_verification'
+    assert again['case_id'] is None and again['verification'] is None
+    assert again['person']['guardian']['phone']  # authorized contact, standalone context
+    assert db.data['found_reports/' + first['id']] == stored
+    assert len([p for p in db.data if p.startswith('found_reports/')]) == 1
+    assert guardian.get(identifier).to_dict()['active_found_report_id'] == first['id']
+    assert not any(p.startswith('cases/') for p in db.data)
+    # The resumed report continues exactly where it was: a failed check
+    # blocks handover, a valid one does not itself reunite.
+    assert not vol().verify_guardian_identifier(first['id'], 'FR-WRONG')['verified']
+    with pytest.raises(HTTPException) as error:
+        vol().handover_found(first['id'])
+    assert error.value.detail == 'guardian_verification_required'
+    verified = vol().verify_guardian_identifier(first['id'], code_of(db, first['id']))
+    assert verified['verified'] and verified['report']['status'] == 'awaiting_guardian_verification'
+    assert vol().handover_found(first['id'])['status'] == 'reunited'
+    assert db.data['found_reports/' + first['id']]['handed_over_by'] == 'one'
+    assert 'active_found_report_id' not in guardian.get(identifier).to_dict()
+    assert not any(p.startswith('cases/') for p in db.data)
+
+
+def test_confirm_identity_on_another_volunteers_active_report_is_refused_clearly(db):
+    guardian, identifier = guardian_with_individual('guardian')
+    profile = vol().profiles_list()[0]
+    first = manual(profile_id=profile['id'])
+    with pytest.raises(HTTPException) as error:
+        manual('two', profile_id=profile['id'])
+    assert error.value.status_code == 409 and error.value.detail == 'already_matched'
+    assert len([p for p in db.data if p.startswith('found_reports/')]) == 1
+    assert db.data['found_reports/' + first['id']]['volunteer_uid'] == 'one'
+    with pytest.raises(HTTPException):  # and it stays private to its reporter
+        vol('two').found_owned(first['id'])
+
+
+def test_camera_report_cannot_take_over_a_profile_linked_to_own_other_report(db):
+    guardian, identifier = guardian_with_individual('guardian')
+    profile = vol().profiles_list()[0]
+    first = manual(profile_id=profile['id'])
+    camera = submit()
+    with pytest.raises(HTTPException) as error:
+        vol().confirm(camera['id'], profile['id'])
+    assert error.value.status_code == 409 and error.value.detail == 'resume_existing_report'
+    assert db.data['found_reports/' + camera['id']].get('matched_profile_id') is None
+    assert guardian.get(identifier).to_dict()['active_found_report_id'] == first['id']
+    assert len([p for p in db.data if p.startswith('found_reports/')]) == 2

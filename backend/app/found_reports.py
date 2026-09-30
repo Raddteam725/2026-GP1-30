@@ -1,4 +1,7 @@
 """Dedicated Found Report lifecycle and shared reunification context helpers."""
+import secrets
+import unicodedata
+
 IDENTIFYING = 'identification_in_progress'
 IDENTIFIED = 'identity_confirmed'
 VERIFYING = 'awaiting_guardian_verification'
@@ -9,6 +12,57 @@ IDENTIFIED_ACTIVE = (IDENTIFIED, VERIFYING)
 
 def found_status(data):
     return data.get('status') or (IDENTIFIED if data.get('matched_profile_id') else IDENTIFYING)
+
+
+# Short Guardian-readable fallback for ONE active standalone Found Report. The
+# document id stays the authoritative internal identifier and is never shown
+# as, nor accepted as, the manual verification value. The code is written once
+# at identity confirmation, kept unchanged for the report's whole active life
+# and dropped by the Reunited allowlist (`minimal_completed`).
+VERIFICATION_CODE_LENGTH = 6
+
+
+def new_verification_code():
+    return ''.join(secrets.choice('0123456789') for _ in range(VERIFICATION_CODE_LENGTH))
+
+
+def normalize_code(value):
+    """Tolerate separators (spaces, '#', dashes) and Arabic-Indic numerals;
+    anything else stays and therefore fails the comparison."""
+    out = []
+    for ch in str(value or ''):
+        if ch.isspace() or ch in '#-':
+            continue
+        out.append(str(unicodedata.digit(ch)) if ch.isdigit() else ch)
+    return ''.join(out)
+
+
+def code_eligible(data):
+    return bool(data.get('matched_profile_id')) and not data.get('case_id') and not data.get('ended') \
+        and found_status(data) in IDENTIFIED_ACTIVE
+
+
+def ensure_verification_code(db, doc):
+    """Return the report's code, assigning one (once) to an active standalone
+    report created before short codes existed. Ineligible reports get none."""
+    from firebase_admin import firestore
+    data = doc.to_dict() or {}
+    if data.get('verification_code'):
+        return data['verification_code']
+    if not code_eligible(data):
+        return None
+
+    @firestore.transactional
+    def assign(tx):
+        current = doc.reference.get(transaction=tx).to_dict() or {}
+        if current.get('verification_code'):
+            return current['verification_code']
+        if not code_eligible(current):
+            return None
+        code = new_verification_code()
+        tx.update(doc.reference, {'verification_code': code})
+        return code
+    return assign(db.transaction())
 
 
 def minimal_completed(data):

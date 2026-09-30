@@ -248,9 +248,12 @@ class GuardianApi implements GuardianRepository {
   }
 
   @override
-  Future<List<String>> activeFoundReportIds() async =>
+  Future<List<GuardianFoundReport>> activeFoundReports() async =>
       _list(await _request('GET', '/guardian/found-reports'))
-          .map((value) => (value as Map<String, dynamic>)['id'] as String)
+          .map(
+            (value) =>
+                GuardianFoundReport.fromJson(value as Map<String, dynamic>),
+          )
           .toList();
 
   @override

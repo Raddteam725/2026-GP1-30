@@ -43,8 +43,8 @@ class TestAuth implements AuthService {
 
 class TestRepository implements GuardianRepository {
   @override
-  Future<List<String>> activeFoundReportIds() async => foundReportIds;
-  List<String> foundReportIds = [];
+  Future<List<GuardianFoundReport>> activeFoundReports() async => foundReports;
+  List<GuardianFoundReport> foundReports = [];
   ActiveEvent event = const ActiveEvent(
     id: 'test-event',
     name: 'Test Event',

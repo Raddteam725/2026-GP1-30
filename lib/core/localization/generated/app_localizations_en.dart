@@ -1081,6 +1081,34 @@ class AppLocalizationsEn extends AppLocalizations {
       'This action could not be completed. Please try again.';
 
   @override
+  String get vFailureAlreadyMatched =>
+      'This individual is already being reunited through another active report. Only that report can continue.';
+
+  @override
+  String get vFailureResumeExisting =>
+      'You already have an active report for this individual. Continue it from Report instead of confirming the identity again.';
+
+  @override
+  String get vFailureProfileUnavailable =>
+      'This registration is no longer eligible for identification.';
+
+  @override
+  String get vFailureIdentificationEnded =>
+      'This identification attempt has already ended or been confirmed. The report has been refreshed.';
+
+  @override
+  String get vFailureMatchRequired =>
+      'Confirm the individual\'s identity before continuing to Guardian verification.';
+
+  @override
+  String get vFailureStageUnavailable =>
+      'This step is not available at the report\'s current stage. The report has been refreshed.';
+
+  @override
+  String get vFailureReportUnavailable =>
+      'This report\'s details could not be loaded. Please try again.';
+
+  @override
   String get vNoMissingReport => 'No missing-person report';
 
   @override
@@ -1631,10 +1659,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get vFoundIdentifierHelp =>
-      'Show the Found Report identifier from the Guardian’s signed-in Radd account. Compare the complete identifier before confirming verification.';
+      'Ask the Guardian to read the 6-digit verification code shown under Found Individual Report in their signed-in Radd account, and enter it exactly.';
 
   @override
-  String get vFoundReportIdentifier => 'Found Report Identifier';
+  String get vFoundReportIdentifier => 'Guardian Verification Code';
+
+  @override
+  String get vVerificationCodeFormat => 'Enter the 6-digit verification code.';
+
+  @override
+  String get foundReportCode => 'Verification code';
+
+  @override
+  String get foundReportCodeHint =>
+      'One of your registered individuals has been identified by a Volunteer. If the QR code cannot be scanned, read this code to the Volunteer. It belongs only to this active report.';
+
+  @override
+  String get foundReportCodeUnavailable =>
+      'The verification code is not available yet. Refresh this screen or use the QR code.';
 
   @override
   String get vConfirmIdentity => 'Confirm Identity';

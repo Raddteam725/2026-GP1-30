@@ -61,7 +61,8 @@ void main() {
           response = reportData;
         }
         if (path.endsWith('/verify-identifier')) {
-          expect(jsonDecode(request.body), {'identifier': 'FR-test'});
+          // The short Guardian-read code, never the internal report id.
+          expect(jsonDecode(request.body), {'identifier': '482913'});
           reportData['verification'] = {
             'context_id': 'FR-test',
             'context_type': 'found_report',
@@ -107,7 +108,7 @@ void main() {
         account,
         report,
         VerificationMethod.caseIdentifier,
-        'FR-test',
+        '482913',
         authenticatedAccountShown: true,
       ),
       isTrue,

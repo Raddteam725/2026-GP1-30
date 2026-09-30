@@ -2090,6 +2090,48 @@ abstract class AppLocalizations {
   /// **'This action could not be completed. Please try again.'**
   String get vActionFailed;
 
+  /// No description provided for @vFailureAlreadyMatched.
+  ///
+  /// In en, this message translates to:
+  /// **'This individual is already being reunited through another active report. Only that report can continue.'**
+  String get vFailureAlreadyMatched;
+
+  /// No description provided for @vFailureResumeExisting.
+  ///
+  /// In en, this message translates to:
+  /// **'You already have an active report for this individual. Continue it from Report instead of confirming the identity again.'**
+  String get vFailureResumeExisting;
+
+  /// No description provided for @vFailureProfileUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This registration is no longer eligible for identification.'**
+  String get vFailureProfileUnavailable;
+
+  /// No description provided for @vFailureIdentificationEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'This identification attempt has already ended or been confirmed. The report has been refreshed.'**
+  String get vFailureIdentificationEnded;
+
+  /// No description provided for @vFailureMatchRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm the individual\'s identity before continuing to Guardian verification.'**
+  String get vFailureMatchRequired;
+
+  /// No description provided for @vFailureStageUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This step is not available at the report\'s current stage. The report has been refreshed.'**
+  String get vFailureStageUnavailable;
+
+  /// No description provided for @vFailureReportUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This report\'s details could not be loaded. Please try again.'**
+  String get vFailureReportUnavailable;
+
   /// No description provided for @vNoMissingReport.
   ///
   /// In en, this message translates to:
@@ -3053,14 +3095,38 @@ abstract class AppLocalizations {
   /// No description provided for @vFoundIdentifierHelp.
   ///
   /// In en, this message translates to:
-  /// **'Show the Found Report identifier from the Guardian’s signed-in Radd account. Compare the complete identifier before confirming verification.'**
+  /// **'Ask the Guardian to read the 6-digit verification code shown under Found Individual Report in their signed-in Radd account, and enter it exactly.'**
   String get vFoundIdentifierHelp;
 
   /// No description provided for @vFoundReportIdentifier.
   ///
   /// In en, this message translates to:
-  /// **'Found Report Identifier'**
+  /// **'Guardian Verification Code'**
   String get vFoundReportIdentifier;
+
+  /// No description provided for @vVerificationCodeFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6-digit verification code.'**
+  String get vVerificationCodeFormat;
+
+  /// No description provided for @foundReportCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification code'**
+  String get foundReportCode;
+
+  /// No description provided for @foundReportCodeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'One of your registered individuals has been identified by a Volunteer. If the QR code cannot be scanned, read this code to the Volunteer. It belongs only to this active report.'**
+  String get foundReportCodeHint;
+
+  /// No description provided for @foundReportCodeUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The verification code is not available yet. Refresh this screen or use the QR code.'**
+  String get foundReportCodeUnavailable;
 
   /// No description provided for @vConfirmIdentity.
   ///

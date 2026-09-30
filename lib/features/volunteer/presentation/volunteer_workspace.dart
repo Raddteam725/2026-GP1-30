@@ -550,6 +550,38 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
 
   void _message(String text) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+
+  /// Refusals that mean the persisted report/case is at a different stage
+  /// than this screen assumed.
+  static const staleStateFailures = {
+    'already-matched',
+    'resume-existing-report',
+    'identification-ended',
+    'match-already-confirmed',
+    'invalid-transition',
+    'case-not-joinable',
+    'report-incomplete',
+    'report-state-unavailable',
+  };
+
+  /// The Guardian-facing text for a failed Volunteer action: known workflow
+  /// refusals get their own explanation; anything else the safe generic one.
+  static String volunteerFailureMessage(AppLocalizations s, Object error) =>
+      switch (error is StateError ? error.message : null) {
+        'already-matched' => s.vFailureAlreadyMatched,
+        'resume-existing-report' => s.vFailureResumeExisting,
+        'profile-unavailable' => s.vFailureProfileUnavailable,
+        'identification-ended' => s.vFailureIdentificationEnded,
+        'match-already-confirmed' => s.vFailureIdentificationEnded,
+        'match-required' => s.vFailureMatchRequired,
+        'guardian-verification-required' => s.vNoHandover,
+        'invalid-transition' => s.vFailureStageUnavailable,
+        'case-not-joinable' => s.vNotificationCaseUnavailable,
+        'report-incomplete' => s.vFailureReportUnavailable,
+        'report-state-unavailable' => s.vFailureReportUnavailable,
+        'guardian-account-required' => s.vAuthenticatedAccount,
+        _ => s.vActionFailed,
+      };
   Future<void> _run(
     Future<void> Function() action, {
     bool requiresLocation = true,
@@ -566,12 +598,21 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
       await action();
     } catch (error, stack) {
       assert(() {
+        // Stage/code only -- never identifiers, contact data or QR content.
         debugPrint(
-          'Radd Volunteer action failed (${error.runtimeType})\n$stack',
+          'Radd Volunteer action failed (${error.runtimeType}'
+          '${error is StateError ? ': ${error.message}' : ''})\n$stack',
         );
         return true;
       }());
-      if (mounted) _message(s.vActionFailed);
+      if (mounted) _message(volunteerFailureMessage(s, error));
+      // The backend refused because the stored workflow moved on: pull the
+      // authoritative state so the screens catch up instead of retrying blind.
+      if (mounted &&
+          error is StateError &&
+          staleStateFailures.contains(error.message)) {
+        unawaited(_loadRemote(event: true));
+      }
     } finally {
       if (mounted) {
         _update(() => _busy = false);

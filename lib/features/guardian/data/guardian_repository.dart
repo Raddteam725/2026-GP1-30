@@ -139,7 +139,10 @@ abstract class GuardianRepository {
 
   /// Account-level: one Guardian QR, not one per case.
   Future<GuardianVerification> accountVerification();
-  Future<List<String>> activeFoundReportIds();
+
+  /// Active standalone Found Reports naming this Guardian's individuals,
+  /// each with the short verification code the Guardian reads out.
+  Future<List<GuardianFoundReport>> activeFoundReports();
   Future<MissingCase> cancelCase(String id);
   Future<MissingCase> resolveCase(String id);
 

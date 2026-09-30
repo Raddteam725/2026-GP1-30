@@ -321,7 +321,17 @@ class VolunteerWorkflow:
             linked_id = pd.get('active_found_report_id')
             linked = self.db.collection('found_reports').document(linked_id).get(transaction=tx) if linked_id else None
             if linked and linked.exists and not linked.to_dict().get('ended') and found_lifecycle.found_status(linked.to_dict() or {}) in found_lifecycle.ACTIVE and linked.id != report_id:
-                raise HTTPException(409, detail='already_matched')
+                # This registration is already inside an active standalone
+                # reunification. Confirming it again from Manual Review is
+                # NOT a new identification: if that report is this
+                # Volunteer's own, resume it (no duplicate report, no state
+                # change) -- the app continues at whatever stage it reached.
+                # A camera report of this Volunteer, or another Volunteer's
+                # attempt, is refused with a distinct reason instead.
+                mine = (linked.to_dict() or {}).get('volunteer_uid') == self.uid
+                if creating and mine:
+                    return {'resume': linked.id}
+                raise HTTPException(409, detail='resume_existing_report' if mine else 'already_matched')
             identity = {'matched_profile_id': profile_id, 'guardian_id': pd['guardian_id'],
                         'individual_id': person.id, 'individual_path': person.reference.path,
                         'confirmed_by': self.uid, 'status': found_lifecycle.IDENTIFIED,
@@ -330,7 +340,9 @@ class VolunteerWorkflow:
                 if creating:
                     tx.set(report.reference, rd)
                 tx.update(person.reference, {'active_found_report_id': report_id})
-                tx.update(report.reference, identity)
+                # Standalone only: the short Guardian-readable fallback code,
+                # fixed for this report's whole active life.
+                tx.update(report.reference, {**identity, 'verification_code': rd.get('verification_code') or found_lifecycle.new_verification_code()})
                 return
             ref = self.cases.document(case_id)
             old = ref.get(transaction=tx)
@@ -350,7 +362,10 @@ class VolunteerWorkflow:
             tx.set(self.db.collection('users').document(pd['guardian_id']).collection('notifications').document(ref.id + '-match_confirmed'),
                 {'case_id': ref.id, 'event_id': rd['event_id'], 'kind': 'status_update', 'status': 'match_confirmed', 'created_at': now, 'read_at': None})
             push.update(guardian_id=pd['guardian_id'], case_id=ref.id, event_id=rd['event_id'])
-        confirm(self.db.transaction())
+        outcome = confirm(self.db.transaction())
+        if isinstance(outcome, dict) and outcome.get('resume'):
+            # Nothing was written: hand back the existing report as it stands.
+            return self.public_found(self.found_owned(outcome['resume']))
         if push:
             logging.getLogger('uvicorn.error').info('Radd event %s-match_confirmed T2 committed epoch_ms=%d', push['case_id'], time.time()*1000)
         self.delete_found_photo(report_id)
@@ -422,7 +437,14 @@ class VolunteerWorkflow:
             cd = case.to_dict()
             if cd['status'] != 'awaiting_guardian_verification':
                 raise HTTPException(409, detail='invalid_transition')
-            if presented != case.id.upper():
+            if case.reference.path.startswith('found_reports/'):
+                # Standalone: the short code stored on THIS report only (never
+                # the document id, never a lookup across other reports).
+                expected = str(cd.get('verification_code') or '')
+                matched = bool(expected) and secrets.compare_digest(found_lifecycle.normalize_code(case_id), expected)
+            else:
+                matched = presented == case.id.upper()
+            if not matched:
                 tx.update(case.reference, {'guardian_verification': None})
                 return False
             receipt = cd.get('guardian_verification') or {}

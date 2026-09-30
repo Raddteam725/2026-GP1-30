@@ -1063,6 +1063,33 @@ class AppLocalizationsAr extends AppLocalizations {
   String get vActionFailed => 'تعذر إتمام الإجراء. حاول مجددًا.';
 
   @override
+  String get vFailureAlreadyMatched =>
+      'هذا الفرد قيد إعادة لمّ الشمل بالفعل ضمن بلاغ نشط آخر. لا يمكن المتابعة إلا من ذلك البلاغ.';
+
+  @override
+  String get vFailureResumeExisting =>
+      'لديك بلاغ نشط بالفعل لهذا الفرد. تابعه من شاشة الإبلاغ بدلًا من تأكيد الهوية مجددًا.';
+
+  @override
+  String get vFailureProfileUnavailable => 'هذا التسجيل لم يعد مؤهلًا للتعرف.';
+
+  @override
+  String get vFailureIdentificationEnded =>
+      'انتهت محاولة التعرف هذه أو تم تأكيدها بالفعل. تم تحديث البلاغ.';
+
+  @override
+  String get vFailureMatchRequired =>
+      'أكّد هوية الفرد قبل المتابعة إلى التحقق من ولي الأمر.';
+
+  @override
+  String get vFailureStageUnavailable =>
+      'هذه الخطوة غير متاحة في المرحلة الحالية للبلاغ. تم تحديث البلاغ.';
+
+  @override
+  String get vFailureReportUnavailable =>
+      'تعذّر تحميل تفاصيل هذا البلاغ. حاول مجددًا.';
+
+  @override
   String get vNoMissingReport => 'لا يوجد بلاغ فقدان';
 
   @override
@@ -1604,10 +1631,24 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get vFoundIdentifierHelp =>
-      'اعرض معرّف بلاغ العثور من حساب ولي الأمر المسجّل دخوله في رد. قارن المعرّف كاملًا قبل تأكيد التحقق.';
+      'اطلب من ولي الأمر قراءة رمز التحقق المكوّن من 6 أرقام الظاهر تحت «بلاغ العثور على شخص» في حسابه المسجّل دخوله في رد، وأدخله كما هو.';
 
   @override
-  String get vFoundReportIdentifier => 'معرّف بلاغ العثور';
+  String get vFoundReportIdentifier => 'رمز تحقق ولي الأمر';
+
+  @override
+  String get vVerificationCodeFormat => 'أدخل رمز التحقق المكوّن من 6 أرقام.';
+
+  @override
+  String get foundReportCode => 'رمز التحقق';
+
+  @override
+  String get foundReportCodeHint =>
+      'تعرّف متطوع على أحد الأفراد المسجّلين لديك. إذا تعذّر مسح رمز الاستجابة السريعة، اقرأ هذا الرمز للمتطوع. هذا الرمز خاص بهذا البلاغ النشط فقط.';
+
+  @override
+  String get foundReportCodeUnavailable =>
+      'رمز التحقق غير متاح بعد. حدّث هذه الشاشة أو استخدم رمز الاستجابة السريعة.';
 
   @override
   String get vConfirmIdentity => 'تأكيد الهوية';

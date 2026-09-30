@@ -191,12 +191,15 @@ app.include_router(volunteer_router)
 
 @app.get('/v1/guardian/found-reports')
 def guardian_found_reports(s=Depends(service)):
-    from .found_reports import IDENTIFIED_ACTIVE, found_status
+    from .found_reports import IDENTIFIED_ACTIVE, found_status, ensure_verification_code
     from google.cloud.firestore_v1.base_query import FieldFilter
     s.profile()
     from .events import active_event
     event_id = active_event(s.db).id
+    # `verification_code` is the short fallback the Guardian reads out; the
+    # document id is internal. Older active reports are assigned one here.
     return [{'id': doc.id, 'status': found_status(doc.to_dict()),
-             'individual_id': doc.to_dict().get('individual_id')}
+             'individual_id': doc.to_dict().get('individual_id'),
+             'verification_code': ensure_verification_code(s.db, doc)}
             for doc in s.db.collection('found_reports').where(filter=FieldFilter('guardian_id', '==', s.uid)).stream()
             if doc.to_dict().get('event_id') == event_id and found_status(doc.to_dict()) in IDENTIFIED_ACTIVE and not doc.to_dict().get('case_id') and not doc.to_dict().get('ended')]

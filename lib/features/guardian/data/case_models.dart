@@ -71,6 +71,28 @@ class GuardianNotification {
       );
 }
 
+/// An active standalone Found Report (no Missing Case) in which this
+/// Guardian's registered individual was identified. [verificationCode] is
+/// the short code the Guardian reads to the Volunteer when the QR cannot be
+/// scanned; [id] is the internal report id and is not shown as that code.
+class GuardianFoundReport {
+  const GuardianFoundReport({
+    required this.id,
+    required this.status,
+    this.individualId,
+    this.verificationCode,
+  });
+  final String id, status;
+  final String? individualId, verificationCode;
+  factory GuardianFoundReport.fromJson(Map<String, dynamic> j) =>
+      GuardianFoundReport(
+        id: j['id'] as String,
+        status: j['status']?.toString() ?? '',
+        individualId: j['individual_id']?.toString(),
+        verificationCode: j['verification_code']?.toString(),
+      );
+}
+
 /// Account-level: one Guardian verification QR, not one per case. The case
 /// context is supplied by whichever case the Volunteer is currently on.
 class GuardianVerification {
