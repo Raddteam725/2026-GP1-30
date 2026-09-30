@@ -67,7 +67,9 @@ The backend needs a Firebase service-account key. Keep the JSON file **outside**
 backend/.venv/Scripts/python backend/run_dev.py --credentials-dir "<folder containing the key>"
 ```
 
-The API runs on `http://127.0.0.1:8000`. `GET /health` returns 200 when it is up.
+The API runs on port 8000. Check `http://127.0.0.1:8000/health` in a browser — it returns `{"status":"ok"}` when the server is up.
+
+**If the app shows "The service is currently unavailable"** while the backend is clearly running, the emulator cannot reach it. Add `--host 0.0.0.0` to the command above and allow the connection if Windows Firewall prompts. This depends on your machine's network configuration, so it is not needed on every setup.
 
 **4. Run the app**
 
