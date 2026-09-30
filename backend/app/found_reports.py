@@ -37,9 +37,19 @@ def normalize_code(value):
     return ''.join(out)
 
 
+def guardian_verification_visible(data):
+    """The one rule for Guardian-facing verification information on a
+    standalone Found Report: identity confirmed against a registration
+    (`identity_confirmed` or `awaiting_guardian_verification`), no Missing
+    Case behind it, not ended, not handed over. Reunited/terminal and
+    still-identifying reports never qualify, whatever legacy fields (a stale
+    code, a matched profile, a Guardian link) they may still carry."""
+    return (found_status(data) in IDENTIFIED_ACTIVE and bool(data.get('matched_profile_id'))
+            and not data.get('case_id') and not data.get('ended') and not data.get('handed_over_at'))
+
+
 def code_eligible(data):
-    return bool(data.get('matched_profile_id')) and not data.get('case_id') and not data.get('ended') \
-        and found_status(data) in IDENTIFIED_ACTIVE
+    return guardian_verification_visible(data)
 
 
 def ensure_verification_code(db, doc):

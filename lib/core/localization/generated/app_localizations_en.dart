@@ -1679,6 +1679,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'The verification code is not available yet. Refresh this screen or use the QR code.';
 
   @override
+  String foundReportIndividual(String name) {
+    return 'Found individual: $name';
+  }
+
+  @override
   String get vConfirmIdentity => 'Confirm Identity';
 
   @override

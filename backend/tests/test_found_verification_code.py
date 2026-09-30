@@ -38,8 +38,8 @@ def test_code_is_generated_short_numeric_and_never_the_document_id(db):
     assert code != report['id'] and code not in report['id']
     # Shown to the Guardian, not to the Volunteer payload.
     shown = guardian_found_reports(guardian)
-    assert shown == [{'id': report['id'], 'status': 'identity_confirmed',
-                      'individual_id': identifier, 'verification_code': code}]
+    assert shown == [{'id': report['id'], 'status': 'identity_confirmed', 'individual_id': identifier,
+                      'individual_name': 'Missing Person', 'verification_code': code}]
     assert 'verification_code' not in report
     assert 'verification_code' not in vol().public_found(vol().found_owned(report['id']))
     assert not any(p.startswith('cases/') for p in db.data)
@@ -157,6 +157,82 @@ def test_existing_active_report_without_code_gets_one_safely_when_shown(db):
     assert len([p for p in db.data if p.startswith('found_reports/')]) == 1
     vol().begin_verification(report['id'])
     assert vol().verify_guardian_identifier(report['id'], code)['verified']
+    assert not any(p.startswith('cases/') for p in db.data)
+
+
+def test_guardian_list_follows_authoritative_status_and_names_the_individual(db):
+    guardian, identifier = guardian_with_individual('guardian')
+    wanted = volunteer_workflow.key(guardian.get(identifier))
+    profile = next(p for p in vol().profiles_list() if p['id'] == wanted)
+    camera = submit()
+    # identification_in_progress: no Guardian relationship confirmed yet, so
+    # nothing is listed and no code exists.
+    assert guardian_found_reports(guardian) == []
+    assert 'verification_code' not in db.data['found_reports/' + camera['id']]
+    vol().confirm(camera['id'], profile['id'])
+    listed = guardian_found_reports(guardian)
+    assert [r['status'] for r in listed] == ['identity_confirmed']
+    assert listed[0]['individual_name'] == 'Missing Person'
+    assert listed[0]['individual_id'] == identifier
+    code = listed[0]['verification_code']
+    assert len(code) == 6 and code.isdigit() and code != camera['id']
+    vol().begin_verification(camera['id'])
+    listed = guardian_found_reports(guardian)
+    assert [r['status'] for r in listed] == ['awaiting_guardian_verification']
+    assert listed[0]['verification_code'] == code  # same code across stages
+    assert vol().verify_guardian_identifier(camera['id'], code)['verified']
+    vol().handover_found(camera['id'])
+    assert guardian_found_reports(guardian) == []
+    assert not any(p.startswith('cases/') for p in db.data)
+
+
+def test_guardian_list_excludes_legacy_terminal_documents_and_never_backfills_them(db):
+    guardian, identifier = guardian_with_individual('guardian')
+    wanted = volunteer_workflow.key(guardian.get(identifier))
+    profile = next(p for p in vol().profiles_list() if p['id'] == wanted)
+    active = manual(profile_id=profile['id'])
+    live = dict(db.data['found_reports/' + active['id']])
+    # A historical Reunited document that was never minimized: it still
+    # carries the Guardian link, the matched profile and an old code.
+    db.data['found_reports/FR-legacy-reunited'] = {**live, 'status': 'reunited', 'handed_over_at': live['created_at'],
+                                                   'handed_over_by': 'one', 'verification_code': '111111'}
+    # A historical handed-over document with no status field at all.
+    db.data['found_reports/FR-legacy-nostatus'] = {k: v for k, v in live.items() if k not in ('status', 'verification_code')}
+    db.data['found_reports/FR-legacy-nostatus']['handed_over_at'] = live['created_at']
+    # A historical ended identification that kept a Guardian link.
+    db.data['found_reports/FR-legacy-ended'] = {k: v for k, v in live.items() if k != 'verification_code'} | {'ended': True}
+    before = {k: dict(v) for k, v in db.data.items() if k.startswith('found_reports/FR-legacy')}
+    listed = guardian_found_reports(guardian)
+    assert [r['id'] for r in listed] == [active['id']]
+    assert listed[0]['verification_code'] == live['verification_code']
+    after = {k: dict(v) for k, v in db.data.items() if k.startswith('found_reports/FR-legacy')}
+    assert after == before  # not backfilled, not regenerated, not touched
+    assert 'verification_code' not in after['found_reports/FR-legacy-nostatus']
+    assert found_reports.ensure_verification_code(db, db.collection('found_reports').document('FR-legacy-nostatus').get()) is None
+
+
+def test_multiple_active_reports_are_each_named_and_verify_only_with_their_own_code(db):
+    guardian, first_id = guardian_with_individual('guardian')
+    _, second_id = guardian_with_individual('guardian')  # same Guardian, second individual
+    guardian.db.collection('users').document('guardian').collection('individuals').document(second_id).update({'full_name': 'Second Person'})
+    keys = {volunteer_workflow.key(guardian.get(i)): i for i in (first_id, second_id)}
+    profiles = {keys[p['id']]: p for p in vol().profiles_list() if p['id'] in keys}
+    first = manual(profile_id=profiles[first_id]['id'], request_id='manual-request-00001')
+    second = manual(profile_id=profiles[second_id]['id'], request_id='manual-request-00002')
+    assert first['id'] != second['id']
+    listed = {r['id']: r for r in guardian_found_reports(guardian)}
+    assert set(listed) == {first['id'], second['id']}
+    assert listed[first['id']]['individual_name'] == 'Missing Person'
+    assert listed[second['id']]['individual_name'] == 'Second Person'
+    assert listed[first['id']]['verification_code'] == code_of(db, first['id'])
+    assert listed[second['id']]['verification_code'] == code_of(db, second['id'])
+    vol().begin_verification(first['id'])
+    vol().begin_verification(second['id'])
+    if code_of(db, first['id']) == code_of(db, second['id']):
+        db.data['found_reports/' + second['id']]['verification_code'] = str((int(code_of(db, first['id'])) + 3) % 10**6).zfill(6)
+    assert not vol().verify_guardian_identifier(first['id'], code_of(db, second['id']))['verified']
+    assert vol().verify_guardian_identifier(first['id'], code_of(db, first['id']))['verified']
+    assert vol().verify_guardian_identifier(second['id'], code_of(db, second['id']))['verified']
     assert not any(p.startswith('cases/') for p in db.data)
 
 

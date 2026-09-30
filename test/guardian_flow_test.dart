@@ -15,6 +15,7 @@ import 'package:radd/features/guardian/presentation/guardian_home_screen.dart';
 import 'package:radd/features/guardian/presentation/individual_form_screen.dart';
 import 'package:radd/features/guardian/presentation/cases_screen.dart';
 import 'package:radd/features/guardian/presentation/case_widgets.dart';
+import 'package:radd/features/guardian/presentation/guardian_components.dart';
 import 'package:radd/features/guardian/presentation/guardian_qr_screen.dart';
 import 'package:radd/features/guardian/presentation/notifications_screen.dart';
 import 'package:radd/features/guardian/presentation/guided_report_screen.dart';
@@ -258,11 +259,25 @@ void main() {
           const GuardianFoundReport(
             id: 'FR-test-context',
             status: 'awaiting_guardian_verification',
+            individualName: 'Sara Test',
             verificationCode: '482913',
+          ),
+          const GuardianFoundReport(
+            id: 'FR-second-active',
+            status: 'identity_confirmed',
+            individualName: 'Omar Test',
+            verificationCode: '105577',
           ),
           const GuardianFoundReport(
             id: 'FR-legacy-no-code',
             status: 'identity_confirmed',
+          ),
+          // A stale terminal item must never render as a verification card.
+          const GuardianFoundReport(
+            id: 'FR-done',
+            status: 'reunited',
+            individualName: 'Done Test',
+            verificationCode: '999999',
           ),
         ];
         await route(t, AppRoutes.qrCode);
@@ -270,11 +285,27 @@ void main() {
         final s = AppLocalizations.of(
           t.element(find.byType(GuardianQrScreen).first),
         )!;
+        // Each code sits under the name of the individual it belongs to.
         expect(find.text('482913'), findsOneWidget);
-        expect(find.textContaining('FR-test-context'), findsNothing);
-        expect(find.textContaining('FR-legacy-no-code'), findsNothing);
+        expect(find.text('105577'), findsOneWidget);
+        expect(find.text(s.foundReportIndividual('Sara Test')), findsOneWidget);
+        expect(find.text(s.foundReportIndividual('Omar Test')), findsOneWidget);
+        expect(
+          find.ancestor(
+            of: find.text('482913'),
+            matching: find.ancestor(
+              of: find.text(s.foundReportIndividual('Sara Test')),
+              matching: find.byType(GuardianPanel),
+            ),
+          ),
+          findsOneWidget,
+        );
+        expect(find.text(s.awaitingVerification), findsOneWidget);
+        expect(find.textContaining('FR-'), findsNothing);
+        expect(find.text('999999'), findsNothing);
+        expect(find.text(s.foundReportIndividual('Done Test')), findsNothing);
         expect(find.text(s.foundReportCodeUnavailable), findsOneWidget);
-        expect(find.text(s.vFoundReportTitle), findsNWidgets(2));
+        expect(find.text(s.vFoundReportTitle), findsNWidgets(3));
         // The QR itself stays available below the report cards (lazy list).
         await t.scrollUntilVisible(
           find.byType(QrImageView),

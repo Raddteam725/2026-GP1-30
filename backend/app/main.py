@@ -191,15 +191,26 @@ app.include_router(volunteer_router)
 
 @app.get('/v1/guardian/found-reports')
 def guardian_found_reports(s=Depends(service)):
-    from .found_reports import IDENTIFIED_ACTIVE, found_status, ensure_verification_code
+    from .found_reports import found_status, ensure_verification_code, guardian_verification_visible
     from google.cloud.firestore_v1.base_query import FieldFilter
     s.profile()
     from .events import active_event
     event_id = active_event(s.db).id
+    # Only this Guardian's standalone reports at a stage where verification
+    # information may be shown (see guardian_verification_visible): Reunited
+    # and still-identifying reports are excluded by authoritative status.
     # `verification_code` is the short fallback the Guardian reads out; the
     # document id is internal. Older active reports are assigned one here.
-    return [{'id': doc.id, 'status': found_status(doc.to_dict()),
-             'individual_id': doc.to_dict().get('individual_id'),
-             'verification_code': ensure_verification_code(s.db, doc)}
-            for doc in s.db.collection('found_reports').where(filter=FieldFilter('guardian_id', '==', s.uid)).stream()
-            if doc.to_dict().get('event_id') == event_id and found_status(doc.to_dict()) in IDENTIFIED_ACTIVE and not doc.to_dict().get('case_id') and not doc.to_dict().get('ended')]
+    # `individual_name` is the Guardian's own registration name, so the
+    # Guardian can tell which code belongs to which individual.
+    result = []
+    for doc in s.db.collection('found_reports').where(filter=FieldFilter('guardian_id', '==', s.uid)).stream():
+        data = doc.to_dict() or {}
+        if data.get('event_id') != event_id or not guardian_verification_visible(data):
+            continue
+        individual_id = data.get('individual_id')
+        registration = (s.db.collection('users').document(s.uid).collection('individuals').document(individual_id).get().to_dict() or {}) if individual_id else {}
+        result.append({'id': doc.id, 'status': found_status(data), 'individual_id': individual_id,
+                       'individual_name': registration.get('full_name'),
+                       'verification_code': ensure_verification_code(s.db, doc)})
+    return result

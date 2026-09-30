@@ -3128,6 +3128,12 @@ abstract class AppLocalizations {
   /// **'The verification code is not available yet. Refresh this screen or use the QR code.'**
   String get foundReportCodeUnavailable;
 
+  /// No description provided for @foundReportIndividual.
+  ///
+  /// In en, this message translates to:
+  /// **'Found individual: {name}'**
+  String foundReportIndividual(String name);
+
   /// No description provided for @vConfirmIdentity.
   ///
   /// In en, this message translates to:

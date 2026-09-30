@@ -1651,6 +1651,11 @@ class AppLocalizationsAr extends AppLocalizations {
       'رمز التحقق غير متاح بعد. حدّث هذه الشاشة أو استخدم رمز الاستجابة السريعة.';
 
   @override
+  String foundReportIndividual(String name) {
+    return 'الفرد الذي تم العثور عليه: $name';
+  }
+
+  @override
   String get vConfirmIdentity => 'تأكيد الهوية';
 
   @override

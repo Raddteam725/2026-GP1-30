@@ -339,10 +339,12 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
                 onRetry: _reload,
               );
             }
+            // Only reports at a verification stage; the backend already
+            // excludes Reunited/terminal ones, this guards a stale item.
             return Column(
               children: [
                 for (final report in state.data ?? <GuardianFoundReport>[])
-                  _foundReportCard(s, report),
+                  if (report.awaitingVerification) _foundReportCard(s, report),
               ],
             );
           },
@@ -418,6 +420,7 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
   /// deliberately not displayed.
   Widget _foundReportCard(AppLocalizations s, GuardianFoundReport report) {
     final code = report.verificationCode;
+    final name = report.individualName?.trim();
     return GuardianPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -429,6 +432,18 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
               fontWeight: FontWeight.w700,
               color: AppColors.primary,
             ),
+          ),
+          if (name != null && name.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              s.foundReportIndividual(name),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+          ],
+          const SizedBox(height: 4),
+          Text(
+            caseStatusLabel(report.status, s),
+            style: const TextStyle(color: mutedText, fontSize: 13),
           ),
           const SizedBox(height: 6),
           Text(

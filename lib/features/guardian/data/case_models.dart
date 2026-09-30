@@ -80,15 +80,28 @@ class GuardianFoundReport {
     required this.id,
     required this.status,
     this.individualId,
+    this.individualName,
     this.verificationCode,
   });
   final String id, status;
-  final String? individualId, verificationCode;
+
+  /// The Guardian's own registration name for the identified individual, so
+  /// each code can be told apart when several reports are active.
+  final String? individualId, individualName, verificationCode;
+
+  /// Stages at which Guardian verification information may be shown. The
+  /// backend applies the same rule; this guards against any stale item.
+  static const verificationStages = {
+    'identity_confirmed',
+    'awaiting_guardian_verification',
+  };
+  bool get awaitingVerification => verificationStages.contains(status);
   factory GuardianFoundReport.fromJson(Map<String, dynamic> j) =>
       GuardianFoundReport(
         id: j['id'] as String,
         status: j['status']?.toString() ?? '',
         individualId: j['individual_id']?.toString(),
+        individualName: j['individual_name']?.toString(),
         verificationCode: j['verification_code']?.toString(),
       );
 }
