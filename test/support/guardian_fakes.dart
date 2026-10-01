@@ -43,6 +43,90 @@ class TestAuth implements AuthService {
 
 class TestRepository implements GuardianRepository {
   @override
+  Future<List<GuardianFoundReport>> activeFoundReports() async => foundReports;
+  List<GuardianFoundReport> foundReports = [];
+  ActiveEvent event = const ActiveEvent(
+    id: 'test-event',
+    name: 'Test Event',
+    status: 'active',
+    location: 'Test Venue',
+  );
+  bool failNextEvent = false;
+  @override
+  Future<ActiveEvent> activeEvent() async {
+    if (failNextEvent) {
+      failNextEvent = false;
+      throw const AppFailure('eventUnavailable');
+    }
+    return event;
+  }
+
+  @override
+  Future<List<RegistrationPeriod>> registrationPeriods() async => const [
+    RegistrationPeriod('test-short', 2),
+    RegistrationPeriod('test-long', 48),
+  ];
+
+  /// Options the backend would offer an existing registration (deadlines
+  /// counted from a fixed start). `retentionOptionsRequests` counts calls.
+  int retentionOptionsRequests = 0;
+  bool failNextRetentionOptions = false;
+  DateTime retentionStart = DateTime.utc(2026, 9, 29, 8);
+  @override
+  Future<RetentionOptions> retentionOptions(String id) async {
+    retentionOptionsRequests++;
+    if (failNextRetentionOptions) {
+      failNextRetentionOptions = false;
+      throw const AppFailure('photoExpired');
+    }
+    final p = records.singleWhere((i) => i.id == id);
+    // Mirrors the backend contract: every configured option with the
+    // deadline counted from the ORIGINAL start; 'test-min' already passed
+    // and 'test-month' would end after the event, so both are unavailable.
+    return RetentionOptions(
+      currentPeriodId: p.registrationPeriodId,
+      expiresAt: p.registrationExpiresAt,
+      editable: p.activeCaseId == null,
+      options: [
+        RetentionOption(
+          'test-min',
+          1,
+          retentionStart.add(const Duration(hours: 1)),
+          available: false,
+          reason: 'deadline_passed',
+        ),
+        RetentionOption(
+          'test-short',
+          2,
+          retentionStart.add(const Duration(hours: 2)),
+        ),
+        RetentionOption(
+          'test-long',
+          48,
+          retentionStart.add(const Duration(hours: 48)),
+        ),
+        RetentionOption(
+          'test-week',
+          168,
+          retentionStart.add(const Duration(hours: 168)),
+        ),
+        RetentionOption(
+          'test-month',
+          720,
+          retentionStart.add(const Duration(hours: 720)),
+          available: false,
+          reason: 'beyond_event',
+        ),
+      ],
+    );
+  }
+
+  /// The period id the last save carried (null = unchanged / default).
+  String? lastSavedPeriodId;
+
+  /// Makes the next saveIndividual fail with this backend reason.
+  AppFailure? rejectNextSave;
+  @override
   Future<String> accountRole() async => 'guardian';
   GuardianProfile person = const GuardianProfile(
     fullName: 'Test Guardian',
@@ -52,9 +136,19 @@ class TestRepository implements GuardianRepository {
   final List<Individual> records = [];
   final List<MissingCase> caseRecords = [];
   final List<GuardianNotification> notificationRecords = [];
+  int caseFetches = 0;
+  bool failNextMissingCase = false;
   int _caseCounter = 0;
+
+  /// Simulates an Admin deactivation: the backend answers every Guardian
+  /// request with 403 `account_inactive`.
+  bool deactivated = false;
   @override
-  Future<GuardianProfile> profile() async => person;
+  Future<GuardianProfile> profile() async {
+    if (deactivated) throw const AppFailure('accountInactive');
+    return person;
+  }
+
   @override
   Future<GuardianProfile> createProfile(String name, String phone) async =>
       person = GuardianProfile(
@@ -77,9 +171,35 @@ class TestRepository implements GuardianRepository {
     Uint8List? photo,
   }) async {
     final existing = id == null ? null : records.singleWhere((i) => i.id == id);
+    if (rejectNextSave != null) {
+      final failure = rejectNextSave!;
+      rejectNextSave = null;
+      throw failure;
+    }
+    lastSavedPeriodId = input.registrationPeriodId;
+    final periodId =
+        input.registrationPeriodId ?? existing?.registrationPeriodId;
+    final hours = switch (periodId) {
+      'test-min' => 1,
+      'test-short' => 2,
+      'test-long' => 48,
+      'test-week' => 168,
+      'test-month' => 720,
+      _ => null,
+    };
+    // Backend rule mirrored for the edit path only: a choice whose deadline
+    // (from the original start) has passed or lies after the event is refused.
+    if (existing != null && input.registrationPeriodId != null) {
+      if (periodId == 'test-min') throw const AppFailure('retentionPassed');
+      if (periodId == 'test-month') throw const AppFailure('retentionInvalid');
+    }
     final p = Individual(
       id: id ?? 'test-id',
       activeCaseId: existing?.activeCaseId,
+      registrationPeriodId: periodId,
+      registrationExpiresAt: hours == null
+          ? existing?.registrationExpiresAt
+          : retentionStart.add(Duration(hours: hours)),
       fullName: input.fullName,
       age: input.age,
       gender: input.gender,
@@ -100,11 +220,30 @@ class TestRepository implements GuardianRepository {
     records.removeWhere((i) => i.id == id);
   }
 
+  // Counts authoritative list refetches (event/resume-driven) and simulates
+  // one transient load failure (flips back after throwing once).
+  int caseListFetches = 0;
+  bool failNextCases = false;
   @override
-  Future<List<MissingCase>> cases() async => List.of(caseRecords);
+  Future<List<MissingCase>> cases() async {
+    caseListFetches++;
+    if (failNextCases) {
+      failNextCases = false;
+      throw const AppFailure('unavailable');
+    }
+    return List.of(caseRecords);
+  }
+
   @override
-  Future<MissingCase> missingCase(String id) async =>
-      caseRecords.singleWhere((c) => c.id == id);
+  Future<MissingCase> missingCase(String id) async {
+    caseFetches++;
+    if (failNextMissingCase) {
+      failNextMissingCase = false;
+      throw const AppFailure('unavailable');
+    }
+    return caseRecords.singleWhere((c) => c.id == id);
+  }
+
   @override
   Future<MissingCase> reportMissing(String individualId) async {
     final p = records.singleWhere((i) => i.id == individualId);
@@ -122,6 +261,8 @@ class TestRepository implements GuardianRepository {
       createdAt: now,
       updatedAt: now,
       stages: {'report_received': now.toIso8601String()},
+      // Server-assigned in production; a fixed, recognizable 6-digit value here.
+      verificationCode: '80${_caseCounter.toString().padLeft(4, '0')}',
     );
     caseRecords.add(value);
     records
@@ -167,6 +308,7 @@ class TestRepository implements GuardianRepository {
       updatedAt: DateTime.now().toUtc(),
       stages: current.stages,
       report: report,
+      verificationCode: current.verificationCode,
     );
     caseRecords
       ..removeWhere((c) => c.id == id)
@@ -195,6 +337,9 @@ class TestRepository implements GuardianRepository {
   }
 
   int _verificationCounter = 0;
+
+  /// How many short-lived credentials the QR screen has requested.
+  int get verificationRequests => _verificationCounter;
   @override
   Future<GuardianVerification>
   accountVerification() async => GuardianVerification(
@@ -217,6 +362,7 @@ class TestRepository implements GuardianRepository {
       updatedAt: DateTime.now().toUtc(),
       stages: current.stages,
       report: current.report,
+      // Terminal: the backend drops the code with the outcome.
     );
     caseRecords
       ..removeWhere((c) => c.id == id)

@@ -8,6 +8,7 @@ import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/feature_page.dart';
 import '../data/guardian_push_service.dart';
+import '../data/coalesced_refresh.dart';
 import '../data/guardian_repository.dart';
 import 'case_widgets.dart';
 import 'guardian_components.dart';
@@ -21,6 +22,46 @@ class CasesScreen extends StatefulWidget {
 }
 
 class _CasesScreenState extends State<CasesScreen> {
+  @override
+  void initState() {
+    super.initState();
+    GuardianPushRefresh.instance.addListener(_recover);
+  }
+
+  @override
+  void dispose() {
+    GuardianPushRefresh.instance.removeListener(_recover);
+    super.dispose();
+  }
+
+  int _eventGeneration = 0;
+  final _eventRefresh = CoalescedRefresh();
+  Future<void> _recover() => _eventRefresh.run(_recoverOnce);
+  Future<void> _recoverOnce() async {
+    if (!mounted) return;
+    final generation = ++_eventGeneration;
+    try {
+      final data = await AppServices.of(context).guardian.cases();
+      if (!mounted || generation != _eventGeneration) return;
+      setState(() {
+        _data = Future.value(data);
+      });
+      assert(() {
+        debugPrint(
+          'Radd Guardian authoritative refresh T8/T9 ${DateTime.now().toUtc().toIso8601String()}',
+        );
+        return true;
+      }());
+    } catch (error) {
+      assert(() {
+        debugPrint(
+          'Radd Guardian background refresh failed (${error.runtimeType})',
+        );
+        return true;
+      }());
+    }
+  }
+
   Future<List<MissingCase>>? _data;
   @override
   void didChangeDependencies() {
@@ -29,6 +70,7 @@ class _CasesScreenState extends State<CasesScreen> {
   }
 
   void _reload() => setState(() {
+    ++_eventGeneration;
     _data = AppServices.of(context).guardian.cases();
   });
 
@@ -56,35 +98,23 @@ class _CasesScreenState extends State<CasesScreen> {
               ? null
               : const GuardianNavigation(selected: 3),
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        s.cases,
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        s.casesSubtitle,
-                        style: const TextStyle(color: mutedText, fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  tooltip: s.retry,
-                  onPressed: _reload,
-                  icon: const Icon(Icons.refresh, color: AppColors.primary),
-                ),
-              ],
+            // No manual refresh control: the list follows the backend on its
+            // own -- a validated case event (FCM) or an app resume triggers
+            // the authoritative refetch above (_recover), and returning from
+            // Case Status reloads. Only an explicit load FAILURE offers a
+            // retry (ErrorNotice below).
+            Text(
+              s.cases,
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              s.casesSubtitle,
+              style: const TextStyle(color: mutedText, fontSize: 14),
             ),
             const SizedBox(height: 20),
             if (state.hasError)
@@ -196,9 +226,9 @@ class CaseStatusScreen extends StatefulWidget {
 // still active and this screen is on-screen, per the "status updates
 // automatically" requirement. Radd talks to the Business Logic Layer only
 // through the REST API (no direct Firestore listener on the client), so a
-// short poll is the contract-compliant way to approximate real-time here; a
-// foreground FCM push additionally triggers the same refresh immediately.
-const _liveStatusPollInterval = Duration(seconds: 8);
+// foreground FCM/resume event refreshes immediately. This poll is recovery
+// only, for a missed signal or a temporary transport failure.
+const _liveStatusPollInterval = Duration(seconds: 30);
 
 class _CaseStatusScreenState extends State<CaseStatusScreen> {
   Future<MissingCase>? _data;
@@ -212,14 +242,23 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
     // A foreground push is a hint only -- this reuses the same silent
     // background refresh the 8-second poll already does; it never trusts
     // the push payload itself for status/case data.
-    GuardianPushRefresh.instance.addListener(_pollOnce);
+    GuardianPushRefresh.instance.addListener(_onCaseEvent);
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _data ??= AppServices.of(context).guardian.missingCase(widget.id)
-      ..then(_onLoaded);
+    _data ??= _loadCurrent();
+  }
+
+  Future<MissingCase> _loadCurrent() {
+    final generation = ++_liveGeneration;
+    return AppServices.of(context).guardian
+        .missingCase(widget.id)
+        .then((value) {
+          if (generation == _liveGeneration) _onLoaded(value);
+          return value;
+        });
   }
 
   void _onLoaded(MissingCase value) {
@@ -232,29 +271,47 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
     _poll ??= Timer.periodic(_liveStatusPollInterval, (_) => _pollOnce());
   }
 
-  Future<void> _pollOnce() async {
+  int _liveGeneration = 0;
+  final _caseRefresh = CoalescedRefresh();
+  void _onCaseEvent() {
+    if (GuardianPushRefresh.instance.concerns(widget.id)) {
+      _poll?.cancel();
+      _poll = null;
+      _startPolling();
+      _pollOnce();
+    }
+  }
+
+  Future<void> _pollOnce() => _caseRefresh.run(_fetchCase);
+  Future<void> _fetchCase() async {
+    if (!mounted) return;
     if (_busy) return; // Never race a Guardian-initiated action's own reload.
+    final generation = ++_liveGeneration;
     try {
       final value = await AppServices.of(context).guardian
           .missingCase(widget.id);
-      if (!mounted) return;
+      if (!mounted || generation != _liveGeneration) return;
       setState(() => _live = value);
+      if (value.active) _startPolling();
       if (!value.active) _poll?.cancel(); // Terminal: nothing left to watch.
-    } catch (_) {
+    } catch (error) {
+      assert(() {
+        debugPrint('Radd Guardian case refresh failed (${error.runtimeType})');
+        return true;
+      }());
       // A transient failure here must not surface as an error banner over an
       // otherwise-fine screen; the next tick (or manual refresh) retries.
     }
   }
 
   void _reload() => setState(() {
-    _data = AppServices.of(context).guardian.missingCase(widget.id)
-      ..then(_onLoaded);
+    _data = _loadCurrent();
   });
 
   @override
   void dispose() {
     _poll?.cancel();
-    GuardianPushRefresh.instance.removeListener(_pollOnce);
+    GuardianPushRefresh.instance.removeListener(_onCaseEvent);
     super.dispose();
   }
 
@@ -274,9 +331,12 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
     });
     try {
       final guardian = AppServices.of(context).guardian;
-      await (resolve
+      final outcome = await (resolve
           ? guardian.resolveCase(widget.id)
           : guardian.cancelCase(widget.id));
+      // Their own explicit action, already reflected on this screen: no
+      // transient banner for the push that follows (history keeps it).
+      GuardianPushRefresh.instance.markOwnAction(outcome.id, outcome.status);
       if (mounted) _reload();
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -292,16 +352,12 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
       future: _data,
       builder: (context, state) {
         final value = _live ?? state.data;
+        // No manual refresh control: this screen follows its case through
+        // the event refetch (_onCaseEvent), app resume and the slow fallback
+        // poll; only an explicit load failure offers a retry (below).
         return FeaturePage(
           title: s.caseStatus,
           centerTitle: false,
-          actions: [
-            IconButton(
-              tooltip: s.retry,
-              onPressed: _busy ? null : _reload,
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
           bottomNavigationBar: const GuardianNavigation(selected: 3),
           children: [
             if (state.hasError)
@@ -456,9 +512,7 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
                     ? Icons.celebration_outlined
                     : Icons.info_outline,
                 size: 20,
-                color: value.status == 'reunited'
-                    ? AppColors.secondary
-                    : mutedText,
+                color: caseStatusColor(value.status),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -490,6 +544,7 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
           for (var index = 0; index < caseStages.length; index++)
             _TimelineStep(
               number: index + 1,
+              color: caseStatusColor(caseStages[index]),
               title: caseStatusLabel(caseStages[index], s),
               state:
                   value.stages.containsKey(caseStages[index]) &&
@@ -514,6 +569,7 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
           if (outcome)
             _TimelineStep(
               number: null,
+              color: caseStatusColor(value.status),
               title: caseStatusLabel(value.status, s),
               state: _StepState.outcome,
               timestamp: caseDate(context, value.updatedAt),
@@ -595,6 +651,7 @@ enum _StepState { completed, current, upcoming, outcome }
 class _TimelineStep extends StatelessWidget {
   const _TimelineStep({
     required this.number,
+    required this.color,
     required this.title,
     required this.state,
     required this.timestamp,
@@ -602,6 +659,10 @@ class _TimelineStep extends StatelessWidget {
     required this.isLast,
   });
   final int? number;
+
+  /// The stage's own semantic status colour (see caseStatusColor); only
+  /// reached steps paint with it, upcoming steps stay muted.
+  final Color color;
   final String title;
   final _StepState state;
   final String? timestamp;
@@ -614,7 +675,7 @@ class _TimelineStep extends StatelessWidget {
     final completed = state == _StepState.completed;
     final outcome = state == _StepState.outcome;
     final reached = completed || current || outcome;
-    final lineColor = completed ? AppColors.secondary : AppColors.border;
+    final lineColor = completed ? color : AppColors.border;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -626,19 +687,9 @@ class _TimelineStep extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: completed
-                    ? AppColors.secondary
-                    : current
-                    ? AppColors.primary
-                    : Colors.white,
+                color: completed || current ? color : Colors.white,
                 border: Border.all(
-                  color: completed
-                      ? AppColors.secondary
-                      : current
-                      ? AppColors.primary
-                      : outcome
-                      ? mutedText
-                      : const Color(0xFFCBD5E1),
+                  color: reached ? color : const Color(0xFFCBD5E1),
                   width: 2,
                 ),
               ),
@@ -653,7 +704,7 @@ class _TimelineStep extends StatelessWidget {
                       child: SizedBox.square(dimension: 10),
                     )
                   : outcome
-                  ? const Icon(Icons.flag_outlined, size: 14, color: mutedText)
+                  ? Icon(Icons.flag_outlined, size: 14, color: color)
                   : const DecoratedBox(
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
@@ -694,13 +745,13 @@ class _TimelineStep extends StatelessWidget {
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFFF4D6),
+                          color: color.withValues(alpha: .12),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           s.activeLabel,
-                          style: const TextStyle(
-                            color: Color(0xFF9A6700),
+                          style: TextStyle(
+                            color: color,
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                           ),

@@ -44,7 +44,11 @@ abstract final class AppRouter {
         AppRoutes.completeProfile => const AuthScreen(
           mode: AuthMode.completeProfile,
         ),
-        AppRoutes.auth => const AuthScreen(),
+        AppRoutes.auth => AuthScreen(
+          notice: settings.arguments is String
+              ? settings.arguments as String
+              : null,
+        ),
         AppRoutes.createAccount => const AuthScreen(mode: AuthMode.register),
         AppRoutes.forgotPassword => const AuthScreen(mode: AuthMode.reset),
         AppRoutes.privacy => const PrivacyScreen(),

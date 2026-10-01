@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -7,7 +8,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import 'volunteer_components.dart';
 
-/// In-app camera only. Capture returns bytes directly; no gallery/review step.
+/// In-app camera only, with explicit preview, retake and use-photo consent.
 class VolunteerCapture extends StatefulWidget {
   const VolunteerCapture({super.key});
   @override
@@ -17,6 +18,7 @@ class VolunteerCapture extends StatefulWidget {
 class _VolunteerCaptureState extends State<VolunteerCapture>
     with WidgetsBindingObserver {
   CameraController? _camera;
+  Uint8List? _preview;
   bool _busy = false, _failed = false;
   int _generation = 0;
   @override
@@ -26,29 +28,70 @@ class _VolunteerCaptureState extends State<VolunteerCapture>
     _initialize();
   }
 
-  Future<void> _initialize() async {
-    final generation = ++_generation;
+  Future<void> _operations = Future<void>.value();
+  bool _foreground = true, _initializing = false;
+
+  // CameraX owns shared native resources. Finish closing one controller before
+  // creating the next, including when a permission dialog changes lifecycle.
+  Future<void> _enqueue(Future<void> Function() action) {
+    final operation = _operations.then((_) => action());
+    _operations = operation.catchError((Object error) {
+      debugPrint('Radd camera operation failed (${error.runtimeType})');
+    });
+    return operation;
+  }
+
+  Future<void> _closeCamera() async {
+    final camera = _camera;
+    _camera = null;
+    if (camera == null) return;
     try {
-      final cameras = await availableCameras();
-      if (!mounted || generation != _generation) return;
-      final controller = CameraController(
-        cameras.firstWhere(
-          (c) => c.lensDirection == CameraLensDirection.back,
-          orElse: () => cameras.first,
-        ),
-        ResolutionPreset.high,
-        enableAudio: false,
-      );
-      _camera = controller;
-      await controller.initialize();
-      if (!mounted || generation != _generation) {
-        await controller.dispose();
-        return;
-      }
-      setState(() => _failed = false);
-    } catch (_) {
-      if (mounted && generation == _generation) setState(() => _failed = true);
+      await camera.dispose();
+    } catch (error) {
+      // A failed initialization may leave CameraX without a preview surface.
+      // Cleanup failure must not escape a lifecycle callback or block retry.
+      debugPrint('Radd camera disposal failed (${error.runtimeType})');
     }
+  }
+
+  Future<void> _initialize() {
+    final generation = ++_generation;
+    return _enqueue(() async {
+      await _closeCamera();
+      if (!mounted || !_foreground || generation != _generation) return;
+      _initializing = true;
+      try {
+        final cameras = await availableCameras();
+        if (!mounted || !_foreground || generation != _generation) return;
+        if (cameras.isEmpty) throw CameraException('NoCamera', '');
+        final controller = CameraController(
+          cameras.firstWhere(
+            (c) => c.lensDirection == CameraLensDirection.back,
+            orElse: () => cameras.first,
+          ),
+          ResolutionPreset.high,
+          enableAudio: false,
+        );
+        _camera = controller;
+        await controller.initialize();
+        if (!mounted || !_foreground || generation != _generation) {
+          await _closeCamera();
+          return;
+        }
+        setState(() => _failed = false);
+      } catch (error) {
+        debugPrint(
+          'Radd camera initialization failed: '
+          '${error is CameraException ? error.code : error.runtimeType}',
+        );
+        await _closeCamera();
+        if (mounted && generation == _generation) {
+          setState(() => _failed = true);
+        }
+      } finally {
+        _initializing = false;
+      }
+    });
   }
 
   Future<void> _capture() async {
@@ -56,16 +99,23 @@ class _VolunteerCaptureState extends State<VolunteerCapture>
     setState(() => _busy = true);
     XFile? file;
     try {
-      file = await _camera!.takePicture();
-      final Uint8List bytes = await file.readAsBytes();
+      final generation = _generation;
+      await _enqueue(() async {
+        if (!mounted || !_foreground || generation != _generation) return;
+        file = await _camera!.takePicture();
+      });
+      if (file == null) return;
+      final Uint8List bytes = await file!.readAsBytes();
       if (bytes.length > 8000000) throw StateError('photo-too-large');
-      if (mounted) Navigator.pop(context, bytes);
+      if (mounted && generation == _generation) {
+        setState(() => _preview = bytes);
+      }
     } catch (_) {
       if (mounted) setState(() => _failed = true);
     } finally {
       if (file != null) {
         try {
-          await File(file.path).delete();
+          await File(file!.path).delete();
         } catch (_) {}
       }
       if (mounted) setState(() => _busy = false);
@@ -74,21 +124,27 @@ class _VolunteerCaptureState extends State<VolunteerCapture>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) {
-      _generation++;
-      final camera = _camera;
-      _camera = null;
-      camera?.dispose();
-    } else if (_camera == null) {
+    // Android permission prompts can emit inactive/resumed during initialize.
+    // They must not dispose the controller which is requesting permission.
+    if (state == AppLifecycleState.inactive && _initializing) return;
+    if (state == AppLifecycleState.resumed) {
+      if (_foreground) return;
+      _foreground = true;
       _initialize();
+    } else {
+      _foreground = false;
+      _generation++;
+      _enqueue(_closeCamera);
+      if (mounted) setState(() {});
     }
   }
 
   @override
   void dispose() {
+    _foreground = false;
     _generation++;
     WidgetsBinding.instance.removeObserver(this);
-    _camera?.dispose();
+    _enqueue(_closeCamera);
     super.dispose();
   }
 
@@ -103,28 +159,40 @@ class _VolunteerCaptureState extends State<VolunteerCapture>
           child: Column(
             children: [
               Expanded(
-                child: _failed
+                child: _preview != null
+                    ? Image.memory(_preview!, fit: BoxFit.contain)
+                    : _failed
                     ? Center(child: Text(s.cameraUnavailable))
                     : _camera?.value.isInitialized != true
                     ? const Center(child: CircularProgressIndicator())
                     : CameraPreview(_camera!),
               ),
               const SizedBox(height: 16),
-              VolunteerAction(
-                _failed ? s.vTryAgain : s.capture,
-                onPressed: _busy
-                    ? null
-                    : _failed
-                    ? () async {
-                        await _camera?.dispose();
-                        _camera = null;
-                        if (mounted) {
-                          setState(() => _failed = false);
-                          _initialize();
+              if (_preview != null) ...[
+                VolunteerAction(
+                  s.usePhoto,
+                  onPressed: () => Navigator.pop(context, _preview),
+                ),
+                const SizedBox(height: 12),
+                VolunteerAction(
+                  s.retakePhoto,
+                  secondary: true,
+                  onPressed: () => setState(() => _preview = null),
+                ),
+              ] else
+                VolunteerAction(
+                  _failed ? s.vTryAgain : s.capture,
+                  onPressed: _busy
+                      ? null
+                      : _failed
+                      ? () async {
+                          if (mounted) {
+                            setState(() => _failed = false);
+                            _initialize();
+                          }
                         }
-                      }
-                    : _capture,
-              ),
+                      : _capture,
+                ),
             ],
           ),
         ),

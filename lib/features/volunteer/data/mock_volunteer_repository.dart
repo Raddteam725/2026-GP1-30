@@ -12,6 +12,7 @@ class MockVolunteerRepository extends VolunteerRepository {
         person: _profiles[0],
         createdAt: _now.subtract(const Duration(minutes: 10)),
         updatedAt: _now.subtract(const Duration(minutes: 10)),
+        verificationCode: '804200',
       ),
       VolunteerCase(
         id: 'RD-8049',
@@ -20,6 +21,7 @@ class MockVolunteerRepository extends VolunteerRepository {
         updatedAt: _now.subtract(const Duration(minutes: 20)),
         status: CaseStatus.searchInProgress,
         joinedBy: {'preview-other'},
+        verificationCode: '804900',
         information: const CaseInformation(
           lastSeen: LocalizedData(
             'East promenade, food court',
@@ -32,6 +34,7 @@ class MockVolunteerRepository extends VolunteerRepository {
         person: _profiles[2],
         createdAt: _now.subtract(const Duration(minutes: 40)),
         updatedAt: _now.subtract(const Duration(minutes: 40)),
+        verificationCode: '805500',
       ),
       VolunteerCase(
         id: 'RD-8035',
@@ -41,6 +44,7 @@ class MockVolunteerRepository extends VolunteerRepository {
         status: CaseStatus.searchInProgress,
         joinedBy: {account.uid},
         information: updatedInformation,
+        verificationCode: '803500',
       ),
     ];
     _alerts[account.uid] = [
@@ -66,6 +70,8 @@ class MockVolunteerRepository extends VolunteerRepository {
     name: LocalizedData('Ahmed Khalid', 'أحمد خالد'),
     volunteerId: 'VOL-1024',
     active: true,
+    assigned: true,
+    eventId: 'preview-event',
     email: 'ahmed.khalid@example.com',
     phone: '+966 55 123 4567',
   );
@@ -274,6 +280,15 @@ class MockVolunteerRepository extends VolunteerRepository {
 
   String identifierFor(FoundReport report) =>
       caseForPerson(report.matchedPerson!.id)?.id ?? report.id;
+
+  /// What the Guardian's device shows for this report's reunification
+  /// context in preview mode: the linked case's code, or a fixed 6-digit
+  /// code for a standalone Found Report.
+  String verificationCodeFor(FoundReport report) =>
+      caseForPerson(report.matchedPerson!.id)?.verificationCode ??
+      previewFoundCode(report.id);
+  static String previewFoundCode(String reportId) =>
+      (reportId.hashCode.abs() % 1000000).toString().padLeft(6, '0');
   @override
   Future<void> beginVerification(
     VolunteerAccount account,
@@ -306,8 +321,11 @@ class MockVolunteerRepository extends VolunteerRepository {
       throw StateError('verification-not-ready');
     }
     final id = identifierFor(report);
+    // The Volunteer types the 6-digit code the Guardian reads out (the linked
+    // case's code, or the standalone report's own), never the RD-/FR- id.
     final valid = method == VerificationMethod.caseIdentifier
-        ? authenticatedAccountShown && value.trim() == id
+        ? authenticatedAccountShown &&
+              value.trim() == verificationCodeFor(report)
         : value == 'preview-qr:$id:${report.matchedPerson!.guardian.id}';
     report.verification = valid
         ? VerificationReceipt(

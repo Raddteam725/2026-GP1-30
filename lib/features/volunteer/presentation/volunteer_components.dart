@@ -3,26 +3,34 @@ import 'package:intl/intl.dart' show DateFormat, NumberFormat;
 
 import '../../../core/localization/generated/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../guardian/presentation/guardian_components.dart';
 import '../domain/volunteer_models.dart';
 
-const volunteerCanvas = Color(0xFFF9F9FF);
-const volunteerInk = Color(0xFF0A1B37);
-const volunteerNavy = Color(0xFF002869);
-const volunteerTeal = Color(0xFF006972);
+const volunteerCanvas = Color(0xFFF9FBFD);
+const volunteerInk = AppColors.primary;
+const volunteerNavy = AppColors.primary;
+const volunteerTeal = AppColors.secondary;
 const volunteerTint = Color(0xFFF1F3FF);
-const volunteerBorder = Color(0xFFE5E7EF);
+const volunteerBorder = AppColors.border;
 const volunteerGreen = Color(0xFF078461);
 AppLocalizations stringsOf(BuildContext context) =>
     AppLocalizations.of(context)!;
 String dataText(BuildContext context, LocalizedData value) =>
     value.inLanguage(Localizations.localeOf(context).languageCode);
+String relationshipText(BuildContext context, LocalizedData value) =>
+    switch (value.en) {
+      'child' => stringsOf(context).child,
+      'parent' => stringsOf(context).parent,
+      'other' => stringsOf(context).other,
+      _ => dataText(context, value),
+    };
 String numberText(BuildContext context, num value) =>
     NumberFormat.decimalPattern(Localizations.localeOf(context).languageCode)
         .format(value);
 String timeText(BuildContext context, DateTime date) =>
     DateFormat.MMMd(Localizations.localeOf(context).languageCode)
         .add_jm()
-        .format(date);
+        .format(date.toLocal());
 String statusText(AppLocalizations s, CaseStatus status) => switch (status) {
   CaseStatus.reportReceived => s.vReportReceived,
   CaseStatus.searchInProgress => s.vSearchProgress,
@@ -41,9 +49,9 @@ class VolunteerCard extends StatelessWidget {
   const VolunteerCard({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(16),
+    this.padding = const EdgeInsets.all(20),
     this.color = Colors.white,
-    this.border = volunteerBorder,
+    this.border = const Color(0xB3E5E7EB),
     this.onTap,
   });
   final Widget child;
@@ -53,13 +61,10 @@ class VolunteerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 16),
-    child: Material(
+    child: GuardianPanel(
+      padding: EdgeInsets.zero,
       color: color,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: border),
-      ),
-      clipBehavior: Clip.antiAlias,
+      border: border,
       child: InkWell(
         onTap: onTap,
         child: Padding(padding: padding, child: child),
@@ -82,7 +87,7 @@ class VolunteerHeading extends StatelessWidget {
   Widget build(BuildContext context) => Text(
     text,
     style: TextStyle(
-      fontSize: large ? 26 : 18,
+      fontSize: large ? 28 : 20,
       fontWeight: FontWeight.w700,
       color: color,
       height: 1.3,
@@ -145,11 +150,6 @@ class VolunteerAction extends StatelessWidget {
   final bool secondary, danger;
   @override
   Widget build(BuildContext context) {
-    final color = danger
-        ? const Color(0xFFB91C1C)
-        : secondary
-        ? volunteerTeal
-        : AppColors.primary;
     final content = Wrap(
       alignment: WrapAlignment.center,
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -159,46 +159,20 @@ class VolunteerAction extends StatelessWidget {
         Text(label, textAlign: TextAlign.center),
       ],
     );
-    final style = ButtonStyle(
-      minimumSize: const WidgetStatePropertyAll(Size(0, 52)),
-      padding: const WidgetStatePropertyAll(
-        EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      ),
-      shape: WidgetStatePropertyAll(
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
-      ),
-      textStyle: const WidgetStatePropertyAll(
-        TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-      ),
-    );
     return SizedBox(
       width: double.infinity,
       child: secondary || danger
           ? OutlinedButton(
               onPressed: onPressed,
-              style: style.copyWith(
-                foregroundColor: WidgetStatePropertyAll(color),
-                side: WidgetStatePropertyAll(
-                  BorderSide(
-                    color: color.withValues(alpha: danger ? 0.35 : 1),
-                    width: 1.3,
-                  ),
-                ),
-              ),
+              style: danger
+                  ? OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                      side: const BorderSide(color: AppColors.error),
+                    )
+                  : null,
               child: content,
             )
-          : FilledButton(
-              onPressed: onPressed,
-              style: style.copyWith(
-                backgroundColor: WidgetStateProperty.resolveWith(
-                  (states) => states.contains(WidgetState.disabled)
-                      ? Colors.grey.shade300
-                      : color,
-                ),
-                foregroundColor: const WidgetStatePropertyAll(Colors.white),
-              ),
-              child: content,
-            ),
+          : FilledButton(onPressed: onPressed, child: content),
     );
   }
 }

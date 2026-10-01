@@ -1,4 +1,9 @@
 import logging
+import time
+import re
+import os
+from contextlib import asynccontextmanager
+from .local_jobs import LocalJobs
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -6,7 +11,18 @@ from .firebase import identity
 from .models import ProfileCreate, ProfileUpdate, IndividualInput, FcmRegistration, FcmUnregister
 from .service import GuardianService
 
-app = FastAPI(title="Radd Guardian API", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app):
+    jobs = LocalJobs() if os.getenv('RADD_LOCAL_JOBS') == '1' else None
+    if jobs:
+        jobs.start()
+    try:
+        yield
+    finally:
+        if jobs:
+            jobs.stop()
+
+app = FastAPI(title="Radd Shared API", version="0.1.0", lifespan=lifespan)
 
 @app.middleware("http")
 async def limits(request: Request, call_next):
@@ -21,9 +37,14 @@ async def limits(request: Request, call_next):
             if len(body) > 11_300_000:
                 return JSONResponse(status_code=413, content={"detail": "request_too_large"})
         request._body = bytes(body)
+    request_id = request.headers.get('x-radd-request-id', '')
+    if not re.fullmatch(r'[0-9]{1,20}-[0-9]{1,8}', request_id):
+        request_id = '-'
+    logging.getLogger('uvicorn.error').info('Radd request %s T1 received epoch_ms=%d', request_id, time.time()*1000)
+    started = time.monotonic()
     response = await call_next(request)
     route = request.scope.get("route")
-    logging.getLogger("uvicorn.error").info("Radd API: %s %s -> %s", request.method, getattr(route, "path", "/unknown"), response.status_code)
+    logging.getLogger("uvicorn.error").info("Radd request %s API: %s %s -> %s (%d ms)", request_id, request.method, getattr(route, "path", "/unknown"), response.status_code, (time.monotonic() - started) * 1000)
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -47,6 +68,12 @@ def health():
 @app.get("/v1/session")
 def session(s=Depends(service)):
     return s.account_role()
+
+@app.get("/v1/event")
+def current_event(s=Depends(service)):
+    # The Active event as Guardian and Volunteer see it -- name, location,
+    # dates, hours, status -- read from the same record the Admin manages.
+    return s.current_event()
 
 @app.get("/v1/guardian")
 def profile(s=Depends(service)):
@@ -78,6 +105,16 @@ def unregister_fcm_token(value: FcmUnregister, s=Depends(service)):
 def update_profile(value: ProfileUpdate, s=Depends(service)):
     return s.save_profile(value)
 
+@app.get("/v1/registration-periods")
+def registration_periods(s=Depends(service)):
+    from .events import active_event
+    from .registration_retention import valid_periods
+    s.profile()
+    event = active_event(s.db)
+    options = valid_periods(event)
+    return {'event_id': event.id, 'ends_at': event.to_dict()['ends_at'],
+            'options': options, 'default_period_id': options[-1]['id']}
+
 @app.get("/v1/individuals")
 def individuals(s=Depends(service)):
     return s.list()
@@ -91,7 +128,7 @@ def individual(item_id: str, s=Depends(service)):
     if "/" in item_id or not item_id:
         raise HTTPException(404)
     from .service import public_individual
-    return public_individual(s.get(item_id))
+    return public_individual(s.get(item_id), s.db)
 
 @app.put("/v1/individuals/{item_id}")
 def update_individual(item_id: str, value: IndividualInput, s=Depends(service)):
@@ -101,6 +138,12 @@ def update_individual(item_id: str, value: IndividualInput, s=Depends(service)):
 def delete_individual(item_id: str, s=Depends(service)):
     s.delete(item_id)
     return Response(status_code=204)
+
+@app.get("/v1/individuals/{item_id}/retention-options")
+def retention_options(item_id: str, s=Depends(service)):
+    if "/" in item_id or not item_id:
+        raise HTTPException(404)
+    return s.retention_options(item_id)
 
 @app.get("/v1/individuals/{item_id}/photo")
 def photograph(item_id: str, s=Depends(service)):
@@ -122,11 +165,15 @@ def report_missing(value: CaseCreate, s=Depends(cases_service)):
 
 @app.get("/v1/cases/{case_id}")
 def case(case_id: str, s=Depends(cases_service)):
-    return public_case(s.owned(case_id))
+    return s.get(case_id)
 
 @app.put("/v1/cases/{case_id}/guided-report")
 def guided_report(case_id: str, value: GuidedReport, s=Depends(cases_service)):
     return s.save_report(case_id, value)
+
+@app.post("/v1/cases/{case_id}/verification")
+def verification(case_id: str, s=Depends(cases_service)):
+    return s.verification(case_id)
 
 @app.post("/v1/cases/{case_id}/cancel")
 def cancel_case(case_id: str, s=Depends(cases_service)):
@@ -147,3 +194,29 @@ def read_notification(notification_id: str, s=Depends(cases_service)):
 
 from .volunteer import router as volunteer_router
 app.include_router(volunteer_router)
+
+@app.get('/v1/guardian/found-reports')
+def guardian_found_reports(s=Depends(service)):
+    from .found_reports import found_status, ensure_verification_code, guardian_verification_visible
+    from google.cloud.firestore_v1.base_query import FieldFilter
+    s.profile()
+    from .events import active_event
+    event_id = active_event(s.db).id
+    # Only this Guardian's standalone reports at a stage where verification
+    # information may be shown (see guardian_verification_visible): Reunited
+    # and still-identifying reports are excluded by authoritative status.
+    # `verification_code` is the short fallback the Guardian reads out; the
+    # document id is internal. Older active reports are assigned one here.
+    # `individual_name` is the Guardian's own registration name, so the
+    # Guardian can tell which code belongs to which individual.
+    result = []
+    for doc in s.db.collection('found_reports').where(filter=FieldFilter('guardian_id', '==', s.uid)).stream():
+        data = doc.to_dict() or {}
+        if data.get('event_id') != event_id or not guardian_verification_visible(data):
+            continue
+        individual_id = data.get('individual_id')
+        registration = (s.db.collection('users').document(s.uid).collection('individuals').document(individual_id).get().to_dict() or {}) if individual_id else {}
+        result.append({'id': doc.id, 'status': found_status(data), 'individual_id': individual_id,
+                       'individual_name': registration.get('full_name'),
+                       'verification_code': ensure_verification_code(s.db, doc)})
+    return result

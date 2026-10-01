@@ -13,10 +13,12 @@ from app.main import app
 from app.firebase import identity
 from app.cases import CaseService
 from app.case_models import CaseCreate
-from firestore_fake import Database, Bucket
+from firestore_fake import Database, Bucket, configured_event, server_now
 from test_cases import guardian_with_individual
 
 class TransactionDatabase(Database):
+    def delete(self, ref):
+        self.data.pop(ref.path, None)
     """Serializes test transactions and resolves timestamps/dotted updates.
 
     This verifies use of the transaction boundary under concurrent callers;
@@ -29,7 +31,7 @@ class TransactionDatabase(Database):
     def set(self, ref, value, merge=False):
         def resolve(v):
             if v is volunteer.firestore.SERVER_TIMESTAMP:
-                return datetime.now(timezone.utc)
+                return server_now()
             if isinstance(v, dict): return {k: resolve(x) for k, x in v.items()}
             return v
         super().set(ref, resolve(value), merge)
@@ -44,7 +46,7 @@ class TransactionDatabase(Database):
 @pytest.fixture
 def db(monkeypatch):
     db, storage = TransactionDatabase(), Bucket()
-    db.set(db.collection('events').document('test-event'), {'active': True})
+    db.set(db.collection('events').document('test-event'), configured_event())
     monkeypatch.setattr(volunteer, 'database', lambda: db)
     monkeypatch.setattr(service, 'database', lambda: db)
     monkeypatch.setattr(service, 'bucket', lambda: storage)
@@ -60,6 +62,7 @@ def db(monkeypatch):
         return run
     monkeypatch.setattr(volunteer.firestore, 'transactional', transactional)
     for uid in ['one', 'two']:
+        db.set(db.collection('events').document('test-event').collection('volunteers').document(uid), {})
         db.set(db.collection('users').document(uid), {'role': 'volunteer', 'active': True,
             'full_name': 'Volunteer ' + uid, 'volunteer_id': 'VOL-' + uid,
             'email': uid + '@example.test', 'phone': '+966500000001'})
@@ -74,16 +77,36 @@ def case():
     result = CaseService(guardian).create(CaseCreate(individual_id=person))
     return guardian, result['id']
 
+@pytest.mark.parametrize('outcome', ['cancelled', 'resolved'])
+def test_closed_state_is_minimal_authoritative_and_scoped_to_previous_recipient(db, outcome):
+    from datetime import timedelta
+    guardian, identifier = case()
+    getattr(CaseService(guardian), 'cancel' if outcome == 'cancelled' else 'resolve')(identifier)
+    assert vol().case_state(identifier) == {'id': identifier, 'status': outcome}
+    with pytest.raises(HTTPException):
+        vol().accessible(identifier)  # Status access never unlocks private details.
+    for note in list(vol('two').user.collection('volunteer_notifications').stream()):
+        note.reference.delete()
+    with pytest.raises(HTTPException):
+        vol('two').case_state(identifier)
+    db.data['cases/' + identifier]['closed_at'] = datetime.now(timezone.utc) - timedelta(hours=24)
+    with pytest.raises(HTTPException):
+        vol().case_state(identifier)
+
 def test_profile_from_admin_document_and_no_self_registration(db):
     assert vol().profile()['volunteer_id'] == 'VOL-one'
+    from app.alerts import PROXIMITY_RADIUS_METERS
+    assert vol().profile()['proximity_radius_meters'] == PROXIMITY_RADIUS_METERS
     db.data['users/one']['active'] = False
-    assert vol().profile()['active'] is False
+    with pytest.raises(HTTPException) as inactive:
+        vol().profile()
+    assert inactive.value.detail == 'volunteer_inactive'
     with pytest.raises(HTTPException): vol('missing').profile()
     with pytest.raises(HTTPException): vol(role='guardian').profile()
     app.dependency_overrides[identity] = lambda: {'uid': 'one'}
     with TestClient(app) as client:
         assert client.put('/v1/volunteer', json={'active': True}).status_code == 405
-        assert client.get('/v1/volunteer').json()['uid'] == 'one'
+        assert client.get('/v1/volunteer').status_code == 403
 
 def test_guardian_cannot_use_any_volunteer_endpoint(db):
     _, case_id = case()
@@ -127,7 +150,7 @@ def test_shared_guardian_case_first_second_join_and_isolation(db):
     assert not {'guardian_id', 'individual_path', 'joined_by', 'phone', 'photo_path'} & response.keys()
     assert first.photo(case_id).startswith(b'\xff\xd8')
 
-@pytest.mark.parametrize('status', ['match_confirmed', 'awaiting_guardian_verification', 'reunited'])
+@pytest.mark.parametrize('status', ['match_confirmed', 'awaiting_guardian_verification'])
 def test_only_confirmer_retains_case_after_match(db, status):
     _, case_id = case()
     vol().start_search(case_id)
@@ -165,3 +188,26 @@ def test_client_uid_never_controls_join(db):
         response = client.post(f'/v1/volunteer/cases/{case_id}/start-search', json={'uid': 'two'})
         assert response.status_code == 200
     assert db.data['cases/' + case_id]['joined_by'] == ['one']
+
+
+@pytest.mark.parametrize('status', volunteer.TERMINAL_STATUSES)
+def test_terminal_workload_api_excludes_all_participants_without_erasing_history(db, status):
+    from copy import deepcopy
+    guardian, case_id = case()
+    vol().start_search(case_id)
+    vol('two').start_search(case_id)
+    assert vol().list(True)[0]['id'] == vol('two').list(True)[0]['id'] == case_id
+    db.data['cases/' + case_id].update(status=status, confirmed_by='two')
+    stored = deepcopy(db.data['cases/' + case_id])
+    with TestClient(app) as client:
+        for uid in ['one', 'two']:
+            app.dependency_overrides[identity] = lambda uid=uid: {'uid': uid}
+            for _ in range(2):
+                for path in ['mine', 'available']:
+                    response = client.get('/v1/volunteer/cases/' + path)
+                    assert response.status_code == 200
+                    assert response.json() == []
+            with pytest.raises(HTTPException): vol(uid).start_search(case_id)
+    assert db.data['cases/' + case_id] == stored
+    assert stored['joined_by'] == ['one', 'two']
+    assert CaseService(guardian).list()[0]['status'] == status

@@ -1,37 +1,17 @@
-"""Two independent, idempotent retention jobs. Deliberately NOT wired to any
-scheduler/deployment mechanism here -- during development they are invoked
-directly (by tests, or manually via `python -m app.cleanup` for controlled
-verification against real Firebase). Whatever eventually triggers them on a
-schedule in production calls these same functions unchanged.
+"""Idempotent registration-expiry cleanup, with active-case deletion deferral.
 
-- expire_photos(): a registered individual's photo is only ever current for
-  24 hours from its own capture time (never from an event day/date boundary).
-  Physically deletes the Storage object and only then clears the stale
-  Firestore reference. See app.service.PHOTO_FRESHNESS/photo_expired -- the
-  backend already refuses to serve or rely on an expired photo even before
-  this job next runs; this job's job is freeing the Storage object itself.
-- scrub_terminal_cases(): 24 hours after a case reaches a terminal status,
-  every identifying/personal field is removed from the shared `cases` row
-  (and everything found/alerted/notified about it elsewhere is deleted
-  outright), leaving only the minimum fields the documented Admin statistics
-  need. The registered individual's own profile is untouched by this --
-  its lifecycle is governed solely by expire_photos()/the Guardian's own
-  explicit delete, never by case status.
-
-Storage-deletion contract, load-bearing for both jobs: a Firestore reference
-to a Storage object is never cleared/removed unless that object was actually
-deleted (or was already gone). If the delete fails, the reference is left
-exactly as it was so the next run retries the same object -- this must never
-silently orphan a blob that a person can no longer be pointed at, nor must a
-transient failure make it look like nothing needs deleting anymore. See
-`_delete_blob` and every one of its call sites.
+Unknown legacy periods are neither guessed nor automatically deleted. Found
+photos retain their separate end/match lifecycle. Terminal case statistics keep
+the existing scrubber; registration expiry can scrub associated terminal debris
+so identifiable information does not outlive its applicable registration.
 """
 from datetime import datetime, timedelta, timezone
 from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 from .firebase import database, bucket
-from .service import PHOTO_FRESHNESS
-from .case_models import TERMINAL_STATUSES
+from .registration_retention import known_period, utc_now
+from .found_reports import identified_report, minimal_completed, REUNITED
+from .case_models import TERMINAL_STATUSES, age_group
 
 CASE_RETENTION = timedelta(hours=24)
 
@@ -59,34 +39,58 @@ def run():
         # failure rule as everywhere else in this module.
 
 def expire_photos():
+    """Compatibility job name: expires entire identifiable registrations, not photo age."""
     db = database()
-    cutoff = datetime.now(timezone.utc) - PHOTO_FRESHNESS
-    # No collection-group index/query is assumed available; walk the same
-    # guardian -> individuals path the rest of the app already uses (e.g.
-    # VolunteerWorkflow.registrations), scoped server-side to Firestore's own
-    # `<=` filter on the authoritative capture timestamp.
-    for guardian in db.collection("users").where(filter=FieldFilter("role", "==", "guardian")).stream():
-        stale = guardian.reference.collection("individuals").where(
-            filter=FieldFilter("photo_captured_at", "<=", cutoff)
-        ).stream()
-        for person in stale:
-            data = person.to_dict() or {}
-            path = data.get("photo_path")
-            if not path:
-                continue  # Already cleared by an earlier run -- idempotent no-op.
-            if not _delete_blob(path):
-                continue  # Storage delete failed: reference stays; retried next run.
+    for guardian in db.collection('users').where(filter=FieldFilter('role', '==', 'guardian')).stream():
+        for person in guardian.reference.collection('individuals').stream():
             @firestore.transactional
-            def clear(tx, ref=person.reference, expected=path):
-                # Re-read inside the transaction: if the Guardian captured a
-                # NEW photo since this sweep started, photo_path now points
-                # at that replacement, not `expected` -- in that case this is
-                # a no-op, so an older, already-completed delete of the OLD
-                # blob can never reach into the record and remove the new one.
-                current = ref.get(transaction=tx).to_dict() or {}
-                if current.get("photo_path") == expected:
-                    tx.update(ref, {"photo_path": firestore.DELETE_FIELD})
-            clear(db.transaction())
+            def claim(tx):
+                current = person.reference.get(transaction=tx)
+                data = current.to_dict() or {}
+                if not known_period(data) or data['registration_expires_at'] > utc_now():
+                    return None
+                prefix = f'guardians/{guardian.id}/individuals/{person.id}/'
+                if data.get('guardian_id') != guardian.id or any(
+                    data.get(field) and not data[field].startswith(prefix)
+                    for field in ('photo_path', 'embedding_path')
+                ):
+                    return None
+                if identified_report(db, data, tx) is not None:
+                    return None
+                # Read case records in the same transaction as the deletion fence.
+                # Case creation/confirmation also reads and writes this registration.
+                cases = list(db.collection('cases').where(filter=FieldFilter(
+                    'individual_path', '==', person.reference.path)).stream(transaction=tx))
+                associated = {c.id: c for c in cases}
+                if data.get('active_case_id'):
+                    c = db.collection('cases').document(data['active_case_id']).get(transaction=tx)
+                    if not c.exists:
+                        return None  # Unresolved reference: do not destroy case data.
+                    associated[c.id] = c
+                for case in associated.values():
+                    linked = case.to_dict() or {}
+                    if linked.get('scrubbed_at') is not None:
+                        continue
+                    if (linked.get('guardian_id') != guardian.id
+                            or linked.get('individual_id') != person.id
+                            or linked.get('event_id') != data.get('event_id')):
+                        return None
+                if any((c.to_dict() or {}).get('status') not in TERMINAL_STATUSES for c in associated.values()):
+                    return None
+                tx.update(person.reference, {'deleting': True})
+                return data, list(associated.values())
+            claimed = claim(db.transaction())
+            if claimed is None:
+                continue
+            data, cases = claimed
+            # Keep references and deletion fence on failure so the next job retries.
+            if not all(_delete_blob(data.get(field)) for field in ('photo_path', 'embedding_path')):
+                continue
+            for case in cases:
+                _scrub_case(db, case)
+            # Embedded face_embedding and every other identifiable field leave
+            # with the registration. Guardian account and other people are untouched.
+            person.reference.delete()
 
 def _delete_case_debris(db, case_id, guardian_id):
     # Everything found/alerted/notified about a case is deleted outright --
@@ -97,12 +101,18 @@ def _delete_case_debris(db, case_id, guardian_id):
         if path and not _delete_blob(path):
             continue  # This found_report is the only reference to that photo
                        # -- leave both in place so the next run retries.
-        report.reference.delete()
+        data = report.to_dict() or {}
+        if data.get('origin') == 'volunteer_found' and data.get('status') == REUNITED:
+            report.reference.set(minimal_completed(data))
+        else:
+            report.reference.delete()
     for alert in db.collection("alerts").where(filter=FieldFilter("case_id", "==", case_id)).stream():
         alert.reference.delete()  # No PII, no Storage object -- always safe.
     if guardian_id:
         notes = db.collection("users").document(guardian_id).collection("notifications")
         for note in notes.where(filter=FieldFilter("case_id", "==", case_id)).stream():
+            for receipt in note.reference.collection("deliveries").stream():
+                receipt.reference.delete()
             note.reference.delete()
     # Every Volunteer can end up with a case-linked notification (materialized
     # lazily by VolunteerWorkflow.notifications_list for anyone who viewed
@@ -112,6 +122,8 @@ def _delete_case_debris(db, case_id, guardian_id):
     for volunteer in db.collection("users").where(filter=FieldFilter("role", "==", "volunteer")).stream():
         notes = volunteer.reference.collection("volunteer_notifications")
         for note in notes.where(filter=FieldFilter("case_id", "==", case_id)).stream():
+            for receipt in note.reference.collection("deliveries").stream():
+                receipt.reference.delete()
             note.reference.delete()
 
 def _scrub_case(db, doc):
@@ -126,7 +138,7 @@ def _scrub_case(db, doc):
         return  # Case row already minimized; only the debris retry above matters now.
     minimal = {
         "status": data.get("status"), "created_at": data.get("created_at"),
-        "closed_at": data.get("closed_at"), "age_group": data.get("age_group"),
+        "closed_at": data.get("closed_at"), "age_group": age_group(data["age"]) if isinstance(data.get("age"), int) else data.get("age_group"),
         "event_id": data.get("event_id"), "scrubbed_at": firestore.SERVER_TIMESTAMP,
     }
     # The one identifier the documented "Reunited Cases by Volunteer" Admin
@@ -149,14 +161,23 @@ def scrub_terminal_cases():
         for doc in due:
             _scrub_case(db, doc)
 
+def delete_finished_found_photos():
+    """Retry interrupted synchronous deletion without touching missing cases."""
+    db = database()
+    for report in db.collection('found_reports').stream():
+        data = report.to_dict()
+        path = data.get('photo_path')
+        if path and (data.get('ended') or data.get('matched_profile_id')) and _delete_blob(path):
+            report.reference.update({'photo_path': firestore.DELETE_FIELD})
+
 def run_all():
     """Convenience for manual/controlled invocation during development
-    (`python -m app.cleanup`). Not wired to any scheduler -- deployment
-    decides how/when this runs; order here does not matter, each job is
-    independent and idempotent."""
+    (`python -m app.cleanup`). The local server also invokes these jobs
+    independently every minute."""
     run()
     expire_photos()
     scrub_terminal_cases()
+    delete_finished_found_photos()
 
 if __name__ == "__main__":
     run_all()

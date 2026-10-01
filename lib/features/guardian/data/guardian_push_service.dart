@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/widgets.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
@@ -32,14 +34,138 @@ Future<void> guardianBackgroundMessageHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 }
 
+/// A foreground workflow update worth a transient banner while the Guardian
+/// is inside the app. Carries navigation context only (the existing push
+/// payload fields); the Guardian screens fetch authoritative state
+/// themselves, and the notification history stays the durable record.
+class GuardianNotice {
+  const GuardianNotice({
+    required this.id,
+    required this.caseId,
+    required this.status,
+    required this.kind,
+  });
+  final String id, caseId, status, kind;
+
+  /// Outcomes only the Guardian can produce (cancel/resolve) and the
+  /// Guardian's own report creation: the screen they are on already shows
+  /// the result, so no transient banner repeats it. Everything else on the
+  /// reunification path is driven by a Volunteer or an Admin.
+  static const selfInitiatedKinds = {'case_created'};
+  static const selfInitiatedStatuses = {'cancelled', 'resolved'};
+  bool get selfInitiated =>
+      selfInitiatedKinds.contains(kind) ||
+      selfInitiatedStatuses.contains(status);
+
+  static GuardianNotice? fromData(Map<String, dynamic> data) {
+    if (!GuardianPushRefresh.valid(data)) return null;
+    final caseId = data['case_id'] as String, status = data['status'] as String;
+    final supplied = data['notification_id'];
+    return GuardianNotice(
+      id: supplied is String && supplied.isNotEmpty
+          ? supplied
+          : '$caseId-$status',
+      caseId: caseId,
+      status: status,
+      kind: data['kind']?.toString() ?? 'status_update',
+    );
+  }
+}
+
 /// Notifies any listening, currently-open screen that server state may have
 /// changed, without this module needing to know which screens exist or how
 /// they fetch data. A screen reacts by re-running its OWN existing reload --
 /// this never carries data itself, only a "something changed, go check" tick.
-class GuardianPushRefresh extends ChangeNotifier {
+///
+/// [notices] is the separate, foreground-only stream behind the transient
+/// Guardian banner: fed exclusively by a real received push (see
+/// GuardianPushService._receive) after this class's own duplicate
+/// suppression accepted it -- never by screen rebuilds, tab changes, history
+/// loads or app resume, so old events are never replayed as banners.
+class GuardianPushRefresh extends ChangeNotifier with WidgetsBindingObserver {
   GuardianPushRefresh._();
   static final instance = GuardianPushRefresh._();
-  void ping() => notifyListeners();
+  String? caseId;
+  final Set<String> _events = {};
+  final Set<String> _ids = {};
+  final Set<String> _ownActions = {};
+  final StreamController<GuardianNotice> _notices =
+      StreamController<GuardianNotice>.broadcast();
+  Stream<GuardianNotice> get notices => _notices.stream;
+  bool concerns(String id) => caseId == null || caseId == id;
+
+  /// Records a status the Guardian just produced themselves on a case they
+  /// are looking at (report created, cancelled, resolved): the matching push
+  /// still refreshes screens and stays in history, but raises no banner.
+  void markOwnAction(String caseId, String status) {
+    _ownActions.add('$caseId|$status');
+    if (_ownActions.length > 64) _ownActions.remove(_ownActions.first);
+  }
+
+  bool isOwnAction(GuardianNotice notice) =>
+      notice.selfInitiated ||
+      _ownActions.contains('${notice.caseId}|${notice.status}');
+
+  /// Publishes an accepted foreground push as a transient notice. Only
+  /// [GuardianPushService._receive] (a real push) calls this.
+  void announce(Map<String, dynamic> data) {
+    final notice = GuardianNotice.fromData(data);
+    if (notice == null || isOwnAction(notice)) return;
+    _notices.add(notice);
+  }
+
+  static bool valid(Map<String, dynamic> data) {
+    final role = data['role'], id = data['case_id'], status = data['status'];
+    return (role == null || role == 'guardian') &&
+        id is String &&
+        id.isNotEmpty &&
+        !id.contains('/') &&
+        const {
+          'report_received',
+          'search_in_progress',
+          'match_confirmed',
+          'awaiting_guardian_verification',
+          'reunited',
+          'resolved',
+          'cancelled',
+          'referred_to_authority',
+        }.contains(status);
+  }
+
+  bool acceptPush(Map<String, dynamic> data) {
+    if (!valid(data)) return false;
+    final key = '${data['case_id']}|${data['status']}';
+    final id = data['notification_id'];
+    if (_events.contains(key) || (id is String && _ids.contains(id))) {
+      return false;
+    }
+    _events.add(key);
+    if (_events.length > 256) _events.remove(_events.first);
+    if (id is String && id.isNotEmpty) {
+      _ids.add(id);
+      if (_ids.length > 256) _ids.remove(_ids.first);
+    }
+    caseId = data['case_id'] as String;
+    notifyListeners();
+    return true;
+  }
+
+  void reset() {
+    caseId = null;
+    _events.clear();
+    _ids.clear();
+    _ownActions.clear();
+  }
+
+  void ping() {
+    caseId = null;
+    notifyListeners();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) ping();
+  }
 }
 
 /// Holds a case id from a notification the Guardian tapped (from the
@@ -61,7 +187,8 @@ class GuardianPushRouter {
   }
 
   static void _setPending(RemoteMessage? message) {
-    final caseId = message?.data['case_id'];
+    if (message == null || !GuardianPushRefresh.valid(message.data)) return;
+    final caseId = message.data['case_id'];
     if (caseId is String && caseId.isNotEmpty) _pendingCaseId = caseId;
   }
 }
@@ -74,7 +201,24 @@ class GuardianPushService {
   // further FirebaseMessaging platform call (and makes both testable without
   // one). Cleared on logout so a later Guardian's session starts clean.
   static String? _lastKnownToken;
+  static String? _pendingToken;
   static String? _lastSyncedLocale;
+  static StreamSubscription<User?>? _authSub;
+  static int _generation = 0;
+  static bool _observing = false;
+  static void _receive(RemoteMessage message) {
+    if (!GuardianPushRefresh.instance.acceptPush(message.data)) return;
+    final id = message.data['notification_id'] ?? message.messageId;
+    if (kDebugMode) {
+      debugPrint(
+        'Radd Guardian FCM $id T6/T7 ${DateTime.now().toUtc().toIso8601String()}',
+      );
+    }
+    // Screens have been told to refetch (acceptPush); additionally surface
+    // this newly received update as a transient in-app banner. Duplicates
+    // never reach here, so a banner is shown at most once per event.
+    GuardianPushRefresh.instance.announce(message.data);
+  }
 
   // FirebaseMessaging.instance is a device-level singleton that is never
   // itself torn down or reinitialized across a Guardian logging out and a
@@ -109,6 +253,7 @@ class GuardianPushService {
   ) async {
     if (_initialized) return;
     _initialized = true;
+    final generation = ++_generation;
     try {
       // Defensive: the _initialized guard above already prevents a second
       // concurrent initialize() from reaching here, and handleLogout()
@@ -116,36 +261,51 @@ class GuardianPushService {
       // stray leftover subscription must never be possible, so clear any
       // before attaching fresh ones.
       await _cancelSubscriptions();
+      WidgetsBinding.instance.addObserver(GuardianPushRefresh.instance);
+      _observing = true;
       final messaging = FirebaseMessaging.instance;
+      // Install listeners before permission, token retrieval or upload.
+      _onMessageSub = FirebaseMessaging.onMessage.listen(_receive);
+      _onMessageOpenedSub = FirebaseMessaging.onMessageOpenedApp.listen((
+        message,
+      ) {
+        if (!GuardianPushRefresh.valid(message.data)) return;
+        GuardianPushRouter._setPending(message);
+        GuardianPushRefresh.instance.ping();
+      });
+      GuardianPushRouter._setPending(await messaging.getInitialMessage());
+      if (generation != _generation) return;
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      _authSub = FirebaseAuth.instance.idTokenChanges().listen((user) {
+        if (generation != _generation) return;
+        if (user == null || user.uid != uid) {
+          unawaited(handleLogout(guardian));
+        } else if ((_lastKnownToken ?? _pendingToken) != null) {
+          unawaited(
+            _upload(
+              guardian,
+              _pendingToken ?? _lastKnownToken!,
+              _lastSyncedLocale ?? locale,
+            ),
+          );
+        }
+      });
       final settings = await messaging.requestPermission();
-      if (settings.authorizationStatus == AuthorizationStatus.denied) {
-        return; // Denied: no registration, no listeners. Normal, not an error.
+      if (generation != _generation ||
+          settings.authorizationStatus == AuthorizationStatus.denied) {
+        return;
       }
       final token = await messaging.getToken();
-      if (token != null) await _upload(guardian, token, locale);
-      // Prefer whatever locale most recently synced successfully over the
-      // one captured at startup, so a refreshed token is never uploaded
-      // under a language the Guardian has since moved away from. Exactly
-      // one of these exists for the active session -- see handleLogout.
+      if (generation != _generation) return;
+      if (token != null) unawaited(_upload(guardian, token, locale));
       _tokenRefreshSub = messaging.onTokenRefresh.listen(
         (refreshed) =>
             _upload(guardian, refreshed, _lastSyncedLocale ?? locale),
       );
-
-      // Foreground: the push is only a signal to refresh, never itself the data.
-      _onMessageSub = FirebaseMessaging.onMessage.listen(
-        (_) => GuardianPushRefresh.instance.ping(),
-      );
-
-      // Tapped from background, or app launched fresh by tapping a
-      // (terminated-state) notification -- either way this only records
-      // WHICH case to navigate to; GuardianGate/Home resolve it once
-      // authenticated state is actually available.
-      _onMessageOpenedSub = FirebaseMessaging.onMessageOpenedApp.listen(
-        GuardianPushRouter._setPending,
-      );
-      GuardianPushRouter._setPending(await messaging.getInitialMessage());
-    } catch (_) {
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Radd Guardian FCM setup failed (${error.runtimeType})');
+      }
       // Any Firebase Messaging failure here (unsupported platform, transient
       // service failure, ...) must never affect the rest of the app.
     }
@@ -171,15 +331,27 @@ class GuardianPushService {
     String token,
     String locale,
   ) async {
+    final generation = _generation;
+    _pendingToken = token;
     try {
       await guardian.registerFcmToken(token, locale);
+      if (generation != _generation) {
+        await guardian.unregisterFcmToken(token);
+        return;
+      }
       // Only recorded on success: a failed attempt (e.g. offline) leaves
       // these as they were, so the next opportunity -- another syncLocale
       // check, an onTokenRefresh, or the next app start -- retries with the
       // current locale instead of wrongly assuming it already matches.
       _lastKnownToken = token;
       _lastSyncedLocale = locale;
-    } catch (_) {
+      if (_pendingToken == token) _pendingToken = null;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          'Radd Guardian FCM registration failed (${error.runtimeType})',
+        );
+      }
       // Never surfaced to the Guardian and never a reason to fail anything else.
     }
   }
@@ -205,12 +377,22 @@ class GuardianPushService {
   /// registers it (see service.register_fcm_token), so a missed cleanup here
   /// is not the only safeguard against a stale cross-account registration.
   static Future<void> handleLogout(GuardianRepository guardian) async {
-    final token = _lastKnownToken;
+    ++_generation;
+    GuardianPushRefresh.instance.reset();
+    if (_observing) {
+      WidgetsBinding.instance.removeObserver(GuardianPushRefresh.instance);
+      _observing = false;
+    }
+    final token = _pendingToken ?? _lastKnownToken;
     await _cancelSubscriptions();
     _initialized = false;
     _lastKnownToken = null;
+    _pendingToken = null;
     _lastSyncedLocale = null;
     if (token == null) return;
+    try {
+      await FirebaseMessaging.instance.deleteToken();
+    } catch (_) {}
     try {
       await guardian
           .unregisterFcmToken(token)
@@ -225,6 +407,8 @@ class GuardianPushService {
   }
 
   static Future<void> _cancelSubscriptions() async {
+    await _authSub?.cancel();
+    _authSub = null;
     await _tokenRefreshSub?.cancel();
     await _onMessageSub?.cancel();
     await _onMessageOpenedSub?.cancel();
@@ -235,13 +419,22 @@ class GuardianPushService {
 
   @visibleForTesting
   static void resetForTesting() {
+    if (_observing) {
+      WidgetsBinding.instance.removeObserver(GuardianPushRefresh.instance);
+      _observing = false;
+    }
     // Not awaited (this stays synchronous for use in a plain `setUp`), but
     // still requested so a test-seeded subscription doesn't dangle.
+    ++_generation;
+    GuardianPushRefresh.instance.reset();
+    unawaited(_authSub?.cancel());
+    _authSub = null;
     unawaited(_tokenRefreshSub?.cancel());
     unawaited(_onMessageSub?.cancel());
     unawaited(_onMessageOpenedSub?.cancel());
     _initialized = false;
     _lastKnownToken = null;
+    _pendingToken = null;
     _lastSyncedLocale = null;
     _tokenRefreshSub = null;
     _onMessageSub = null;
@@ -276,4 +469,7 @@ class GuardianPushService {
   @visibleForTesting
   static bool get debugHasActiveTokenRefreshSubscription =>
       _tokenRefreshSub != null;
+
+  @visibleForTesting
+  static void debugReceive(RemoteMessage message) => _receive(message);
 }

@@ -4,6 +4,11 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Geolocator's location service is declared by its merged manifest.
+         Background continuation is enabled only for authorized participation. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Android 13+ (API 33) requires this to be requested at runtime before
          any notification can be shown; FirebaseMessaging.instance.requestPermission()
          (see GuardianPushService) triggers that system dialog. Radd's push is a

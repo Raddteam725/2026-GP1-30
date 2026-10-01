@@ -1,0 +1,15 @@
+rules_version = '2';
+
+// Radd: registered-individual photos (guardians/...) and found-person photos
+// (found/...) are uploaded, served and deleted ONLY by the FastAPI backend
+// through the Admin SDK, after its own authorization checks. Clients never
+// touch the bucket directly, so it is closed to them entirely. Never use a
+// time-limited "test mode" rule here: it makes every photograph publicly
+// listable and downloadable.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

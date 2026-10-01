@@ -12,6 +12,7 @@ it deletes it from the module for the rest of the test process. monkeypatch
 guarantees the original is restored after each test regardless of outcome.
 """
 import sys
+from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import pytest
@@ -20,21 +21,39 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app import service, push
 from app.cases import CaseService
 from app.case_models import CaseCreate
-from firestore_fake import Database, Bucket
+from firestore_fake import Database, Bucket, configured_event
 from test_cases import guardian_with_individual
 
 @pytest.fixture
 def storage(monkeypatch):
     db, bucket = Database(), Bucket()
-    db.set(db.collection("events").document("test-event"), {"active": True})
+    db.set(db.collection("events").document("test-event"), configured_event())
     monkeypatch.setattr(service, "database", lambda: db)
     monkeypatch.setattr(service, "bucket", lambda: bucket)
     monkeypatch.setattr(service.firestore, "transactional", lambda f: f)
     monkeypatch.setattr(push, "database", lambda: db)
+    monkeypatch.setattr(push, "firebase_app", lambda: None)
+    monkeypatch.setattr(push.auth, "get_user", lambda *a, **k: SimpleNamespace(disabled=False, tokens_valid_after_timestamp=0))
     return db, bucket
 
 def registrations_path(uid):
     return f"users/{uid}/fcm_registrations"
+
+@pytest.mark.parametrize('revoked', [False, True])
+def test_guardian_expired_or_revoked_session_does_not_receive_push(storage, monkeypatch, revoked):
+    db, _ = storage
+    guardian, _ = guardian_with_individual('owner')
+    guardian.register_fcm_token('device')
+    calls = []
+    monkeypatch.setattr(push.messaging, 'send_each', lambda *a, **k: calls.append(a))
+    if revoked:
+        monkeypatch.setattr(push.auth, 'get_user', lambda *a, **k: SimpleNamespace(disabled=False, tokens_valid_after_timestamp=2000))
+    else:
+        for data in registration_docs(db, 'owner').values():
+            data['session_expires_at'] = 0
+    push.notify_guardian('owner', kind='status_update', status='reunited', case_id='isolated-case', event_id='test-event')
+    assert calls == []
+    assert db.collection('users').document('owner').collection('notifications').document('isolated-case-reunited').get().exists
 
 def registration_docs(db, uid):
     return {k: v for k, v in db.data.items() if k.startswith(registrations_path(uid) + "/")}
@@ -52,7 +71,7 @@ class FakeSendEach:
     def __init__(self, outcomes):
         self.outcomes = outcomes  # {token: SendResponse}
         self.calls = []
-    def __call__(self, messages):
+    def __call__(self, messages, app=None):
         self.calls.append(list(messages))
         return messaging.BatchResponse([self.outcomes[m.token] for m in messages])
 
@@ -256,7 +275,7 @@ def test_send_each_raising_entirely_never_propagates(storage, monkeypatch):
     db, _ = storage
     s, _ = guardian_with_individual("owner")
     s.register_fcm_token("token-a")
-    def raising(messages):
+    def raising(messages, app=None):
         raise ConnectionError("FCM unreachable")
     monkeypatch.setattr(push.messaging, "send_each", raising)
     push.notify_guardian("owner", kind="case_created", status="report_received", case_id="RD-1", event_id="test-event")  # Must not raise.
@@ -272,7 +291,7 @@ def test_push_failure_never_fails_case_creation_and_the_notification_still_write
     db, _ = storage
     s, individual_id = guardian_with_individual("owner")
     s.register_fcm_token("token-a")
-    def raising(messages):
+    def raising(messages, app=None):
         raise ConnectionError("FCM unreachable")
     monkeypatch.setattr(push.messaging, "send_each", raising)
     created = CaseService(s).create(CaseCreate(individual_id=individual_id))
@@ -286,7 +305,7 @@ def test_push_failure_never_fails_cancel_or_resolve(storage, monkeypatch):
     s, individual_id = guardian_with_individual("owner")
     s.register_fcm_token("token-a")
     case_id = CaseService(s).create(CaseCreate(individual_id=individual_id))["id"]
-    def raising(messages):
+    def raising(messages, app=None):
         raise ConnectionError("FCM unreachable")
     monkeypatch.setattr(push.messaging, "send_each", raising)
     resolved = CaseService(s).resolve(case_id)
@@ -301,7 +320,7 @@ def test_push_payload_contains_only_minimal_navigation_fields(storage, monkeypat
     created = CaseService(s).create(CaseCreate(individual_id=individual_id))
     assert len(sender.calls) == 1
     (message,) = sender.calls[0]
-    assert set(message.data.keys()) == {"kind", "status", "case_id", "event_id"}
+    assert set(message.data.keys()) == {"kind", "status", "case_id", "event_id", "role", "notification_id"}
     assert message.data["case_id"] == created["id"]
     assert message.data["status"] == "report_received"
     # No name, age, photo, guided-report, location, contact info, or token.
@@ -353,3 +372,38 @@ def test_notification_created_response_is_unaffected_by_registered_push_tokens(s
     created = CaseService(s).create(CaseCreate(individual_id=individual_id))
     assert created["id"].startswith("RD-")
     assert CaseService(s).list_notifications()[0]["kind"] == "case_created"
+
+@pytest.mark.parametrize('cleanup_fails', [False, True])
+def test_failed_batch_releases_remaining_leases_and_retries(storage, monkeypatch, cleanup_fails):
+    db, _ = storage
+    guardian, person = guardian_with_individual('owner')
+    created = CaseService(guardian).create(CaseCreate(individual_id=person))
+    guardian.register_fcm_token('a')
+    guardian.register_fcm_token('b')
+    ref = guardian.user.collection('notifications').document(created['id'] + '-report_received')
+    deleted = []
+    reference_type = type(ref)
+    original_delete = reference_type.delete
+    def cleanup(self, *args, **kwargs):
+        if '/deliveries/' in self.path:
+            deleted.append(self.path)
+            if cleanup_fails and len(deleted) == 1:
+                raise OSError('isolated cleanup failure')
+        return original_delete(self, *args, **kwargs)
+    monkeypatch.setattr(reference_type, 'delete', cleanup)
+    def fail(*args, **kwargs):
+        raise OSError('isolated batch outage')
+    monkeypatch.setattr(push.messaging, 'send_each', fail)
+    push.notify_guardian('owner', kind='case_created', status='report_received', case_id=created['id'], event_id='test-event')
+    assert len(deleted) == 2
+    assert len(list(ref.collection('deliveries').stream())) == int(cleanup_fails)
+    # Simulate expiry of the one lease whose cleanup failed; durable retry then succeeds.
+    for receipt in ref.collection('deliveries').stream():
+        receipt.reference.update({'lease_until': datetime.now(timezone.utc)-timedelta(seconds=1)})
+    sender = FakeSendEach({'a': success(), 'b': success()})
+    monkeypatch.setattr(push.messaging, 'send_each', sender)
+    push.retry_guardian_alerts()
+    assert len(sender.calls) == 1
+    assert all(d.to_dict().get('sent_at') for d in ref.collection('deliveries').stream())
+    push.retry_guardian_alerts()
+    assert len(sender.calls) == 1

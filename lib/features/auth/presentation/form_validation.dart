@@ -1,4 +1,5 @@
 import '../../../core/localization/generated/app_localizations.dart';
+import '../../../shared/saudi_phone.dart';
 
 abstract final class FormValidation {
   static String? required(String? value, AppLocalizations s) =>
@@ -10,12 +11,12 @@ abstract final class FormValidation {
       (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(v!.trim())
           ? s.invalidEmail
           : null);
-  // International E.164-style input, documented in the localized helper.
+
+  /// Saudi Arabian phone numbers in any common form (see
+  /// lib/shared/saudi_phone.dart); the API sends the canonical form.
   static String? phone(String? v, AppLocalizations s) =>
       required(v, s) ??
-      (!RegExp(r'^\+[1-9][0-9]{7,14}$').hasMatch(v!.trim())
-          ? s.invalidPhone
-          : null);
+      (normalizeSaudiPhone(v) == null ? s.invalidPhone : null);
   static bool strongPassword(String v) =>
       v.length >= 8 &&
       RegExp('[A-Z]').hasMatch(v) &&

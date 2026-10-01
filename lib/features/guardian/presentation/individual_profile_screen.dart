@@ -5,6 +5,8 @@ import '../../../core/localization/generated/app_localizations.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../shared/widgets/feature_page.dart';
 import '../data/guardian_repository.dart';
+import '../data/guardian_push_service.dart';
+import '../data/coalesced_refresh.dart';
 import 'individual_widgets.dart';
 import 'guardian_components.dart';
 import 'case_widgets.dart';
@@ -20,6 +22,34 @@ class IndividualProfileScreen extends StatefulWidget {
 
 class _IndividualProfileScreenState extends State<IndividualProfileScreen> {
   Future<(Individual, MissingCase?)>? _data;
+  final _refresh = CoalescedRefresh();
+  int _generation = 0;
+  (Individual, MissingCase?)? _current;
+  @override
+  void initState() {
+    super.initState();
+    GuardianPushRefresh.instance.addListener(_onEvent);
+  }
+
+  @override
+  void dispose() {
+    GuardianPushRefresh.instance.removeListener(_onEvent);
+    super.dispose();
+  }
+
+  void _onEvent() {
+    final id = _current?.$2?.id;
+    if (id != null && !GuardianPushRefresh.instance.concerns(id)) return;
+    _refresh.run(() async {
+      if (!mounted) return;
+      final value = await _load();
+      if (!mounted || _current != value) return;
+      setState(() {
+        _data = Future.value(value);
+      });
+    });
+  }
+
   bool _busy = false;
   Object? _error;
   int _revision = 0;
@@ -30,13 +60,16 @@ class _IndividualProfileScreenState extends State<IndividualProfileScreen> {
   }
 
   Future<(Individual, MissingCase?)> _load() async {
+    final generation = ++_generation;
     final guardian = AppServices.of(context).guardian;
     final person = await guardian.individual(widget.id);
     final activeCaseId = person.activeCaseId;
     final activeCase = activeCaseId == null
         ? null
         : await guardian.missingCase(activeCaseId);
-    return (person, activeCase);
+    final value = (person, activeCase);
+    if (mounted && generation == _generation) _current = value;
+    return value;
   }
 
   Future<void> _delete(Individual person) async {
@@ -82,8 +115,8 @@ class _IndividualProfileScreenState extends State<IndividualProfileScreen> {
       child: FutureBuilder<(Individual, MissingCase?)>(
         future: _data,
         builder: (context, state) {
-          final p = state.data?.$1;
-          final activeCase = state.data?.$2;
+          final p = (_current ?? state.data)?.$1;
+          final activeCase = (_current ?? state.data)?.$2;
           final locked = activeCase != null;
           return FeaturePage(
             title: s.individualProfile,
@@ -99,7 +132,7 @@ class _IndividualProfileScreenState extends State<IndividualProfileScreen> {
                 ),
             ],
             children: [
-              if (state.hasError)
+              if (state.hasError && p == null)
                 ErrorNotice(
                   message: failureMessage(state.error!, s),
                   onRetry: () => setState(() {
@@ -153,6 +186,17 @@ class _IndividualProfileScreenState extends State<IndividualProfileScreen> {
                       _row(s.gender, genderLabel(p.gender, s)),
                       const Divider(height: 24),
                       _row(s.relationship, relationshipDisplay(p, s)),
+                      if (p.registrationExpiresAt != null) ...[
+                        const Divider(height: 24),
+                        // The deletion deadline the Guardian chose; changed
+                        // through Edit like every other profile field.
+                        _row(
+                          s.registrationPeriodTitle,
+                          s.retentionUntil(
+                            caseDate(context, p.registrationExpiresAt),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

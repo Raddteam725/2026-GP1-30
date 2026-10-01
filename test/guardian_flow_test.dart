@@ -14,6 +14,8 @@ import 'package:radd/features/guardian/data/guardian_repository.dart';
 import 'package:radd/features/guardian/presentation/guardian_home_screen.dart';
 import 'package:radd/features/guardian/presentation/individual_form_screen.dart';
 import 'package:radd/features/guardian/presentation/cases_screen.dart';
+import 'package:radd/features/guardian/presentation/case_widgets.dart';
+import 'package:radd/features/guardian/presentation/guardian_components.dart';
 import 'package:radd/features/guardian/presentation/guardian_qr_screen.dart';
 import 'package:radd/features/guardian/presentation/notifications_screen.dart';
 import 'package:radd/features/guardian/presentation/guided_report_screen.dart';
@@ -23,6 +25,7 @@ void main() {
   late TestAuth auth;
   late TestRepository repo;
   setUp(() {
+    GuardianPushService.resetForTesting();
     auth = TestAuth();
     repo = TestRepository();
   });
@@ -113,8 +116,8 @@ void main() {
       expect(find.text('This field is required.'), findsNWidgets(2));
       expect(auth.logins, 0);
       await tapText(t, 'Forgot Password?');
-      expect(find.text('Send Reset Instructions'), findsOneWidget);
-      await tapText(t, 'Send Reset Instructions');
+      expect(find.text('Send Reset Email'), findsOneWidget);
+      await tapText(t, 'Send Reset Email');
       expect(find.text('This field is required.'), findsOneWidget);
     },
   );
@@ -138,6 +141,14 @@ void main() {
     expect(auth.registrations, 0);
     await tapText(t, 'Privacy Notice');
     expect(find.byType(PrivacyScreen), findsOneWidget);
+    // The final notice in the selected language, never the old placeholder;
+    // the 18+ declaration stays a separate checkbox, not part of the notice.
+    await scrollToText(t, 'Information We Collect and Use');
+    expect(find.text('Information We Collect and Use'), findsOneWidget);
+    await scrollToText(t, 'Your Agreement');
+    expect(find.text('Your Agreement'), findsOneWidget);
+    expect(find.textContaining('pending approval'), findsNothing);
+    expect(find.textContaining('18 years'), findsNothing);
     Navigator.pop(t.element(find.byType(PrivacyScreen)));
     await t.pumpAndSettle();
     await t.ensureVisible(find.byType(CheckboxListTile).last);
@@ -170,7 +181,7 @@ void main() {
         findsNothing,
       );
       await tapText(t, 'Save');
-      expect(find.text('Take a photo before saving.'), findsOneWidget);
+      expect(find.text('Photo required.'), findsOneWidget);
       expect(repo.records, isEmpty);
       final s = AppLocalizations.of(
         t.element(find.byType(IndividualFormScreen)),
@@ -193,7 +204,7 @@ void main() {
       await t.enterText(fields.at(1), '9');
       await tapText(t, 'Female');
       expect(find.text('Specify relationship'), findsNothing);
-      await t.tap(find.byType(DropdownButtonFormField<String>));
+      await t.tap(find.byType(DropdownButtonFormField<String>).first);
       await t.pumpAndSettle();
       await t.tap(find.text('Other').last);
       await t.pumpAndSettle();
@@ -202,10 +213,110 @@ void main() {
       await t.enterText(find.byType(TextFormField).at(2), 'Family friend');
       await tapText(t, 'Save');
       // The relationship is now satisfied; only the still-missing photo blocks saving.
-      expect(find.text('Take a photo before saving.'), findsOneWidget);
+      expect(find.text('Photo required.'), findsOneWidget);
       expect(repo.records, isEmpty);
     },
   );
+  testWidgets(
+    'Registration offers configured periods without selecting an event',
+    (t) async {
+      await start(t);
+      auth.active = true;
+      await route(t, AppRoutes.addIndividual);
+      await scrollToText(t, 'Data retention period');
+      final selector = find.byKey(const ValueKey('registration-period'));
+      await t.ensureVisible(selector);
+      expect(
+        t.widget<DropdownButtonFormField<String>>(selector).initialValue,
+        isNull,
+      );
+      await t.tap(selector);
+      await t.pumpAndSettle();
+      expect(find.text('2 hours'), findsOneWidget);
+      expect(find.text('2 days'), findsOneWidget);
+      await t.tap(find.text('2 hours'));
+      await t.pumpAndSettle();
+      expect(t.state<FormFieldState<String>>(selector).value, 'test-short');
+      expect(
+        const IndividualInput(
+          fullName: 'Test',
+          age: 7,
+          gender: 'female',
+          relationship: 'child',
+          registrationPeriodId: 'test-short',
+        ).toJson()['registration_period_id'],
+        'test-short',
+      );
+    },
+  );
+  for (final language in ['en', 'ar']) {
+    testWidgets(
+      'Guardian sees the short Found Report verification code, never the internal id, without a missing case in $language',
+      (t) async {
+        await start(t, locale: language);
+        auth.active = true;
+        repo.foundReports = [
+          const GuardianFoundReport(
+            id: 'FR-test-context',
+            status: 'awaiting_guardian_verification',
+            individualName: 'Sara Test',
+            verificationCode: '482913',
+          ),
+          const GuardianFoundReport(
+            id: 'FR-second-active',
+            status: 'identity_confirmed',
+            individualName: 'Omar Test',
+            verificationCode: '105577',
+          ),
+          const GuardianFoundReport(
+            id: 'FR-legacy-no-code',
+            status: 'identity_confirmed',
+          ),
+          // A stale terminal item must never render as a verification card.
+          const GuardianFoundReport(
+            id: 'FR-done',
+            status: 'reunited',
+            individualName: 'Done Test',
+            verificationCode: '999999',
+          ),
+        ];
+        await route(t, AppRoutes.qrCode);
+        expect(repo.caseRecords, isEmpty);
+        final s = AppLocalizations.of(
+          t.element(find.byType(GuardianQrScreen).first),
+        )!;
+        // Each code sits under the name of the individual it belongs to.
+        expect(find.text('482913'), findsOneWidget);
+        expect(find.text('105577'), findsOneWidget);
+        expect(find.text(s.foundReportIndividual('Sara Test')), findsOneWidget);
+        expect(find.text(s.foundReportIndividual('Omar Test')), findsOneWidget);
+        expect(
+          find.ancestor(
+            of: find.text('482913'),
+            matching: find.ancestor(
+              of: find.text(s.foundReportIndividual('Sara Test')),
+              matching: find.byType(GuardianPanel),
+            ),
+          ),
+          findsOneWidget,
+        );
+        expect(find.text(s.awaitingVerification), findsOneWidget);
+        expect(find.textContaining('FR-'), findsNothing);
+        expect(find.text('999999'), findsNothing);
+        expect(find.text(s.foundReportIndividual('Done Test')), findsNothing);
+        expect(find.text(s.foundReportCodeUnavailable), findsOneWidget);
+        expect(find.text(s.vFoundReportTitle), findsNWidgets(3));
+        // The QR itself stays available below the report cards (lazy list).
+        await t.scrollUntilVisible(
+          find.byType(QrImageView),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.byType(QrImageView), findsOneWidget);
+        expect(t.takeException(), isNull);
+      },
+    );
+  }
   testWidgets('Logout clears protected history and keeps locale', (t) async {
     await start(t, locale: 'ar');
     auth.active = true;
@@ -217,8 +328,8 @@ void main() {
     await tapText(t, 'تسجيل الخروج');
     await tapText(t, 'تسجيل الخروج');
     expect(auth.active, isFalse);
-    expect(find.byType(LanguageSelectionScreen), findsOneWidget);
-    final context = t.element(find.byType(LanguageSelectionScreen));
+    expect(find.byType(AuthScreen), findsOneWidget);
+    final context = t.element(find.byType(AuthScreen));
     expect(Navigator.of(context).canPop(), isFalse);
     expect(Directionality.of(context), TextDirection.rtl);
   });
@@ -254,7 +365,7 @@ void main() {
     expect(t.takeException(), isNull);
   });
   testWidgets(
-    'An expired photo hides Report Missing until a new photo is captured',
+    'An expired registration cannot be renewed by replacing its photo',
     (t) async {
       await start(t);
       auth.active = true;
@@ -270,19 +381,12 @@ void main() {
       );
       await route(t, AppRoutes.guardian);
       await tapText(t, 'Test Person');
-      await scrollToText(t, 'Update Photo');
+      await scrollToText(t, 'Register an Individual');
       expect(find.text('Report Missing'), findsNothing);
-      expect(find.text('Update Photo'), findsOneWidget);
-      await tapText(t, 'Update Photo');
+      await tapText(t, 'Register an Individual');
       expect(find.byType(IndividualFormScreen), findsOneWidget);
-      // The fake's own save() never carries photoExpired forward from an
-      // edit, standing in for a freshly captured photo restarting the
-      // 24-hour window server-side.
-      await t.enterText(find.byType(TextFormField).first, 'Test Person');
-      await tapText(t, 'Save Changes');
-      await scrollToText(t, 'Report Missing');
-      expect(find.text('Report Missing'), findsOneWidget);
-      expect(find.text('Update Photo'), findsNothing);
+      expect(find.text('Save Changes'), findsNothing);
+      expect(repo.records.single.photoExpired, isTrue);
     },
   );
   testWidgets('Language remains accessible from the authenticated profile', (
@@ -293,12 +397,27 @@ void main() {
     await route(t, AppRoutes.guardian);
     await tapText(t, 'Profile');
     await tapText(t, 'Language');
+    // A bottom sheet with both languages, the current one ticked.
+    expect(find.byKey(const ValueKey('language-ar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('language-en')), findsOneWidget);
+    expect(find.byIcon(Icons.check), findsOneWidget);
     await tapText(t, 'العربية');
-    await tapText(t, 'متابعة');
+    // Applied in place: still signed in, still on the Guardian Profile --
+    // never bounced through the startup language screen or login.
     expect(find.byType(GuardianHomeScreen), findsOneWidget);
+    expect(find.byType(LanguageSelectionScreen), findsNothing);
+    expect(auth.active, isTrue);
     expect(
       Directionality.of(t.element(find.byType(GuardianHomeScreen))),
       TextDirection.rtl,
+    );
+    expect(find.text('الملف الشخصي'), findsWidgets);
+    await tapText(t, 'اللغة');
+    await tapText(t, 'English');
+    expect(find.byType(GuardianHomeScreen), findsOneWidget);
+    expect(
+      Directionality.of(t.element(find.byType(GuardianHomeScreen))),
+      TextDirection.ltr,
     );
   });
 
@@ -404,26 +523,64 @@ void main() {
       );
     },
   );
-  testWidgets('Refresh on the Cases list never passes a Future to setState', (
-    t,
-  ) async {
+  testWidgets('Cases has no manual refresh control; it follows the backend '
+      'on its own (see guardian_status_refresh_test)', (t) async {
     await start(t);
     auth.active = true;
     await route(t, AppRoutes.cases);
     expect(find.byType(CasesScreen), findsOneWidget);
-    await t.tap(find.byIcon(Icons.refresh));
-    await t.pumpAndSettle();
+    expect(find.byIcon(Icons.refresh), findsNothing);
     expect(t.takeException(), isNull);
   });
-  testWidgets('Refresh on Notifications never passes a Future to setState', (
-    t,
-  ) async {
+  for (final destination in [AppRoutes.guardian, AppRoutes.cases]) {
+    testWidgets('Guardian event refreshes $destination immediately', (t) async {
+      await start(t);
+      auth.active = true;
+      repo.records.add(
+        const Individual(
+          id: 'live-test',
+          fullName: 'Event Person',
+          age: 7,
+          gender: 'female',
+          relationship: 'child',
+        ),
+      );
+      await route(t, destination);
+      expect(find.text('Report Received'), findsNothing);
+      await repo.reportMissing('live-test');
+      GuardianPushRefresh.instance.ping();
+      await t.pumpAndSettle();
+      await scrollToText(t, 'Report Received');
+      expect(find.text('Report Received'), findsWidgets);
+      final value = repo.caseRecords.single;
+      repo.caseRecords[0] = MissingCase(
+        id: value.id,
+        individualId: value.individualId,
+        name: value.name,
+        age: value.age,
+        status: 'search_in_progress',
+        eventId: value.eventId,
+        createdAt: value.createdAt,
+        stages: value.stages,
+      );
+      GuardianPushRefresh.instance.acceptPush({
+        'role': 'guardian',
+        'case_id': value.id,
+        'status': 'search_in_progress',
+      });
+      await t.pumpAndSettle();
+      await scrollToText(t, 'Search in Progress');
+      expect(find.text('Search in Progress'), findsWidgets);
+      expect(find.text('Report Received'), findsNothing);
+      expect(t.takeException(), isNull);
+    });
+  }
+  testWidgets('Notifications has no manual refresh control', (t) async {
     await start(t);
     auth.active = true;
     await route(t, AppRoutes.notifications);
     expect(find.byType(NotificationsScreen), findsOneWidget);
-    await t.tap(find.byIcon(Icons.refresh));
-    await t.pumpAndSettle();
+    expect(find.byIcon(Icons.refresh), findsNothing);
     expect(t.takeException(), isNull);
   });
   testWidgets(
@@ -452,9 +609,7 @@ void main() {
       expect(t.takeException(), isNull);
     },
   );
-  testWidgets('Refresh on Case Status never passes a Future to setState', (
-    t,
-  ) async {
+  testWidgets('Case Status has no manual refresh control', (t) async {
     await start(t);
     auth.active = true;
     repo.records.add(
@@ -469,8 +624,7 @@ void main() {
     final case1 = await repo.reportMissing('test-id');
     await route(t, AppRoutes.caseStatus, arguments: case1.id);
     expect(find.byType(CaseStatusScreen), findsOneWidget);
-    await t.tap(find.byIcon(Icons.refresh));
-    await t.pumpAndSettle();
+    expect(find.byIcon(Icons.refresh), findsNothing);
     expect(t.takeException(), isNull);
     // Dispose the screen so its background status-poll timer is cancelled
     // before the test ends (an outstanding Timer otherwise fails teardown).
@@ -515,7 +669,7 @@ void main() {
             },
           ),
         );
-      await t.pump(const Duration(seconds: 9));
+      await t.pump(const Duration(seconds: 31));
       await t.pump();
       expect(find.text('Search in Progress'), findsWidgets);
       Navigator.pop(t.element(find.byType(CaseStatusScreen)));
@@ -557,23 +711,105 @@ void main() {
             },
           ),
         );
-      // No 8-second wait this time -- a foreground push arrives instead.
-      GuardianPushRefresh.instance.ping();
+      final before = repo.caseFetches;
+      GuardianPushRefresh.instance.acceptPush({
+        'role': 'guardian',
+        'case_id': 'other',
+        'status': 'search_in_progress',
+      });
+      await t.pumpAndSettle();
+      expect(repo.caseFetches, before);
+      repo.failNextMissingCase = true;
+      GuardianPushRefresh.instance.acceptPush({
+        'role': 'guardian',
+        'case_id': case1.id,
+        'status': 'search_in_progress',
+      });
+      await t.pumpAndSettle();
+      expect(find.text('Report Received'), findsWidgets);
+      GuardianPushRefresh.instance.didChangeAppLifecycleState(
+        AppLifecycleState.resumed,
+      );
       await t.pumpAndSettle();
       expect(find.text('Search in Progress'), findsWidgets);
       Navigator.pop(t.element(find.byType(CaseStatusScreen)));
       await t.pumpAndSettle();
     },
   );
-  testWidgets('Refresh on the QR screen never passes a Future to setState', (
+
+  testWidgets('Individual Profile refetches after a relevant status event', (
     t,
   ) async {
     await start(t);
     auth.active = true;
+    repo.records.add(
+      const Individual(
+        id: 'test-id',
+        fullName: 'Test Person',
+        age: 7,
+        gender: 'female',
+        relationship: 'child',
+      ),
+    );
+    final value = await repo.reportMissing('test-id');
+    await route(t, AppRoutes.individual, arguments: 'test-id');
+    final before = repo.caseFetches;
+    GuardianPushRefresh.instance.acceptPush({
+      'role': 'guardian',
+      'case_id': 'other',
+      'status': 'resolved',
+    });
+    await t.pumpAndSettle();
+    expect(repo.caseFetches, before);
+    repo.caseRecords[0] = MissingCase(
+      id: value.id,
+      individualId: value.individualId,
+      name: value.name,
+      age: value.age,
+      status: 'search_in_progress',
+      eventId: value.eventId,
+      createdAt: value.createdAt,
+      stages: value.stages,
+    );
+    GuardianPushRefresh.instance.acceptPush({
+      'role': 'guardian',
+      'case_id': value.id,
+      'status': 'search_in_progress',
+    });
+    await t.pumpAndSettle();
+    expect(repo.caseFetches, before + 1);
+    await scrollToText(t, 'Active Case');
+    expect(
+      t
+          .widget<ReportMissingAction>(find.byType(ReportMissingAction))
+          .activeCase!
+          .status,
+      'search_in_progress',
+    );
+    await repo.resolveCase(value.id);
+    GuardianPushRefresh.instance.acceptPush({
+      'role': 'guardian',
+      'case_id': value.id,
+      'status': 'resolved',
+    });
+    await t.pumpAndSettle();
+    expect(find.text('Active Case'), findsNothing);
+    expect(
+      t
+          .widget<ReportMissingAction>(find.byType(ReportMissingAction))
+          .activeCase,
+      isNull,
+    );
+    expect(t.takeException(), isNull);
+  });
+
+  testWidgets('QR screen has no manual refresh control (its credential '
+      'regenerates itself -- see guardian_status_refresh_test)', (t) async {
+    await start(t);
+    auth.active = true;
     await route(t, AppRoutes.qrCode);
     expect(find.byType(GuardianQrScreen), findsOneWidget);
-    await t.tap(find.byIcon(Icons.refresh));
-    await t.pumpAndSettle();
+    expect(find.byIcon(Icons.refresh), findsNothing);
     expect(t.takeException(), isNull);
   });
   testWidgets('Active case locks the individual profile until resolved', (
@@ -643,21 +879,21 @@ void main() {
     await start(t);
     await route(t, AppRoutes.forgotPassword);
     await t.enterText(find.byType(TextFormField).first, 'someone@example.test');
-    await tapText(t, 'Send Reset Instructions');
+    await tapText(t, 'Send Reset Email');
     // The request actually reached the authentication service...
     expect(auth.resetRequests, ['someone@example.test']);
     // ...and the confirmation never reveals whether that email is registered.
     expect(find.text('Check your email'), findsOneWidget);
     expect(
       find.text(
-        'If an account exists for this email, password reset instructions will be sent.',
+        "If an account is associated with this email address, you'll receive a password reset email.",
       ),
       findsOneWidget,
     );
-    expect(find.text('Send Reset Instructions'), findsNothing);
+    expect(find.text('Send Reset Email'), findsNothing);
     await tapText(t, 'Send again');
-    expect(find.text('Send Reset Instructions'), findsOneWidget);
-    await tapText(t, 'Send Reset Instructions');
+    expect(find.text('Send Reset Email'), findsOneWidget);
+    await tapText(t, 'Send Reset Email');
     expect(auth.resetRequests, hasLength(2));
     await tapText(t, 'Back to Log In');
     expect(find.byType(AuthScreen), findsNothing);
@@ -760,11 +996,20 @@ void main() {
         ),
         findsOneWidget,
       );
-      await tapText(t, 'Show Case Identifier');
-      expect(find.text('ACTIVE CASE IDENTIFIER'), findsOneWidget);
-      expect(find.textContaining(case1.id), findsWidgets);
+      // The fallback the Guardian reads out is the case's 6-digit code; the
+      // RD-… id stays a reference chip, never the value shown to type.
+      await tapText(t, 'Show Verification Code');
+      expect(find.text('ACTIVE CASE VERIFICATION CODE'), findsOneWidget);
+      expect(find.text(case1.verificationCode!), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.textContaining(case1.id),
+        ),
+        findsNothing,
+      );
       await tapText(t, 'Close');
-      expect(find.text('ACTIVE CASE IDENTIFIER'), findsNothing);
+      expect(find.text('ACTIVE CASE VERIFICATION CODE'), findsNothing);
     },
   );
   for (final locale in ['en', 'ar']) {

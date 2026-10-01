@@ -98,6 +98,12 @@ abstract class AppLocalizations {
     Locale('ar'),
   ];
 
+  /// No description provided for @vBadgeEventName.
+  ///
+  /// In en, this message translates to:
+  /// **'Event: {name}'**
+  String vBadgeEventName(String name);
+
   /// No description provided for @appTitle.
   ///
   /// In en, this message translates to:
@@ -257,7 +263,7 @@ abstract class AppLocalizations {
   /// No description provided for @phoneHelp.
   ///
   /// In en, this message translates to:
-  /// **'Include country code, e.g. +966501234567'**
+  /// **'Saudi phone number, e.g. 0501234567 or +966501234567'**
   String get phoneHelp;
 
   /// No description provided for @login.
@@ -299,19 +305,19 @@ abstract class AppLocalizations {
   /// No description provided for @resetHint.
   ///
   /// In en, this message translates to:
-  /// **'Enter your email to request password reset instructions.'**
+  /// **'Enter your email address to receive a password reset email.'**
   String get resetHint;
 
   /// No description provided for @sendReset.
   ///
   /// In en, this message translates to:
-  /// **'Send Reset Instructions'**
+  /// **'Send Reset Email'**
   String get sendReset;
 
   /// No description provided for @resetSent.
   ///
   /// In en, this message translates to:
-  /// **'If an account exists for this email, password reset instructions will be sent.'**
+  /// **'If an account is associated with this email address, you\'ll receive a password reset email.'**
   String get resetSent;
 
   /// No description provided for @noAccount.
@@ -335,7 +341,7 @@ abstract class AppLocalizations {
   /// No description provided for @privacyConfirm.
   ///
   /// In en, this message translates to:
-  /// **'I have read and agree to the Privacy Notice.'**
+  /// **'I have read and agree to Radd\'s Privacy Notice.'**
   String get privacyConfirm;
 
   /// No description provided for @privacyTitle.
@@ -344,11 +350,119 @@ abstract class AppLocalizations {
   /// **'Privacy Notice'**
   String get privacyTitle;
 
-  /// No description provided for @privacyBody.
+  /// No description provided for @privacyIntro.
   ///
   /// In en, this message translates to:
-  /// **'Project information — final notice pending approval.\n\nRadd processes information and photographs for event-specific reunification. Access is intended to follow system roles. Identifiable records and photographs are subject to the project\'s retention and deletion rules; anonymized aggregate information may be retained under the project design.\n\nThis interim notice will be replaced with the team\'s approved wording.'**
-  String get privacyBody;
+  /// **'At Radd, we respect your privacy and the privacy of individuals registered under your care. The data processed by the system may include personal information and photographs relating to children, older adults, or other individuals who may require assistance if they become separated during an event.\n\nThis notice explains what information Radd uses, why and how it is used during the search, identification, and reunification process, who may access it, how long it is retained, and when it is deleted.'**
+  String get privacyIntro;
+
+  /// No description provided for @privacyInfoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Information We Collect and Use'**
+  String get privacyInfoTitle;
+
+  /// No description provided for @privacyInfoBody.
+  ///
+  /// In en, this message translates to:
+  /// **'When you create a Guardian account and use Radd, the system processes information required to create and use your account, as well as information you provide about individuals registered under your care, including their identifying information and photographs.\n\nWhen a missing-person report is submitted, Radd may also process case-related information, such as details about the missing individual, descriptive information provided to support the search, and last-seen information. If you choose to use your device location as the last-seen location and grant location permission, location coordinates may be used for this purpose.\n\nThis information is used to support registration, reporting, searching, identification, verification, and reunification during the event.\n\nYour account information (name, email address, and phone number) is kept for as long as your Guardian account exists. It is not deleted by the retention rules that apply to registered individuals\' data.'**
+  String get privacyInfoBody;
+
+  /// No description provided for @privacyRegisteredPhotosTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Registered Individuals\' Photographs'**
+  String get privacyRegisteredPhotosTitle;
+
+  /// No description provided for @privacyRegisteredPhotosBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The reference photograph taken when you register an individual, and any facial data derived from it, are part of that individual\'s registered data. They are kept for the retention period you choose at registration and are deleted together with the rest of that data when the period ends. Taking a new photograph later replaces the previous one but does not change the retention period.\n\nPhotographs are used only to help identify the individual during the event. AI suggestions never replace human review and Guardian verification.'**
+  String get privacyRegisteredPhotosBody;
+
+  /// No description provided for @privacyVolunteerPhotosTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Photographs Captured by Volunteers'**
+  String get privacyVolunteerPhotosTitle;
+
+  /// No description provided for @privacyVolunteerPhotosBody.
+  ///
+  /// In en, this message translates to:
+  /// **'When a person is found or becomes separated, an authorized Volunteer may capture their photograph through Radd solely within the identification and reunification workflow.\n\nThe photograph may be used for identification, including comparison against eligible registered profiles to assist in identifying potential matches. Photograph capture is restricted to authorized Volunteers while assisting a found or separated individual.\n\nA photograph captured by a Volunteer is deleted when the identification attempt concludes, whether or not a match is confirmed.'**
+  String get privacyVolunteerPhotosBody;
+
+  /// No description provided for @privacyLocationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Location Information'**
+  String get privacyLocationTitle;
+
+  /// No description provided for @privacyLocationBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Radd may use location information to support the search process and proximity-based alerts related to a reported last-seen location.\n\nFor a missing-person report, if the Guardian confirms that they are at the location where the individual was last seen and grants the application permission to access the device location, the available location may be recorded as the case\'s reported last-seen location. If permission is not granted or the location cannot be obtained, the device location is not used for this purpose. A textual description of the location may instead be provided as part of the case information.\n\nRadd also uses a Volunteer\'s location, when the required permission is granted, to determine whether the Volunteer is near a reported last-seen location and qualifies for a priority alert. The Volunteer\'s location may be updated while the application is running in the background when the required permission is available.'**
+  String get privacyLocationBody;
+
+  /// No description provided for @privacyUsageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How Information Is Used During Search and Identification'**
+  String get privacyUsageTitle;
+
+  /// No description provided for @privacyUsageBody.
+  ///
+  /// In en, this message translates to:
+  /// **'While a case is active, registered information, photographs, and case details may be used to assist authorized Volunteers in searching for the individual and reviewing potential matches.\n\nRadd uses AI-assisted face matching to help compare a photograph of a found individual against eligible registered profiles and may return potential matches for review. When face matching is insufficient, available case information and photographs may also be used for manual review.\n\nMatching results are an aid to identification and are not an automatic final identification. Human review and Guardian verification remain part of the reunification process.'**
+  String get privacyUsageBody;
+
+  /// No description provided for @privacyAccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Access to and Protection of Information'**
+  String get privacyAccessTitle;
+
+  /// No description provided for @privacyAccessBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Photographs and personal information are not available for unrestricted public browsing. Access to protected information is limited to authorized users according to their roles and only to the extent required to perform their functions within the search, identification, verification, and reunification process.\n\nAuthorization is enforced for requests that access or modify protected data rather than relying only on the visibility of interface controls.'**
+  String get privacyAccessBody;
+
+  /// No description provided for @privacyRetentionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Retention and Deletion of Photographs and Case Data'**
+  String get privacyRetentionTitle;
+
+  /// No description provided for @privacyRetentionBody.
+  ///
+  /// In en, this message translates to:
+  /// **'When you register an individual, you choose how long their data (identifying details, photograph, and facial data) is kept, from the options configured for the current event. If you do not choose, the longest available option applies. The retention period cannot go beyond the end of the event. You can change it later from the individual\'s profile, as long as the new deadline is still ahead and within the event.\n\nWhen the period ends, the data is deleted automatically. If a missing-person report is still active at that time, deletion waits until the report is closed.\n\nPhotographs taken by Volunteers of a found individual are temporary and are deleted as soon as the identification attempt ends.\n\nCase records are deleted after the case\'s retention period; only the limited statistical information described below remains.'**
+  String get privacyRetentionBody;
+
+  /// No description provided for @privacyStatisticsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Data Retained for Statistics and Reporting'**
+  String get privacyStatisticsTitle;
+
+  /// No description provided for @privacyStatisticsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'After a case\'s retention period ends and its identifying data is deleted, Radd keeps only the minimum information needed for statistical reporting: the case reference, its final outcome, when it was created and closed, the individual\'s age group, and the event. This information is aggregated or anonymized where applicable. For cases that ended in a reunion, the reference to the Volunteer who completed the handover may be kept so that reunification statistics per Volunteer can be reported.\n\nNo names, photographs, contact details, facial data, or precise locations are kept.'**
+  String get privacyStatisticsBody;
+
+  /// No description provided for @privacyAgreementTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your Agreement'**
+  String get privacyAgreementTitle;
+
+  /// No description provided for @privacyAgreementBody.
+  ///
+  /// In en, this message translates to:
+  /// **'By accepting this Privacy Notice, you confirm that you have read this notice and agree to the collection, use, access, retention, and deletion of information and photographs as described above.'**
+  String get privacyAgreementBody;
 
   /// No description provided for @requiredField.
   ///
@@ -371,7 +485,7 @@ abstract class AppLocalizations {
   /// No description provided for @invalidPhone.
   ///
   /// In en, this message translates to:
-  /// **'Enter + followed by your country code and phone number (8–15 digits).'**
+  /// **'Enter a valid Saudi phone number, e.g. 0501234567 or +966501234567.'**
   String get invalidPhone;
 
   /// No description provided for @passwordHelp.
@@ -557,7 +671,7 @@ abstract class AppLocalizations {
   /// No description provided for @photoRequired.
   ///
   /// In en, this message translates to:
-  /// **'Take a photo before saving.'**
+  /// **'Photo required.'**
   String get photoRequired;
 
   /// No description provided for @photoTooLarge.
@@ -575,7 +689,7 @@ abstract class AppLocalizations {
   /// No description provided for @invalidAge.
   ///
   /// In en, this message translates to:
-  /// **'Enter a whole-number age between 0 and 130.'**
+  /// **'Enter a valid age.'**
   String get invalidAge;
 
   /// No description provided for @gender.
@@ -602,11 +716,17 @@ abstract class AppLocalizations {
   /// **'Relationship to Guardian'**
   String get relationship;
 
-  /// No description provided for @child.
+  /// No description provided for @daughter.
   ///
   /// In en, this message translates to:
-  /// **'Child'**
-  String get child;
+  /// **'Daughter'**
+  String get daughter;
+
+  /// No description provided for @son.
+  ///
+  /// In en, this message translates to:
+  /// **'Son'**
+  String get son;
 
   /// No description provided for @parent.
   ///
@@ -614,17 +734,17 @@ abstract class AppLocalizations {
   /// **'Parent'**
   String get parent;
 
+  /// No description provided for @sibling.
+  ///
+  /// In en, this message translates to:
+  /// **'Sibling'**
+  String get sibling;
+
   /// No description provided for @other.
   ///
   /// In en, this message translates to:
   /// **'Other'**
   String get other;
-
-  /// No description provided for @specifyRelationship.
-  ///
-  /// In en, this message translates to:
-  /// **'Specify relationship'**
-  String get specifyRelationship;
 
   /// No description provided for @save.
   ///
@@ -913,6 +1033,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'We could not verify your account profile because the account service is unavailable. Retry, or return to role selection to access sign-in. Your account has not been deleted.'**
   String get sessionUnavailable;
+
+  /// No description provided for @accountDeactivated.
+  ///
+  /// In en, this message translates to:
+  /// **'This account has been deactivated by the event administration. Contact the event organizers for assistance.'**
+  String get accountDeactivated;
 
   /// No description provided for @completeGuardianProfile.
   ///
@@ -1529,7 +1655,7 @@ abstract class AppLocalizations {
   /// No description provided for @vScanHint.
   ///
   /// In en, this message translates to:
-  /// **'Keep the case-specific code steady within the frame.'**
+  /// **'Keep the Guardian’s QR code steady within the frame.'**
   String get vScanHint;
 
   /// No description provided for @vScanCode.
@@ -1547,31 +1673,31 @@ abstract class AppLocalizations {
   /// No description provided for @vUseIdentifier.
   ///
   /// In en, this message translates to:
-  /// **'Use Case Identifier'**
+  /// **'Use Verification Code'**
   String get vUseIdentifier;
 
   /// No description provided for @vVerifyIdentifier.
   ///
   /// In en, this message translates to:
-  /// **'Verify Case Identifier'**
+  /// **'Verify Code'**
   String get vVerifyIdentifier;
 
   /// No description provided for @vIdentifierHelp.
   ///
   /// In en, this message translates to:
-  /// **'Ask the Guardian to display the case identifier from their authenticated Radd account when they cannot display the QR code.'**
+  /// **'Ask the Guardian to read the 6-digit verification code from their signed-in Radd account when they cannot display the QR code.'**
   String get vIdentifierHelp;
 
   /// No description provided for @vGuardianIdentifier.
   ///
   /// In en, this message translates to:
-  /// **'Guardian Case Identifier'**
+  /// **'Guardian Verification Code'**
   String get vGuardianIdentifier;
 
   /// No description provided for @vExactIdentifier.
   ///
   /// In en, this message translates to:
-  /// **'The identifiers must match. Compare it with the case shown on the Guardian’s own device.'**
+  /// **'Ask the Guardian to read the 6-digit verification code shown for this case in their signed-in Radd account, and enter it exactly.'**
   String get vExactIdentifier;
 
   /// No description provided for @vAuthenticatedAccount.
@@ -1583,7 +1709,7 @@ abstract class AppLocalizations {
   /// No description provided for @vVerify.
   ///
   /// In en, this message translates to:
-  /// **'Verify Identifier'**
+  /// **'Verify Code'**
   String get vVerify;
 
   /// No description provided for @vVerificationFailed.
@@ -1649,7 +1775,7 @@ abstract class AppLocalizations {
   /// No description provided for @vIdentifierMethod.
   ///
   /// In en, this message translates to:
-  /// **'Case identifier'**
+  /// **'Verification code'**
   String get vIdentifierMethod;
 
   /// No description provided for @vContinueHandover.
@@ -1853,7 +1979,7 @@ abstract class AppLocalizations {
   /// No description provided for @vLocationHelp.
   ///
   /// In en, this message translates to:
-  /// **'Allow location while using Radd to check whether you are within 500 meters of a reported location. General alerts remain available without location.'**
+  /// **'Location permission and device location services are required to participate in the event. Radd uses your location to prioritize nearby case alerts. If a location estimate is temporarily unavailable, you can continue participating.'**
   String get vLocationHelp;
 
   /// No description provided for @vAllowLocation.
@@ -1969,6 +2095,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This action could not be completed. Please try again.'**
   String get vActionFailed;
+
+  /// No description provided for @vFailureAlreadyMatched.
+  ///
+  /// In en, this message translates to:
+  /// **'This individual is already being reunited through another active report. Only that report can continue.'**
+  String get vFailureAlreadyMatched;
+
+  /// No description provided for @vFailureResumeExisting.
+  ///
+  /// In en, this message translates to:
+  /// **'You already have an active report for this individual. Continue it from Report instead of confirming the identity again.'**
+  String get vFailureResumeExisting;
+
+  /// No description provided for @vFailureProfileUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This registration is no longer eligible for identification.'**
+  String get vFailureProfileUnavailable;
+
+  /// No description provided for @vFailureIdentificationEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'This identification attempt has already ended or been confirmed. The report has been refreshed.'**
+  String get vFailureIdentificationEnded;
+
+  /// No description provided for @vFailureMatchRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm the individual\'s identity before continuing to Guardian verification.'**
+  String get vFailureMatchRequired;
+
+  /// No description provided for @vFailureStageUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This step is not available at the report\'s current stage. The report has been refreshed.'**
+  String get vFailureStageUnavailable;
+
+  /// No description provided for @vFailureReportUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This report\'s details could not be loaded. Please try again.'**
+  String get vFailureReportUnavailable;
 
   /// No description provided for @vNoMissingReport.
   ///
@@ -2201,7 +2369,7 @@ abstract class AppLocalizations {
   /// No description provided for @verificationExplanation.
   ///
   /// In en, this message translates to:
-  /// **'Show this code to an authorized Volunteer to verify your identity as this account\'s Guardian. It does not identify any missing individual.'**
+  /// **'Show this code to an authorized Volunteer to verify your connection to this case. It does not identify the missing individual.'**
   String get verificationExplanation;
 
   /// No description provided for @noEligibleCases.
@@ -2209,12 +2377,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No cases are awaiting Guardian verification.'**
   String get noEligibleCases;
-
-  /// No description provided for @casesAwaitingVerification.
-  ///
-  /// In en, this message translates to:
-  /// **'Cases awaiting verification'**
-  String get casesAwaitingVerification;
 
   /// No description provided for @verificationExpired.
   ///
@@ -2231,20 +2393,32 @@ abstract class AppLocalizations {
   /// No description provided for @showCaseIdentifier.
   ///
   /// In en, this message translates to:
-  /// **'Show Case Identifier'**
+  /// **'Show Verification Code'**
   String get showCaseIdentifier;
 
   /// No description provided for @caseIdentifier.
   ///
   /// In en, this message translates to:
-  /// **'Case Identifier'**
+  /// **'Verification Code'**
   String get caseIdentifier;
 
   /// No description provided for @caseIdentifierHint.
   ///
   /// In en, this message translates to:
-  /// **'Share this reference with an authorized team member. The reference alone does not verify your identity.'**
+  /// **'Read this code to an authorized Volunteer when the QR code cannot be scanned. The code alone does not verify your identity.'**
   String get caseIdentifierHint;
+
+  /// No description provided for @caseUpdateBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Case Update'**
+  String get caseUpdateBanner;
+
+  /// No description provided for @viewCase.
+  ///
+  /// In en, this message translates to:
+  /// **'View Case'**
+  String get viewCase;
 
   /// No description provided for @eventUnavailable.
   ///
@@ -2291,7 +2465,7 @@ abstract class AppLocalizations {
   /// No description provided for @vLoadFailed.
   ///
   /// In en, this message translates to:
-  /// **'Unable to load current data. Tap to try again.'**
+  /// **'Couldn’t load right now. Tap to try again.'**
   String get vLoadFailed;
 
   /// No description provided for @vContinueReport.
@@ -2312,6 +2486,24 @@ abstract class AppLocalizations {
   /// **'Ask the Guardian to display this case’s QR code in their signed-in Radd account. A case identifier alone cannot verify identity.'**
   String get vQrRequired;
 
+  /// No description provided for @child.
+  ///
+  /// In en, this message translates to:
+  /// **'Child'**
+  String get child;
+
+  /// No description provided for @specifyRelationship.
+  ///
+  /// In en, this message translates to:
+  /// **'Specify relationship'**
+  String get specifyRelationship;
+
+  /// No description provided for @casesAwaitingVerification.
+  ///
+  /// In en, this message translates to:
+  /// **'Cases awaiting verification'**
+  String get casesAwaitingVerification;
+
   /// No description provided for @resolved.
   ///
   /// In en, this message translates to:
@@ -2324,11 +2516,11 @@ abstract class AppLocalizations {
   /// **'Cancelled'**
   String get cancelled;
 
-  /// No description provided for @transferredToAuthority.
+  /// No description provided for @referredToAuthority.
   ///
   /// In en, this message translates to:
-  /// **'Transferred to Authority'**
-  String get transferredToAuthority;
+  /// **'Referred to Authority'**
+  String get referredToAuthority;
 
   /// No description provided for @casesSubtitle.
   ///
@@ -2405,13 +2597,13 @@ abstract class AppLocalizations {
   /// No description provided for @photoExpiredError.
   ///
   /// In en, this message translates to:
-  /// **'This photo has expired and can no longer be used. Take a new photo to continue.'**
+  /// **'This registration is expired or its retention period is unavailable. Create a new registration with a valid event period.'**
   String get photoExpiredError;
 
   /// No description provided for @photoExpiredNotice.
   ///
   /// In en, this message translates to:
-  /// **'This photo has expired and is no longer usable. Take a new photo before reporting this individual missing.'**
+  /// **'This registration is not eligible for a new missing-person report. A new photograph alone does not renew its registration period.'**
   String get photoExpiredNotice;
 
   /// No description provided for @updatePhotoRequired.
@@ -2645,19 +2837,19 @@ abstract class AppLocalizations {
   /// No description provided for @caseIdentifierInstruction.
   ///
   /// In en, this message translates to:
-  /// **'Show this identifier to the Volunteer for alternative verification.'**
+  /// **'Read this 6-digit code to the Volunteer for alternative verification.'**
   String get caseIdentifierInstruction;
 
   /// No description provided for @caseIdentifierUsage.
   ///
   /// In en, this message translates to:
-  /// **'Used to locate and verify the active case when the QR code cannot be displayed or scanned.'**
+  /// **'Used to verify this active case when the QR code cannot be displayed or scanned. It belongs to this case only.'**
   String get caseIdentifierUsage;
 
   /// No description provided for @activeCaseIdentifier.
   ///
   /// In en, this message translates to:
-  /// **'Active case identifier'**
+  /// **'Active case verification code'**
   String get activeCaseIdentifier;
 
   /// No description provided for @noActiveCaseQrNote.
@@ -2689,6 +2881,378 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Send again'**
   String get resendReset;
+
+  /// No description provided for @vAccountDeactivated.
+  ///
+  /// In en, this message translates to:
+  /// **'Your Volunteer account is inactive. You have been signed out.'**
+  String get vAccountDeactivated;
+
+  /// No description provided for @vEndIdentification.
+  ///
+  /// In en, this message translates to:
+  /// **'End Identification Attempt'**
+  String get vEndIdentification;
+
+  /// No description provided for @vEndIdentificationHint.
+  ///
+  /// In en, this message translates to:
+  /// **'End this identification attempt and delete the captured photo? The missing-person case and search will continue.'**
+  String get vEndIdentificationHint;
+
+  /// No description provided for @locationNotRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Location could not be recorded. You can continue; the general alert remains active.'**
+  String get locationNotRecorded;
+
+  /// No description provided for @vCancelledAlert.
+  ///
+  /// In en, this message translates to:
+  /// **'Case Cancelled'**
+  String get vCancelledAlert;
+
+  /// No description provided for @vResolvedAlert.
+  ///
+  /// In en, this message translates to:
+  /// **'Person Found'**
+  String get vResolvedAlert;
+
+  /// No description provided for @vNewAlertMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'A new missing-person case has been reported.'**
+  String get vNewAlertMessage;
+
+  /// No description provided for @vPriorityAlertMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'A missing-person case has been reported within 500 meters of your available location.'**
+  String get vPriorityAlertMessage;
+
+  /// No description provided for @vMatchAlertMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'A match was confirmed for a case you joined. Guardian verification and handover are still required.'**
+  String get vMatchAlertMessage;
+
+  /// No description provided for @vCancelledAlertMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The guardian cancelled this missing-person case.'**
+  String get vCancelledAlertMessage;
+
+  /// No description provided for @vResolvedAlertMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The guardian found the individual and resolved this case.'**
+  String get vResolvedAlertMessage;
+
+  /// No description provided for @vReunitedAlertMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The individual has been reunited with their guardian after verification.'**
+  String get vReunitedAlertMessage;
+
+  /// No description provided for @vLocationSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Settings'**
+  String get vLocationSettings;
+
+  /// No description provided for @vLocationDeniedForever.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable location permission in Settings to continue participating in the event.'**
+  String get vLocationDeniedForever;
+
+  /// No description provided for @vLocationServicesDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on device location services to continue participating in the event.'**
+  String get vLocationServicesDisabled;
+
+  /// No description provided for @vLocationServiceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Radd event participation'**
+  String get vLocationServiceTitle;
+
+  /// No description provided for @vLocationServiceBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Radd uses location for nearby case alerts during your authorized event participation, including while the app is in the background.'**
+  String get vLocationServiceBody;
+
+  /// No description provided for @vLocationServiceChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'Event location'**
+  String get vLocationServiceChannel;
+
+  /// No description provided for @vEventAuthorized.
+  ///
+  /// In en, this message translates to:
+  /// **'Authorized for Current Event'**
+  String get vEventAuthorized;
+
+  /// No description provided for @vEventUnassigned.
+  ///
+  /// In en, this message translates to:
+  /// **'Not Assigned to Current Event'**
+  String get vEventUnassigned;
+
+  /// No description provided for @vAccountStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Account status'**
+  String get vAccountStatus;
+
+  /// No description provided for @vNotificationCaseUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This case is no longer available for an active search. Notifications and cases have been refreshed.'**
+  String get vNotificationCaseUnavailable;
+
+  /// No description provided for @vJoinSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Join Search'**
+  String get vJoinSearch;
+
+  /// No description provided for @vFindWithAi.
+  ///
+  /// In en, this message translates to:
+  /// **'Find Match with AI'**
+  String get vFindWithAi;
+
+  /// No description provided for @vStandalonePending.
+  ///
+  /// In en, this message translates to:
+  /// **'No missing-person report is associated with this individual. Your found report is saved. Match confirmation, Guardian verification and handover for standalone found reports are not available yet.'**
+  String get vStandalonePending;
+
+  /// No description provided for @vLocationRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Location is required to participate'**
+  String get vLocationRequired;
+
+  /// No description provided for @vAiReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Your found report is saved. Start AI-assisted identification, or use Manual Review when needed.'**
+  String get vAiReady;
+
+  /// No description provided for @vAiError.
+  ///
+  /// In en, this message translates to:
+  /// **'Identification could not be completed. Please try again or continue with Manual Review.'**
+  String get vAiError;
+
+  /// No description provided for @vNoEligibleRegistrations.
+  ///
+  /// In en, this message translates to:
+  /// **'No registered individuals are currently eligible for review in this event.'**
+  String get vNoEligibleRegistrations;
+
+  /// No description provided for @registrationPeriodTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Data retention period'**
+  String get registrationPeriodTitle;
+
+  /// No description provided for @registrationPeriodHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose how long this individual\'s data should be kept. It will be deleted automatically when the selected period ends, in accordance with the Privacy Notice.'**
+  String get registrationPeriodHint;
+
+  /// No description provided for @registrationPeriodDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Longest available period (default)'**
+  String get registrationPeriodDefault;
+
+  /// No description provided for @registrationPeriodHours.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} hours'**
+  String registrationPeriodHours(int hours);
+
+  /// No description provided for @registrationPeriodUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Registration periods are not available for this event. Please try again later.'**
+  String get registrationPeriodUnavailable;
+
+  /// No description provided for @registrationPeriodBoundary.
+  ///
+  /// In en, this message translates to:
+  /// **'The period starts at registration and cannot go beyond the end of the event. If a missing-person report is still active when it ends, deletion waits until the report is closed.'**
+  String get registrationPeriodBoundary;
+
+  /// No description provided for @retentionEditBoundary.
+  ///
+  /// In en, this message translates to:
+  /// **'Counted from the original registration date. You can extend it or shorten it, as long as the new deadline is still ahead and within the event.'**
+  String get retentionEditBoundary;
+
+  /// No description provided for @registrationPeriodDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =1{1 day} other{{days} days}}'**
+  String registrationPeriodDays(int days);
+
+  /// No description provided for @retentionUntil.
+  ///
+  /// In en, this message translates to:
+  /// **'Data kept until {date}'**
+  String retentionUntil(String date);
+
+  /// No description provided for @retentionPassedError.
+  ///
+  /// In en, this message translates to:
+  /// **'That period would already have ended. Choose a longer period.'**
+  String get retentionPassedError;
+
+  /// No description provided for @retentionInvalidError.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected retention period is not available for this event.'**
+  String get retentionInvalidError;
+
+  /// No description provided for @retentionOptionUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} ({reason})'**
+  String retentionOptionUnavailable(String label, String reason);
+
+  /// No description provided for @retentionOptionPassed.
+  ///
+  /// In en, this message translates to:
+  /// **'already passed'**
+  String get retentionOptionPassed;
+
+  /// No description provided for @retentionOptionBeyondEvent.
+  ///
+  /// In en, this message translates to:
+  /// **'after the event ends'**
+  String get retentionOptionBeyondEvent;
+
+  /// No description provided for @currentEvent.
+  ///
+  /// In en, this message translates to:
+  /// **'Current event'**
+  String get currentEvent;
+
+  /// No description provided for @eventDates.
+  ///
+  /// In en, this message translates to:
+  /// **'{start} – {end}'**
+  String eventDates(String start, String end);
+
+  /// No description provided for @registeringForEvent.
+  ///
+  /// In en, this message translates to:
+  /// **'Registering for the active event: {event}'**
+  String registeringForEvent(String event);
+
+  /// No description provided for @vFoundReportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Found Individual Report'**
+  String get vFoundReportTitle;
+
+  /// No description provided for @vIdentityConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Identity Confirmed'**
+  String get vIdentityConfirmed;
+
+  /// No description provided for @vIdentificationInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Identification in Progress'**
+  String get vIdentificationInProgress;
+
+  /// No description provided for @vFoundIdentifierHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask the Guardian to read the 6-digit verification code shown under Found Individual Report in their signed-in Radd account, and enter it exactly.'**
+  String get vFoundIdentifierHelp;
+
+  /// No description provided for @vFoundReportIdentifier.
+  ///
+  /// In en, this message translates to:
+  /// **'Guardian Verification Code'**
+  String get vFoundReportIdentifier;
+
+  /// No description provided for @vVerificationCodeFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6-digit verification code.'**
+  String get vVerificationCodeFormat;
+
+  /// No description provided for @foundReportCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification code'**
+  String get foundReportCode;
+
+  /// No description provided for @foundReportCodeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'One of your registered individuals has been identified by a Volunteer. If the QR code cannot be scanned, read this code to the Volunteer. It belongs only to this active report.'**
+  String get foundReportCodeHint;
+
+  /// No description provided for @foundReportCodeUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The verification code is not available yet. Refresh this screen or use the QR code.'**
+  String get foundReportCodeUnavailable;
+
+  /// No description provided for @foundReportIndividual.
+  ///
+  /// In en, this message translates to:
+  /// **'Found individual: {name}'**
+  String foundReportIndividual(String name);
+
+  /// No description provided for @vConfirmIdentity.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm Identity'**
+  String get vConfirmIdentity;
+
+  /// No description provided for @vPrivacyDocument.
+  ///
+  /// In en, this message translates to:
+  /// **'### Account and participation information\nRadd processes your name, email address, phone number, account identifier, Volunteer ID, account status and event assignment to authenticate you and support authorized event work. Your account is provisioned by authorized administration. Volunteer selection, training and organizational agreements are handled outside Radd.\n\n### Required location access\nLocation access and enabled Location Services are required during Active Event participation. Radd uses your location for event coordination and proximity-based Volunteer prioritization. Location may continue updating while the app is in the background during authorized participation.\n\nEvent-related location access stops when you log out or participation is no longer authorized, including account deactivation, removal from the event, loss of Active Event access, permission revocation or disabled Location Services. Radd uses the latest available location estimate and its freshness for proximity prioritization, rather than a continuous movement history.\n\nThe location notice does not grant device permission. Android permission is requested separately. If permission is denied or revoked, or Location Services are disabled, event functions remain blocked until access is restored. If permission and services remain valid but a location estimate is temporarily unavailable, participation and standard alerts remain available; proximity prioritization resumes when a suitable estimate returns.\n\n### Registered individuals and Guardian information\nAuthorized Volunteers may view eligible registered individuals for the Active Event, including names, ages, gender, reference photographs and relevant identification details. Use this information only for authorized identification and reunification work. Browsing Manual Review or selecting a profile does not confirm identity or reveal Guardian contact details. Guardian contact becomes available only within an authorized, confirmed identification and reunification workflow.\n\n### Found Individual Reports\nA Found Individual Report records identification work and may exist without a Guardian Missing Case. Camera photographs used for identification are temporary: they are deleted when the identification attempt ends without a confirmed match or immediately after identity is confirmed. They do not become registered profile photographs. Manual identification may create a report without a photograph. Selecting a profile alone does not confirm identity.\n\n### Verification and handover\nGuardian verification is required before handover. Verification records identify the relevant workflow, participants, verification method and time. Successful verification enables handover but does not complete reunification automatically; handover must be confirmed separately.\n\n### Retention and deletion\nRegistered identifiable information and reference photographs follow the individual\'s established registration period. Replacing a photograph or extending the event does not extend an existing registration. If an approved active Missing Case or an identified Found Report still needs the information to complete verification or handover, deletion is deferred until that need ends. The registration expiry does not change, and expired information does not become generally available for new identification or reporting.\n\nAfter a standalone Found Report reaches Reunited, unnecessary identifying details are removed. A minimal outcome record remains for operational audit and statistics, including the event, necessary timestamps, verification method and the responsible Volunteer reference. Guardian contact details, individual identity details and the temporary Found photograph are not retained in that completed record. A registration that is still valid continues until its own expiry; registration cleanup does not delete Guardian or Volunteer accounts. Missing Cases follow their separate retention and minimization rules. Interrupted deletion is retried.\n\n### Notifications\nRadd uses device notification information, your authenticated session, event assignment, language and available location estimate to provide relevant case and proximity alerts. Notification history may remain available without replaying old alerts. Notification messages avoid individual and Guardian contact details; opening protected information requires authorized access. Delivery depends on device settings, connectivity and service availability.\n\n### Authorized use and protection\nAccess to personal information is restricted by authenticated role, account status, event assignment and the relevant workflow. Keep your account private and do not share protected information outside authorized Radd work. Radd uses authentication and access controls to protect information, but no service can guarantee absolute security or uninterrupted availability.'**
+  String get vPrivacyDocument;
+
+  /// No description provided for @vPrivacyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy Policy'**
+  String get vPrivacyTitle;
+
+  /// No description provided for @vLocationPrivacyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Location & Privacy Notice'**
+  String get vLocationPrivacyTitle;
+
+  /// No description provided for @vLocationPrivacyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Location access is required while participating in the active event. Radd uses your location to support event coordination and proximity-based Volunteer prioritization. Location may continue updating in the background during active event participation.'**
+  String get vLocationPrivacyBody;
+
+  /// No description provided for @vViewPrivacyPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'View Privacy Policy'**
+  String get vViewPrivacyPolicy;
 }
 
 class _AppLocalizationsDelegate

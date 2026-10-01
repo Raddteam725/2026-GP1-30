@@ -17,6 +17,11 @@ Image.MAX_IMAGE_PIXELS = 20_000_000
 def assert_guardian_role(token, profile):
     if token.get("role") not in (None, "guardian") or profile.get("role") != "guardian":
         raise HTTPException(403, detail="guardian_required")
+    # Admin-managed account status: a deactivated Guardian cannot use any
+    # authenticated function (every Guardian operation passes through here
+    # via profile()). Absent means enabled; only an explicit False deactivates.
+    if profile.get("active") is False:
+        raise HTTPException(403, detail="account_inactive")
 
 def owned_registration(data, uid):
     if not data or data.get("guardian_id") != uid:
@@ -28,29 +33,28 @@ def ensure_deletable(data):
     # change under it, so this rejects both delete and edit while active_case_id
     # is set. Case creation/cancellation must update this field in the same
     # transaction as the case's own status change.
-    if data.get("active_case_id"):
+    if data.get("active_case_id") or data.get("active_found_report_id"):
         raise HTTPException(409, detail="active_case")
 
-# Independent of any event/case timer: a registered individual's photo is only
-# ever "current" for exactly 24 hours from its own capture time (Firestore's
-# server clock, never a client-supplied value -- see save()/photo_expired()).
-PHOTO_FRESHNESS = timedelta(hours=24)
+from .registration_retention import registration_available, establish, reschedule, edit_options
 
-def photo_expired(data):
-    captured = data.get("photo_captured_at")
-    # No authoritative capture time on record (never captured, or pre-dates
-    # this field) is treated as expired -- freshness is never assumed absent
-    # server-stamped proof.
-    if not isinstance(captured, datetime):
-        return True
-    return datetime.now(timezone.utc) - captured >= PHOTO_FRESHNESS
 
-def public_individual(doc):
+def photo_expired(data, db=None, tx=None, *, case_context=False):
+    # Compatibility API name: now registration validity, never photograph age.
+    return not registration_available(data, db, tx, case_context=case_context)
+
+def public_individual(doc, db=None):
     data = doc.to_dict()
     return {**{k: data[k] for k in ("full_name", "age", "gender", "relationship")},
         "relationship_other": data.get("relationship_other"),
         "id": doc.id, "active_case_id": data.get("active_case_id"),
-        "photo_expired": photo_expired(data)}
+        # The retention the Guardian chose: shown on the profile and editable
+        # there (see GuardianService.retention_options / save).
+        "registration_started_at": data.get("registration_started_at"),
+        "registration_expires_at": data.get("registration_expires_at"),
+        "registration_period_id": data.get("registration_period_id"),
+        "registration_duration_hours": data.get("registration_duration_hours"),
+        "photo_expired": photo_expired(data, db)}
 
 def normalize_photo(encoded):
     try:
@@ -78,15 +82,25 @@ class GuardianService:
 
     def account_role(self):
         # Volunteer role/status now come from the admin-owned users document.
-        # Inactive Volunteers may restore their session to view their inactive ID;
-        # operational authorization is enforced by VolunteerService.profile().
+        # VolunteerService.profile() authoritatively denies inactive accounts;
+        # resolving a role alone never grants access to protected data or ID.
         doc = self.user.get()
         if not doc.exists:
             raise HTTPException(404, detail="profile_missing")
         role = doc.to_dict().get("role")
+        # Admin accounts use the web Admin Portal (app.admin), never the mobile
+        # roles; resolving one here is a role mismatch, not a mobile session.
         if role not in ("guardian", "volunteer") or self.token.get("role") not in (None, role):
             raise HTTPException(403, detail="role_unresolved")
         return {"role": role}
+
+    def current_event(self):
+        """The one Active event, for any resolvable mobile role (Guardian or
+        Volunteer): the same authoritative record Admin manages. Fails closed
+        (503 event_unavailable) when no event is Active -- never a placeholder."""
+        from .events import event_summary
+        self.account_role()
+        return event_summary(active_event(self.db))
 
     def profile(self):
         doc = self.user.get()
@@ -139,7 +153,7 @@ class GuardianService:
         # any OTHER guardian's registration for this exact token first, so a
         # token is never simultaneously live under two guardians. A second
         # legitimate device (a different token) is never touched by this.
-        for other in self.db.collection("users").where(filter=FieldFilter("role", "==", "guardian")).stream():
+        for other in self.db.collection("users").stream():
             if other.id == self.uid:
                 continue
             stale = other.reference.collection("fcm_registrations").document(doc_id).get()
@@ -149,7 +163,8 @@ class GuardianService:
         @firestore.transactional
         def upsert(tx):
             existing = ref.get(transaction=tx)
-            data = {"token": token, "locale": locale, "updated_at": firestore.SERVER_TIMESTAMP}
+            data = {"token": token, "locale": locale, "updated_at": firestore.SERVER_TIMESTAMP,
+                "session_expires_at": self.token.get("exp", 0), "session_auth_time": self.token.get("auth_time", 0)}
             if not existing.exists:
                 data["created_at"] = firestore.SERVER_TIMESTAMP
             tx.set(ref, data, merge=True)
@@ -198,14 +213,13 @@ class GuardianService:
         return doc
 
     def list(self):
-        return [public_individual(d) for d in self.collection().stream() if not d.to_dict().get("deleting")]
+        return [public_individual(d, self.db) for d in self.collection().stream() if not d.to_dict().get("deleting")]
 
     def photo(self, item_id):
         doc = self.get(item_id)
         data = doc.to_dict()
-        # A photo past its own 24-hour freshness window is never served, even
-        # if the sweep job (see cleanup.expire_photos) has not yet run for it.
-        if not data.get("photo_path") or photo_expired(data):
+        # Registration validity, including an authorized active-case deferral.
+        if not data.get("photo_path") or photo_expired(data, self.db, case_context=True):
             raise HTTPException(404, detail="photo_expired")
         return bucket().blob(data["photo_path"]).download_as_bytes()
 
@@ -247,27 +261,55 @@ class GuardianService:
                 ensure_deletable(current_data)
             else:
                 current_data = {}
-            event = active_event(self.db, tx) if existing is None else None
-            data = value.model_dump(exclude={"photo_base64"})
+            event = active_event(self.db, tx) if existing is None or value.registration_period_id is not None else None
+            if existing and not registration_available(current_data, self.db, tx):
+                raise HTTPException(409, detail='registration_unavailable')
+            data = value.model_dump(exclude={"photo_base64", "registration_period_id"})
+            if existing and value.registration_period_id is not None:
+                # Retention change from the profile: the start never moves,
+                # the new deadline must be in the future and within the event.
+                if current_data.get("event_id") != event.id:
+                    raise HTTPException(409, detail='registration_unavailable')
+                if value.registration_period_id != current_data.get("registration_period_id"):
+                    data.update(reschedule(event, current_data, value.registration_period_id))
             data.update(guardian_id=self.uid, updated_at=firestore.SERVER_TIMESTAMP)
             if new_path:
                 data["photo_path"] = new_path
-                # A freshly captured photo always restarts its own 24-hour
-                # window -- independent of the individual's case/event history.
+                # Capture metadata is not a retention deadline. Invalidate the
+                # old reference embedding when replacing the photograph.
+                data["face_embedding"] = firestore.DELETE_FIELD
+                data["embedding_path"] = firestore.DELETE_FIELD
                 data["photo_captured_at"] = firestore.SERVER_TIMESTAMP
             if existing is None:
                 data["created_at"] = firestore.SERVER_TIMESTAMP
                 data["event_id"] = event.id
+                data.update(establish(event, value.registration_period_id))
             tx.set(ref, data, merge=True)
-            return current_data.get("photo_path")
+            return (current_data.get("photo_path"), current_data.get("embedding_path"))
         try:
-            old_path = save(transaction)
+            old_path, old_embedding = save(transaction)
         except Exception:
             self.cleanup(new_path)
             raise
         if new_path and old_path:
             self.cleanup(old_path)
-        return public_individual(ref.get())
+        if new_path and old_embedding:
+            self.cleanup(old_embedding)
+        return public_individual(ref.get(), self.db)
+
+    def retention_options(self, item_id):
+        """What the Guardian may change this registration's retention to."""
+        data = self.get(item_id).to_dict()
+        event = active_event(self.db)
+        if data.get("event_id") != event.id or not registration_available(data, self.db):
+            raise HTTPException(409, detail='registration_unavailable')
+        return {"individual_id": item_id, "event_id": event.id,
+                "event_ends_at": event.to_dict().get("ends_at"),
+                "started_at": data.get("registration_started_at"),
+                "expires_at": data.get("registration_expires_at"),
+                "current_period_id": data.get("registration_period_id"),
+                "editable": not (data.get("active_case_id") or data.get("active_found_report_id")),
+                "options": edit_options(event, data)}
 
     def delete(self, item_id):
         doc = self.get(item_id, include_deleting=True)
@@ -278,7 +320,9 @@ class GuardianService:
             data = owned_registration(current.to_dict(), self.uid)
             ensure_deletable(data)
             tx.update(doc.reference, {"deleting": True})
-            return data["photo_path"]
-        path = mark(transaction)
-        self.cleanup(path)
+            return [data.get("photo_path"), data.get("embedding_path")]
+        paths = mark(transaction)
+        for path in paths:
+            if path:
+                self.cleanup(path)
         doc.reference.delete()

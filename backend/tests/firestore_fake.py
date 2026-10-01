@@ -12,14 +12,29 @@ datetime arithmetic on fields like `closed_at` and `photo_captured_at` after
 reading them back, exactly as it would against production Firestore.
 DELETE_FIELD is likewise honored on `update()`/merge writes.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from threading import Lock
 from firebase_admin import firestore as _firestore
+
+_clock = {"last": None}
+_clock_lock = Lock()
+
+def server_now():
+    """Strictly increasing UTC timestamps. The Windows clock can return the
+    same value for two consecutive commits, which would make created_at-ordered
+    reads nondeterministic in tests -- real Firestore commits never tie."""
+    with _clock_lock:
+        now = datetime.now(timezone.utc)
+        if _clock["last"] is not None and now <= _clock["last"]:
+            now = _clock["last"] + timedelta(microseconds=1)
+        _clock["last"] = now
+        return now
 
 def _resolve(value):
     if isinstance(value, dict):
         return {k: _resolve(v) for k, v in value.items()}
     if value is _firestore.SERVER_TIMESTAMP:
-        return datetime.now(timezone.utc)
+        return server_now()
     return value
 
 class Snapshot:
@@ -135,3 +150,12 @@ class Bucket:
     def fail_next_delete(self, path):
         """Test-only: makes the next delete() of this exact path raise once."""
         self.failures.add(path)
+
+
+def configured_event():
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    return {'active': True, 'starts_at': now - timedelta(days=1),
+            'ends_at': now + timedelta(days=10),
+            'registration_periods': [{'id': 'short', 'duration_hours': 2},
+                                     {'id': 'long', 'duration_hours': 72}]}

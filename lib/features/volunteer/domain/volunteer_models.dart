@@ -28,10 +28,17 @@ class VolunteerAccount {
     required this.active,
     this.email,
     this.phone,
+    this.assigned = false,
+    this.eventId,
+    this.eventName,
   });
   final String uid, volunteerId;
   final LocalizedData name;
   final bool active;
+  final bool assigned;
+  final String? eventId, eventName;
+  bool get assignedToCurrentEvent => assigned && eventId != null;
+  bool get eventAuthorized => active && assignedToCurrentEvent;
   final String? email, phone;
 }
 
@@ -58,7 +65,9 @@ class RegisteredPerson {
     this.photo,
     this.photoBytes,
     this.information,
+    this.confirmationAvailable = true,
   });
+  final bool confirmationAvailable;
   final String id;
   final LocalizedData name;
   final int age;
@@ -109,9 +118,15 @@ class VolunteerCase {
     this.information,
     Set<String>? joinedBy,
     this.confirmedBy,
+    this.verificationCode,
   }) : joinedBy = {...?joinedBy};
   final String id;
-  final RegisteredPerson person;
+
+  /// Preview/mock only: the 6-digit code the Guardian's device shows for
+  /// this case. The real API never sends a case's code to a Volunteer; the
+  /// backend compares what the Volunteer typed.
+  final String? verificationCode;
+  RegisteredPerson person;
   final DateTime createdAt;
   DateTime updatedAt;
   CaseStatus status;
@@ -131,6 +146,22 @@ class MatchCandidate {
   final double? similarity;
 }
 
+enum FoundStatus {
+  identifying('identification_in_progress'),
+  identified('identity_confirmed'),
+  verifying('awaiting_guardian_verification'),
+  reunited('reunited');
+
+  const FoundStatus(this.value);
+  final String value;
+  static FoundStatus? parse(String? value) {
+    for (final status in values) {
+      if (status.value == value) return status;
+    }
+    return null;
+  }
+}
+
 class FoundReport {
   FoundReport({
     required this.id,
@@ -142,6 +173,8 @@ class FoundReport {
   });
   final String id, volunteerUid, photo;
   Uint8List? photoBytes;
+  bool ended = false;
+  FoundStatus? foundStatus;
   String? caseId;
   DateTime? createdAt;
   RegisteredPerson? matchedPerson;
@@ -164,7 +197,14 @@ class VerificationReceipt {
   final DateTime at;
 }
 
-enum AlertKind { newCase, priority, statusUpdate }
+enum AlertKind {
+  newCase,
+  priority,
+  statusUpdate,
+  cancelled,
+  resolved,
+  reunited,
+}
 
 class VolunteerAlert {
   const VolunteerAlert({

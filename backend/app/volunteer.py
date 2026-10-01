@@ -3,21 +3,37 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 from .firebase import identity, database, bucket
-from .events import active_event
-from .case_models import STAGES
+from .case_models import STAGES, TERMINAL_STATUSES
 from .push import notify_guardian
+from .service import photo_expired, GuardianService
+from .models import FcmRegistration, FcmUnregister
+from .volunteer_alerts import safe_dispatch
+from .alerts import PROXIMITY_RADIUS_METERS
+from .volunteer_access import event_access, require_event
+from pydantic import BaseModel, Field, ConfigDict
+import hashlib
+import time
+import logging
+from datetime import datetime, timedelta, timezone
 from .volunteer_workflow import VolunteerWorkflow, register_workflow, key
 
 JOINABLE = STAGES[:2]
 
+class VolunteerDevice(FcmRegistration):
+    latitude: float | None = Field(default=None, ge=-90, le=90, allow_inf_nan=False)
+    longitude: float | None = Field(default=None, ge=-180, le=180, allow_inf_nan=False)
+
 class VolunteerService(VolunteerWorkflow):
+    def participation_event(self, tx=None):
+        return require_event(self.db, self.uid, tx)
+
     def __init__(self, token):
         self.token, self.uid = token, token['uid']
         self.db = database()
         self.user = self.db.collection('users').document(self.uid)
         self.cases = self.db.collection('cases')
 
-    def profile(self, tx=None, require_active=False):
+    def profile(self, tx=None, require_active=True, require_assignment=True):
         data = self.user.get(transaction=tx).to_dict() or {}
         if data.get('role') != 'volunteer' or self.token.get('role') not in (None, 'volunteer'):
             raise HTTPException(403, detail='volunteer_required')
@@ -25,7 +41,34 @@ class VolunteerService(VolunteerWorkflow):
             raise HTTPException(403, detail='volunteer_profile_incomplete')
         if require_active and data['active'] is not True:
             raise HTTPException(403, detail='volunteer_inactive')
-        return {'uid': self.uid, **{k: data.get(k) for k in ('full_name', 'email', 'phone', 'volunteer_id', 'active')}}
+        access = event_access(self.db, self.uid, tx) if require_active else {'event_id': None, 'assigned': False}
+        if require_assignment and not access['assigned']:
+            raise HTTPException(403, detail='event_access_required')
+        return {'uid': self.uid, **access, 'proximity_radius_meters': PROXIMITY_RADIUS_METERS,
+                **{k: data.get(k) for k in ('full_name', 'email', 'phone', 'volunteer_id', 'active')}}
+
+    def register_device(self, value):
+        self.profile()
+        event = self.participation_event()
+        ref = self.user.collection('fcm_registrations').document(hashlib.sha256(value.token.encode()).hexdigest())
+        previous = ref.get().to_dict() or {}
+        if not previous:
+            # Cross-account token cleanup is required on registration, not on
+            # every foreground location heartbeat for the same owned device.
+            GuardianService.register_fcm_token(self, value.token, value.locale)
+        location = None
+        if value.latitude is not None and value.longitude is not None:
+            location = {'latitude': value.latitude, 'longitude': value.longitude, 'at': firestore.SERVER_TIMESTAMP}
+        ref.update({'locale': value.locale, 'updated_at': firestore.SERVER_TIMESTAMP, 'event_id': event.id, 'session_expires_at': self.token.get('exp', 0), 'session_auth_time': self.token.get('auth_time', 0), 'location': location})
+        # Registration renews eligibility only; history is not a new event.
+        return {'registered': True}
+
+    def unregister_device(self, value):
+        # Unregistration may be needed after deactivation; only this UID's device.
+        self.profile(require_active=False, require_assignment=False)
+        ref = self.user.collection('fcm_registrations').document(hashlib.sha256(value.token.encode()).hexdigest())
+        ref.delete()
+        return {'unregistered': True}
 
     def visible(self, data):
         return data.get('status') in JOINABLE or (
@@ -39,7 +82,7 @@ class VolunteerService(VolunteerWorkflow):
             person_doc = self.db.collection('users').document(guardian_id).collection('individuals').document(person_id).get()
             person = person_doc.to_dict() or {}
         # No contact information, private paths, other volunteers' identities or QR challenges.
-        return {'id': doc.id, 'profile_id': key(person_doc) if person else None, 'gender': person.get('gender'), **{k: data.get(k) for k in (
+        return {'id': doc.id, 'photo_available': bool(person.get('photo_path')) and not photo_expired(person, self.db, case_context=True), 'profile_id': key(person_doc) if person else None, 'gender': person.get('gender'), **{k: data.get(k) for k in (
             'individual_id', 'individual_name', 'age', 'status', 'created_at',
             'updated_at', 'stage_timestamps', 'guided_report')},
             'joined': self.uid in data.get('joined_by', []),
@@ -47,11 +90,14 @@ class VolunteerService(VolunteerWorkflow):
 
     def list(self, mine=False):
         self.profile(require_active=True)
-        event = active_event(self.db)
+        event = self.participation_event()
         docs = self.cases.where(filter=FieldFilter('event_id', '==', event.id)).stream()
         result = []
         for doc in docs:
             data = doc.to_dict()
+            # Active workload only; preserve completed records and participation history.
+            if data.get('status') in TERMINAL_STATUSES:
+                continue
             joined = self.uid in data.get('joined_by', [])
             include = (joined if data.get('status') in JOINABLE else data.get('confirmed_by') == self.uid) if mine else (data.get('status') in JOINABLE and not joined)
             if include and self.visible(data):
@@ -62,17 +108,36 @@ class VolunteerService(VolunteerWorkflow):
         if not case_id or '/' in case_id:
             raise HTTPException(404, detail='not_found')
         self.profile(tx, require_active=True)
-        event = active_event(self.db, tx)
+        event = self.participation_event(tx)
         doc = self.cases.document(case_id).get(transaction=tx)
         data = doc.to_dict() or {}
         if data.get('event_id') != event.id or not self.visible(data):
             raise HTTPException(404, detail='not_found')
         return doc
 
+    def case_state(self, case_id):
+        """Minimal authoritative outcome; closure never grants private detail access."""
+        self.profile(require_active=True)
+        event = self.participation_event()
+        if not case_id or '/' in case_id:
+            raise HTTPException(404, detail='not_found')
+        data = self.cases.document(case_id).get().to_dict() or {}
+        closed = data.get('closed_at')
+        if (data.get('event_id') != event.id or data.get('scrubbed_at') or
+                (isinstance(closed, datetime) and datetime.now(timezone.utc) - closed >= timedelta(hours=24))):
+            raise HTTPException(404, detail='not_found')
+        if not self.visible(data) and self.uid not in data.get('joined_by', []):
+            history = self.user.collection('volunteer_notifications').where(
+                filter=FieldFilter('case_id', '==', case_id)).limit(1)
+            if not list(history.stream()):
+                raise HTTPException(404, detail='not_found')
+        return {'id': case_id, 'status': data['status']}
+
     def start_search(self, case_id):
         push = {}
         @firestore.transactional
         def join(tx):
+            push.clear()  # Firestore may retry after another Volunteer starts first.
             doc = self.accessible(case_id, tx)
             data = doc.to_dict()
             if data['status'] not in JOINABLE:
@@ -97,6 +162,7 @@ class VolunteerService(VolunteerWorkflow):
             tx.update(doc.reference, update)
         join(self.db.transaction())
         if push:
+            logging.getLogger('uvicorn.error').info('Radd event %s-search_in_progress T2 committed epoch_ms=%d', case_id, time.time()*1000)
             try:
                 notify_guardian(push['guardian_id'], kind='status_update', status='search_in_progress',
                     case_id=case_id, event_id=push['event_id'])
@@ -111,6 +177,8 @@ class VolunteerService(VolunteerWorkflow):
         if not guardian_id or not person_id or '/' in guardian_id or '/' in person_id:
             raise HTTPException(404, detail='not_found')
         person = self.db.collection('users').document(guardian_id).collection('individuals').document(person_id).get().to_dict() or {}
+        if photo_expired(person, self.db, case_context=True):
+            raise HTTPException(404, detail='photo_expired')
         path = person.get('photo_path', '')
         if person.get('guardian_id') != guardian_id or person.get('deleting') or not path.startswith(f'guardians/{guardian_id}/individuals/{person_id}/'):
             raise HTTPException(404, detail='not_found')
@@ -120,9 +188,17 @@ router = APIRouter(prefix='/v1/volunteer', tags=['Volunteer'])
 def service(token=Depends(identity)):
     return VolunteerService(token)
 
+@router.put('/fcm-registrations')
+def register_device(value: VolunteerDevice, s=Depends(service)):
+    return s.register_device(value)
+
+@router.post('/fcm-registrations/unregister')
+def unregister_device(value: FcmUnregister, s=Depends(service)):
+    return s.unregister_device(value)
+
 @router.get('')
 def profile(s=Depends(service)):
-    return s.profile()
+    return s.profile(require_assignment=False)
 
 @router.get('/cases/available')
 def available(s=Depends(service)):
@@ -139,5 +215,9 @@ def start_search(case_id: str, s=Depends(service)):
 @router.get('/cases/{case_id}/photo')
 def photo(case_id: str, s=Depends(service)):
     return Response(content=s.photo(case_id), media_type='image/jpeg', headers={'Cache-Control': 'no-store'})
+
+@router.get('/cases/{case_id}/state')
+def case_state(case_id: str, s=Depends(service)):
+    return s.case_state(case_id)
 
 register_workflow(router, service)

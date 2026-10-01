@@ -27,3 +27,12 @@ def test_repository_credentials_are_rejected(monkeypatch):
     monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", str(existing_repo_file))
     with pytest.raises(RuntimeError):
         runner.configure_credentials()
+
+
+def test_impersonated_adc_must_belong_to_same_project():
+    from types import SimpleNamespace
+    runner.validate_credential_project(SimpleNamespace(service_account_email='backend@radd-32eb6.iam.gserviceaccount.com'), 'radd-32eb6')
+    with pytest.raises(RuntimeError):
+        runner.validate_credential_project(SimpleNamespace(service_account_email='backend@another-project.iam.gserviceaccount.com'), 'radd-32eb6')
+    with pytest.raises(RuntimeError):
+        runner.validate_credential_project(SimpleNamespace(), 'radd-32eb6')

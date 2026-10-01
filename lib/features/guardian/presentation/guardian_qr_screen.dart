@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../data/guardian_push_service.dart';
+import '../data/coalesced_refresh.dart';
+
 import '../../../app/app_services.dart';
 import '../../../core/localization/generated/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
@@ -13,11 +16,13 @@ import 'case_widgets.dart';
 import 'guardian_components.dart';
 import 'individual_widgets.dart';
 
-/// Case Identifier: the case-specific alternative when the QR cannot be
-/// displayed or scanned. The Volunteer compares it with the identifier of
-/// their own current case; the identifier alone never proves identity.
+/// Verification Code: the case-specific alternative when the QR cannot be
+/// displayed or scanned. The Guardian reads the 6-digit code of THIS active
+/// case to the Volunteer, who types it into their own current case; the
+/// code alone never proves identity. The internal RD-… id is not shown here.
 Future<void> showCaseIdentifier(BuildContext context, MissingCase value) async {
   final s = AppLocalizations.of(context)!;
+  final code = value.verificationCode;
   await showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -70,17 +75,28 @@ Future<void> showCaseIdentifier(BuildContext context, MissingCase value) async {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  SelectableText(
-                    caseDisplayId(value.id),
-                    textDirection: TextDirection.ltr,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1,
-                      color: AppColors.primary,
+                  if (code == null || code.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        s.foundReportCodeUnavailable,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: mutedText, fontSize: 13),
+                      ),
+                    )
+                  else
+                    SelectableText(
+                      code,
+                      textDirection: TextDirection.ltr,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 6,
+                        color: AppColors.primary,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -133,6 +149,7 @@ class GuardianQrScreen extends StatefulWidget {
 
 class _GuardianQrScreenState extends State<GuardianQrScreen> {
   Future<List<MissingCase>>? _cases;
+  Future<List<GuardianFoundReport>>? _foundReports;
   List<MissingCase> _active = const [];
   String? _selectedId;
   GuardianVerification? _code;
@@ -140,6 +157,27 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
   bool _busy = false;
   Timer? _expiry;
   int _request = 0;
+  int _caseRequest = 0;
+  @override
+  void initState() {
+    super.initState();
+    GuardianPushRefresh.instance.addListener(_recoverCases);
+  }
+
+  final _eventRefresh = CoalescedRefresh();
+  Future<void> _recoverCases() => _eventRefresh.run(_recoverCasesOnce);
+  Future<void> _recoverCasesOnce() async {
+    if (!mounted) return;
+    try {
+      await _loadCases();
+    } catch (error) {
+      assert(() {
+        debugPrint('Radd Guardian QR refresh failed (${error.runtimeType})');
+        return true;
+      }());
+    }
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -148,6 +186,8 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
   }
 
   Future<List<MissingCase>> _loadCases() async {
+    _foundReports = AppServices.of(context).guardian.activeFoundReports();
+    final generation = ++_caseRequest;
     final all = await AppServices.of(context).guardian.cases();
     // Most relevant first: the case currently awaiting this Guardian's
     // verification, then the furthest-progressed, then the most recent.
@@ -161,7 +201,7 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
           a.updatedAt ?? DateTime(0),
         );
       });
-    if (mounted) {
+    if (mounted && generation == _caseRequest) {
       setState(() {
         _active = active;
         if (!active.any((c) => c.id == _selectedId)) {
@@ -217,6 +257,7 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
 
   @override
   void dispose() {
+    GuardianPushRefresh.instance.removeListener(_recoverCases);
     _expiry?.cancel();
     super.dispose();
   }
@@ -284,41 +325,43 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
           ? null
           : const GuardianNavigation(selected: 2),
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    s.qrCode,
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    s.qrSubtitle,
-                    style: const TextStyle(
-                      color: mutedText,
-                      fontSize: 14,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              tooltip: s.retry,
-              onPressed: _reload,
-              icon: const Icon(Icons.refresh, color: AppColors.primary),
-            ),
-          ],
+        // No manual refresh control: the credential regenerates itself at
+        // expiry (_generate's timer) and the case context follows case events
+        // / app resume (_recoverCases). Only an explicit load failure offers
+        // a retry (ErrorNotice below / in the QR card).
+        Text(
+          s.qrCode,
+          style: const TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w700,
+            color: AppColors.primary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          s.qrSubtitle,
+          style: const TextStyle(color: mutedText, fontSize: 14, height: 1.4),
         ),
         const SizedBox(height: 20),
+        FutureBuilder<List<GuardianFoundReport>>(
+          future: _foundReports,
+          builder: (context, state) {
+            if (state.hasError) {
+              return ErrorNotice(
+                message: failureMessage(state.error!, s),
+                onRetry: _reload,
+              );
+            }
+            // Only reports at a verification stage; the backend already
+            // excludes Reunited/terminal ones, this guards a stale item.
+            return Column(
+              children: [
+                for (final report in state.data ?? <GuardianFoundReport>[])
+                  if (report.awaitingVerification) _foundReportCard(s, report),
+              ],
+            );
+          },
+        ),
         FutureBuilder<List<MissingCase>>(
           future: _cases,
           builder: (context, state) {
@@ -385,6 +428,74 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
     );
   }
 
+  /// Standalone Found Report: the short code the Guardian reads to the
+  /// Volunteer when the QR cannot be scanned. The internal report id is
+  /// deliberately not displayed.
+  Widget _foundReportCard(AppLocalizations s, GuardianFoundReport report) {
+    final code = report.verificationCode;
+    final name = report.individualName?.trim();
+    return GuardianPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            s.vFoundReportTitle,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: AppColors.primary,
+            ),
+          ),
+          if (name != null && name.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              s.foundReportIndividual(name),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+          ],
+          const SizedBox(height: 4),
+          Text(
+            caseStatusLabel(report.status, s),
+            style: const TextStyle(color: mutedText, fontSize: 13),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            s.foundReportCodeHint,
+            style: const TextStyle(color: mutedText, fontSize: 13, height: 1.4),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            s.foundReportCode.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1,
+              color: mutedText,
+            ),
+          ),
+          const SizedBox(height: 4),
+          if (code == null || code.isEmpty)
+            Text(
+              s.foundReportCodeUnavailable,
+              style: const TextStyle(color: mutedText, fontSize: 13),
+            )
+          else
+            SelectableText(
+              code,
+              textDirection: TextDirection.ltr,
+              style: const TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 6,
+                color: AppColors.primary,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _selector(AppLocalizations s, MissingCase selected) => GuardianPanel(
     padding: EdgeInsets.zero,
     child: InkWell(
@@ -409,12 +520,12 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const DecoratedBox(
+                      DecoratedBox(
                         decoration: BoxDecoration(
-                          color: AppColors.secondary,
+                          color: caseStatusColor(selected.status),
                           shape: BoxShape.circle,
                         ),
-                        child: SizedBox.square(dimension: 7),
+                        child: const SizedBox.square(dimension: 7),
                       ),
                       const SizedBox(width: 8),
                       Flexible(

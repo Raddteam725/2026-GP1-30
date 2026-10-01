@@ -1,5 +1,31 @@
 part of 'volunteer_workspace.dart';
 
+/// Length of the short Guardian-read verification code of a standalone Found
+/// Report (server-defined; the internal FR-… report id is never typed).
+const verificationCodeLength = 6;
+
+/// Drops separators a Guardian may read aloud or a keyboard may insert
+/// (spaces, '#', dashes) and maps Arabic-Indic numerals to ASCII digits.
+/// Any other character is kept so that it fails validation.
+String normalizeVerificationCode(String value) {
+  final out = StringBuffer();
+  for (final rune in value.runes) {
+    if (rune == 0x20 || rune == 0x23 || rune == 0x2D || rune == 0x09) continue;
+    if (rune >= 0x0660 && rune <= 0x0669) {
+      out.writeCharCode(0x30 + rune - 0x0660); // Arabic-Indic ٠..٩
+    } else if (rune >= 0x06F0 && rune <= 0x06F9) {
+      out.writeCharCode(0x30 + rune - 0x06F0); // Eastern Arabic-Indic ۰..۹
+    } else {
+      out.writeCharCode(rune);
+    }
+  }
+  return out.toString();
+}
+
+bool isVerificationCode(String normalized) =>
+    normalized.length == verificationCodeLength &&
+    normalized.runes.every((r) => r >= 0x30 && r <= 0x39);
+
 extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
   List<Widget> _reportView() => [
     VolunteerInfo(s.vCaptureNotice),
@@ -31,6 +57,15 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
       icon: Icons.photo_camera_outlined,
       onPressed: account.active && !_busy ? _openCamera : null,
     ),
+    const SizedBox(height: 12),
+    VolunteerAction(
+      s.vManualReview,
+      icon: Icons.manage_search,
+      secondary: true,
+      onPressed: account.active && !_busy
+          ? () => _openManual(independent: true)
+          : null,
+    ),
     const SizedBox(height: 16),
     Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -58,7 +93,12 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             VolunteerHeading(report.id),
-            if (report.status != null) StatusChip(report.status!),
+            Text(switch (report.foundStatus) {
+              FoundStatus.identified => s.vIdentityConfirmed,
+              FoundStatus.verifying => s.vAwaitingGuardian,
+              FoundStatus.reunited => s.vReunited,
+              _ => s.vIdentificationInProgress,
+            }),
             Text(
               report.createdAt == null
                   ? ''
@@ -71,10 +111,12 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
   ];
   Future<void> _openCamera() async {
     if (repo is ApiVolunteerRepository) {
+      if (!_canParticipate) return;
       final bytes = await Navigator.of(context).push<Uint8List>(
         MaterialPageRoute(builder: (_) => const VolunteerCapture()),
       );
       if (bytes == null || !mounted) return;
+      if (!_canParticipate) return;
       _pendingCapture = bytes;
       _captureRequestId = List.generate(
         24,
@@ -154,33 +196,65 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     _candidates = [];
     _person = null;
     _similarity = null;
-    _aiUnavailable = false;
-    _open(VolunteerView.finding);
-    unawaited(_loadCandidates(_report!, ++_searchGeneration));
+    _identificationState = IdentificationState.ready;
+    _open(VolunteerView.matches);
   });
+  VolunteerView _reportDestination(FoundReport report) {
+    // The persisted lifecycle, not a cached profile or an AI result, controls
+    // continuation. Incomplete identified data must never restart identification.
+    if (report.ended) throw StateError('identification-ended');
+    switch (report.foundStatus) {
+      case FoundStatus.reunited:
+        return VolunteerView.reunited;
+      case FoundStatus.verifying:
+        if (report.matchedPerson == null) throw StateError('report-incomplete');
+        return report.verification == null
+            ? VolunteerView.verify
+            : VolunteerView.verified;
+      case FoundStatus.identified:
+        if (report.matchedPerson == null) throw StateError('report-incomplete');
+        return VolunteerView.contact;
+      case FoundStatus.identifying:
+        return VolunteerView.matches;
+      case null:
+        throw StateError('report-state-unavailable');
+    }
+  }
+
+  void _restoreReport(FoundReport report) {
+    final destination = _reportDestination(report);
+    _report = report;
+    _person = report.matchedPerson;
+    _independentReview = false;
+    _similarity = null;
+    _candidates = [];
+    _identificationState = IdentificationState.ready;
+    _update(() {
+      // Back must not return an already-confirmed report to old identification.
+      _stack.removeWhere((page) => page.index >= VolunteerView.finding.index);
+      if (_stack.isEmpty) _stack.add(VolunteerView.report);
+      _stack.add(destination);
+    });
+  }
+
   Future<void> _resumeReport(String id) => _run(() async {
     if (repo is! ApiVolunteerRepository) return;
-    _report = await (repo as ApiVolunteerRepository).loadReport(id);
-    _person = _report!.matchedPerson;
-    _similarity = null;
-    if (!mounted) return;
-    if (_report!.status == CaseStatus.reunited) {
-      _open(VolunteerView.reunited);
-    } else if (_report!.verification != null) {
-      _open(VolunteerView.verified);
-    } else if (_report!.matchedPerson != null) {
-      _open(VolunteerView.contact);
-    } else {
-      _candidates = [];
-      _aiUnavailable = true;
-      _open(VolunteerView.matches);
-    }
+    final report = await (repo as ApiVolunteerRepository).loadReport(id);
+    if (mounted) _restoreReport(report);
   });
-  Future<void> _openManual() => _run(() async {
+
+  Future<void> _openManual({bool independent = false}) => _run(() async {
+    if (!independent && _report?.ended == true) {
+      throw StateError('identification-ended');
+    }
     if (repo is ApiVolunteerRepository) {
       await (repo as ApiVolunteerRepository).loadProfiles();
     }
-    if (mounted) _open(VolunteerView.manual);
+    if (mounted) {
+      _independentReview = independent;
+      if (independent) _manualRequestId = null;
+      _open(VolunteerView.manual);
+    }
   });
   Widget _foundImage({required double width, required double height}) {
     final bytes = _report!.photoBytes;
@@ -218,13 +292,27 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
           view != VolunteerView.finding) {
         return;
       }
-      _update(() => _candidates = results);
+      _update(() {
+        _candidates = results;
+        _identificationState = results.isEmpty
+            ? IdentificationState.noReliableCandidate
+            : IdentificationState.candidates;
+      });
       _replace(VolunteerView.matches);
-    } catch (_) {
-      if (mounted && generation == _searchGeneration) {
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Radd identification failed: ${error.runtimeType}');
+      }
+      if (mounted &&
+          generation == _searchGeneration &&
+          view == VolunteerView.finding) {
         _replace(VolunteerView.matches);
-        _update(() => _aiUnavailable = true);
-        _message(s.vAiUnavailable);
+        _update(
+          () => _identificationState =
+              error is StateError && error.message == 'ai-unavailable'
+              ? IdentificationState.unavailable
+              : IdentificationState.error,
+        );
       }
     }
   }
@@ -265,18 +353,68 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     const LinearProgressIndicator(color: volunteerTeal),
     const SizedBox(height: 32),
     VolunteerAction(
+      s.vManualReview,
+      secondary: true,
+      onPressed: _busy ? null : _openManual,
+    ),
+    VolunteerAction(
       s.vCancelSearch,
       onPressed: () => _selectTab(2),
       secondary: true,
       icon: Icons.close,
     ),
   ];
+  Future<void> _endIdentification() async {
+    if (!await _confirm(
+          s.vEndIdentification,
+          s.vEndIdentificationHint,
+          s.vEndIdentification,
+        ) ||
+        !mounted) {
+      return;
+    }
+    await _run(() async {
+      await (repo as ApiVolunteerRepository).endIdentification(_report!);
+      _report = null;
+      _person = null;
+      _candidates = [];
+      if (mounted) _selectTab(2);
+    });
+  }
+
+  Future<void> _startAi() async {
+    if (_report == null || _report!.ended) return;
+    _identificationState = IdentificationState.processing;
+    _open(VolunteerView.finding);
+    unawaited(_loadCandidates(_report!, ++_searchGeneration));
+  }
+
   List<Widget> _matches() => [
-    VolunteerInfo(
-      _aiUnavailable ? s.vAiUnavailable : s.vCandidateHint,
-      title: s.vPotentialMatches,
+    VolunteerAction(
+      s.vFindWithAi,
+      icon: Icons.person_search_outlined,
+      onPressed: _busy || _report?.ended == true ? null : _startAi,
     ),
-    if (_candidates.isEmpty) VolunteerEmpty(s.vNoResults, s.vManualFallback),
+    VolunteerAction(
+      s.vManualReview,
+      icon: Icons.manage_search,
+      onPressed: _busy || _report?.ended == true ? null : _openManual,
+      secondary: true,
+    ),
+    if (repo is ApiVolunteerRepository && _report?.matchedPerson == null)
+      VolunteerAction(
+        s.vEndIdentification,
+        secondary: true,
+        onPressed: _busy ? null : _endIdentification,
+      ),
+    VolunteerInfo(switch (_identificationState) {
+      IdentificationState.ready => s.vAiReady,
+      IdentificationState.unavailable => s.vAiUnavailable,
+      IdentificationState.error => s.vAiError,
+      _ => s.vCandidateHint,
+    }, title: s.vPotentialMatches),
+    if (_identificationState == IdentificationState.noReliableCandidate)
+      VolunteerEmpty(s.vNoResults, s.vManualFallback),
     for (final candidate in _candidates)
       VolunteerCard(
         child: Column(
@@ -327,18 +465,21 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
         ),
       ),
     VolunteerInfo(s.vManualFallback),
-    VolunteerAction(
-      s.vManualReview,
-      icon: Icons.manage_search,
-      onPressed: _busy ? null : _openManual,
-      secondary: true,
-    ),
   ];
-  void _candidate(RegisteredPerson person, double? similarity) {
-    _person = person;
-    _similarity = similarity;
-    _open(VolunteerView.matchDetails);
-  }
+  Future<void> _candidate(RegisteredPerson person, double? similarity) =>
+      _run(() async {
+        if (similarity != null) _independentReview = false;
+        final selected = repo is ApiVolunteerRepository
+            ? await (repo as ApiVolunteerRepository).loadProfileDetails(
+                person,
+                foundReportId: _independentReview ? null : _report?.id,
+              )
+            : person;
+        if (!mounted) return;
+        _person = selected;
+        _similarity = similarity;
+        _open(VolunteerView.matchDetails);
+      });
 
   List<Widget> _manual() {
     final query = _search.text.trim().toLowerCase();
@@ -347,8 +488,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
           (p) =>
               (_gender == null || p.gender == _gender) &&
               (p.name.en.toLowerCase().contains(query) ||
-                  p.name.ar.contains(query)) &&
-              (repo.caseForPerson(p.id)?.joinable ?? true),
+                  p.name.ar.contains(query)),
         )
         .toList();
     return [
@@ -390,7 +530,13 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
       const SizedBox(height: 20),
       VolunteerHeading(s.vRegisteredIndividuals),
       const SizedBox(height: 16),
-      if (people.isEmpty) VolunteerEmpty(s.vNoResults, s.vClearFilters),
+      if (people.isEmpty)
+        VolunteerEmpty(
+          s.vNoResults,
+          repo.reviewableProfiles.isEmpty
+              ? s.vNoEligibleRegistrations
+              : s.vClearFilters,
+        ),
       for (final person in people)
         VolunteerCard(
           child: Column(
@@ -424,45 +570,51 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     ];
   }
 
-  Widget _personSummary(
-    RegisteredPerson person, {
-    CaseStatus? status,
-  }) => VolunteerCard(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (status != null) ...[StatusChip(status), const SizedBox(height: 16)],
-        Row(
+  Widget _personSummary(RegisteredPerson person, {CaseStatus? status}) =>
+      VolunteerCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            PersonPhoto(person),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  VolunteerHeading(dataText(context, person.name)),
-                  const SizedBox(height: 6),
-                  Text(s.vAgeValue(numberText(context, person.age))),
-                  const SizedBox(height: 6),
-                  Text(person.gender == Gender.male ? s.vMale : s.vFemale),
-                ],
-              ),
+            if (status != null) ...[
+              if (_report?.caseId == null &&
+                  _report?.foundStatus == FoundStatus.identified)
+                VolunteerHeading(s.vIdentityConfirmed)
+              else
+                StatusChip(status),
+              const SizedBox(height: 16),
+            ],
+            Row(
+              children: [
+                PersonPhoto(person),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      VolunteerHeading(dataText(context, person.name)),
+                      const SizedBox(height: 6),
+                      Text(s.vAgeValue(numberText(context, person.age))),
+                      const SizedBox(height: 6),
+                      Text(person.gender == Gender.male ? s.vMale : s.vFemale),
+                    ],
+                  ),
+                ),
+              ],
             ),
+            if (_associatedCase != null ||
+                (!_independentReview && _report?.matchedPerson != null)) ...[
+              const Divider(height: 24),
+              Text(
+                _associatedCase?.id ?? _report!.id,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: volunteerNavy,
+                ),
+              ),
+            ],
           ],
         ),
-        if (_associatedCase != null || _report?.matchedPerson != null) ...[
-          const Divider(height: 24),
-          Text(
-            _associatedCase?.id ?? _report!.id,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              color: volunteerNavy,
-            ),
-          ),
-        ],
-      ],
-    ),
-  );
+      );
   VolunteerCase? get _associatedCase {
     final person = _person ?? _report?.matchedPerson;
     if (person == null) return null;
@@ -471,6 +623,12 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     }
     return null;
   }
+
+  /// No Missing Case behind this report: the code belongs to the standalone
+  /// Found Report itself rather than to a linked case (wording only; the
+  /// entry is a 6-digit code in both contexts).
+  bool get _standaloneVerification =>
+      _report?.caseId == null && _associatedCase == null;
 
   List<Widget> _matchDetails() {
     final person = _person!;
@@ -493,70 +651,74 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
             ],
           ),
         ),
-      VolunteerCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            VolunteerHeading(s.vCompare),
-            const Divider(height: 26),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final width = (constraints.maxWidth - 12) / 2;
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                      width: width,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            s.vFoundIndividual,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
+      if (!_independentReview)
+        VolunteerCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              VolunteerHeading(s.vCompare),
+              const Divider(height: 26),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = (constraints.maxWidth - 12) / 2;
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: width,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              s.vFoundIndividual,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 10),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: _foundImage(width: width, height: 160),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    SizedBox(
-                      width: width,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            s.vRegisteredProfile,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
+                            const SizedBox(height: 10),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: _foundImage(width: width, height: 160),
                             ),
-                          ),
-                          const SizedBox(height: 10),
-                          PersonPhoto(person, size: width, height: 160),
-                          const SizedBox(height: 10),
-                          Text(
-                            dataText(context, person.name),
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          Text(s.vAgeValue(numberText(context, person.age))),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ],
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: width,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              s.vRegisteredProfile,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            PersonPhoto(person, size: width, height: 160),
+                            const SizedBox(height: 10),
+                            Text(
+                              dataText(context, person.name),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(s.vAgeValue(numberText(context, person.age))),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
         ),
-      ),
-      VolunteerInfo(s.vMatchNotice),
+      if (_independentReview) _personSummary(person),
+      if (!_independentReview) VolunteerInfo(s.vMatchNotice),
       VolunteerCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -564,10 +726,18 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
             VolunteerHeading(s.vCaseInformation),
             const SizedBox(height: 10),
             if (_associatedCase != null) Text(_associatedCase!.id),
-            VolunteerDetail(
-              s.vGender,
-              person.gender == Gender.male ? s.vMale : s.vFemale,
-            ),
+            if (person.gender != null)
+              VolunteerDetail(
+                s.vGender,
+                person.gender == Gender.male ? s.vMale : s.vFemale,
+              ),
+            if (info?.coordinates != null)
+              VolunteerDetail(
+                s.vLastSeen,
+                '${info!.coordinates!.latitude}, ${info.coordinates!.longitude}',
+                ltr: true,
+                icon: Icons.location_on_outlined,
+              ),
             if (info?.lastSeen != null)
               VolunteerDetail(
                 s.vLastSeen,
@@ -592,7 +762,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
                 dataText(context, info!.additional!),
                 icon: Icons.info_outline,
               ),
-            if (repo.isPreview) ...[
+            if (!_independentReview) ...[
               const Divider(height: 24),
               VolunteerDetail(
                 s.vGuardianName,
@@ -600,7 +770,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
               ),
               VolunteerDetail(
                 s.vRelationship,
-                dataText(context, person.guardian.relationship),
+                relationshipText(context, person.guardian.relationship),
               ),
               if (person.guardian.phone != null)
                 VolunteerDetail(
@@ -612,13 +782,26 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
           ],
         ),
       ),
-      VolunteerAction(
-        s.vConfirmMatch,
-        icon: Icons.check_circle_outline,
-        onPressed: _busy || _report!.matchedPerson != null
-            ? null
-            : _confirmSelected,
-      ),
+      if (!_independentReview && !person.confirmationAvailable)
+        VolunteerInfo(s.vStandalonePending),
+      if (!_independentReview && person.confirmationAvailable)
+        VolunteerAction(
+          _associatedCase == null ? s.vConfirmIdentity : s.vConfirmMatch,
+          icon: Icons.check_circle_outline,
+          onPressed:
+              _busy ||
+                  _report == null ||
+                  _report!.ended ||
+                  _report!.matchedPerson != null
+              ? null
+              : _confirmSelected,
+        ),
+      if (_independentReview)
+        VolunteerAction(
+          s.vConfirmIdentity,
+          icon: Icons.check_circle_outline,
+          onPressed: _busy ? null : _confirmSelected,
+        ),
       const SizedBox(height: 12),
       VolunteerAction(
         s.vBackResults,
@@ -639,8 +822,30 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
       return;
     }
     await _run(() async {
-      await repo.confirmMatch(account, _report!, _person!);
-      if (mounted) _replace(VolunteerView.contact);
+      if (_independentReview) {
+        if (repo is! ApiVolunteerRepository) return;
+        _manualRequestId ??= List.generate(
+          24,
+          (_) => math.Random.secure()
+              .nextInt(256)
+              .toRadixString(16)
+              .padLeft(2, '0'),
+        ).join();
+        _report = await (repo as ApiVolunteerRepository).confirmManualIdentity(
+          _person!.id,
+          _manualRequestId!,
+        );
+        _independentReview = false;
+      } else {
+        await repo.confirmMatch(account, _report!, _person!);
+      }
+      if (mounted) {
+        if (repo is ApiVolunteerRepository) {
+          _restoreReport(_report!);
+        } else {
+          _replace(VolunteerView.contact);
+        }
+      }
     });
   }
 
@@ -751,22 +956,17 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
       onPressed: _busy ? null : _scanPreview,
     ),
     const SizedBox(height: 24),
-    Text(
-      repo.isPreview ? s.vUnableScan : s.vQrRequired,
-      textAlign: TextAlign.center,
-    ),
+    Text(s.vUnableScan, textAlign: TextAlign.center),
     const SizedBox(height: 12),
     VolunteerAction(
       s.vUseIdentifier,
       icon: Icons.pin_outlined,
       secondary: true,
-      onPressed: !repo.isPreview
-          ? null
-          : () {
-              _identifier.clear();
-              _authenticatedShown = false;
-              _open(VolunteerView.identifier);
-            },
+      onPressed: () {
+        _identifier.clear();
+        _authenticatedShown = false;
+        _open(VolunteerView.identifier);
+      },
     ),
   ];
   Future<void> _scanPreview() async {
@@ -819,15 +1019,29 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
             TextFormField(
               controller: _identifier,
               textDirection: TextDirection.ltr,
+              // Missing Case or standalone Found Report alike: the Guardian
+              // reads a 6-digit verification code, never an RD-/FR- id. The
+              // workflow context (this report, its linked case if any)
+              // decides which record the code is checked against.
+              keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 labelText: s.vGuardianIdentifier,
                 prefixIcon: const Icon(Icons.pin_outlined),
               ),
-              validator: (value) =>
-                  value == null || value.trim().isEmpty ? s.vRequired : null,
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) return s.vRequired;
+                if (!isVerificationCode(normalizeVerificationCode(value))) {
+                  return s.vVerificationCodeFormat;
+                }
+                return null;
+              },
             ),
             const SizedBox(height: 16),
-            Text(s.vExactIdentifier),
+            Text(
+              _standaloneVerification
+                  ? s.vFoundIdentifierHelp
+                  : s.vExactIdentifier,
+            ),
             const SizedBox(height: 12),
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
@@ -853,7 +1067,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
               if (_identifierForm.currentState!.validate()) {
                 _verification(
                   VerificationMethod.caseIdentifier,
-                  _identifier.text,
+                  normalizeVerificationCode(_identifier.text),
                 );
               }
             },
@@ -915,13 +1129,11 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
       s.vUseIdentifier,
       secondary: true,
       icon: Icons.pin_outlined,
-      onPressed: !repo.isPreview
-          ? null
-          : () {
-              _identifier.clear();
-              _authenticatedShown = false;
-              _replace(VolunteerView.identifier);
-            },
+      onPressed: () {
+        _identifier.clear();
+        _authenticatedShown = false;
+        _replace(VolunteerView.identifier);
+      },
     ),
   ];
   List<Widget> _verified() => [
@@ -930,7 +1142,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     const SizedBox(height: 12),
     Text(s.vAccountCaseVerified, textAlign: TextAlign.center),
     const SizedBox(height: 24),
-    _personSummary(_report!.matchedPerson!),
+    if (_report!.matchedPerson != null) _personSummary(_report!.matchedPerson!),
     VolunteerCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -962,7 +1174,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     ),
   ];
   List<Widget> _handover() => [
-    _personSummary(_report!.matchedPerson!),
+    if (_report!.matchedPerson != null) _personSummary(_report!.matchedPerson!),
     VolunteerCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -975,7 +1187,10 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
           ),
           VolunteerDetail(
             s.vRelationship,
-            dataText(context, _report!.matchedPerson!.guardian.relationship),
+            relationshipText(
+              context,
+              _report!.matchedPerson!.guardian.relationship,
+            ),
           ),
           VolunteerDetail(s.vVolunteerId, account.volunteerId),
         ],
@@ -1004,6 +1219,8 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     }
     await _run(() async {
       await repo.handover(account, _report!);
+      _person = null;
+      _candidates = [];
       if (mounted) {
         _update(
           () => _stack
@@ -1023,7 +1240,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     const SizedBox(height: 20),
     Center(child: StatusChip(CaseStatus.reunited)),
     const SizedBox(height: 32),
-    _personSummary(_report!.matchedPerson!),
+    if (_report!.matchedPerson != null) _personSummary(_report!.matchedPerson!),
     VolunteerCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1033,22 +1250,24 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
             timeText(context, _report!.handedOverAt!),
             icon: Icons.schedule,
           ),
-          VolunteerDetail(
-            s.vGuardianName,
-            dataText(context, _report!.matchedPerson!.guardian.name),
-            icon: Icons.family_restroom,
-          ),
+          if (_report!.matchedPerson != null)
+            VolunteerDetail(
+              s.vGuardianName,
+              dataText(context, _report!.matchedPerson!.guardian.name),
+              icon: Icons.family_restroom,
+            ),
           VolunteerDetail(
             s.vConfirmedBy,
             '${dataText(context, account.name)} · ${account.volunteerId}',
             icon: Icons.badge_outlined,
           ),
-          VolunteerDetail(
-            s.vVerificationMethod,
-            _report!.verification!.method == VerificationMethod.qr
-                ? s.vQrMethod
-                : s.vIdentifierMethod,
-          ),
+          if (_report!.verification != null)
+            VolunteerDetail(
+              s.vVerificationMethod,
+              _report!.verification!.method == VerificationMethod.qr
+                  ? s.vQrMethod
+                  : s.vIdentifierMethod,
+            ),
         ],
       ),
     ),

@@ -68,7 +68,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
         for (var i = 1; i < 5; i++) {
-          await tester.tap(find.byType(NavigationDestination).at(i));
+          await tester.tap(find.byKey(ValueKey('radd-tab-$i')));
           await tester.pump(const Duration(milliseconds: 400));
           expect(tester.takeException(), isNull);
         }
@@ -115,7 +115,7 @@ void main() {
         final s = AppLocalizations.of(
           tester.element(find.byType(VolunteerWorkspace)),
         )!;
-        await tester.tap(find.byType(NavigationDestination).at(1));
+        await tester.tap(find.byKey(const ValueKey('radd-tab-1')));
         await tester.pumpAndSettle();
         expect(find.byType(TextField), findsNothing);
         expect(find.textContaining(s.vAvailable), findsOneWidget);
@@ -161,7 +161,7 @@ void main() {
         final s = AppLocalizations.of(
           tester.element(find.byType(VolunteerWorkspace)),
         )!;
-        await tester.tap(find.byType(NavigationDestination).at(2));
+        await tester.tap(find.byKey(const ValueKey('radd-tab-2')));
         await tester.pumpAndSettle();
         await press(tester, s.vOpenCamera);
         await press(tester, s.vPreviewCapture);
@@ -183,8 +183,12 @@ void main() {
         await press(tester, s.vProceedVerification);
         await tester.scrollUntilVisible(find.text(s.vUseIdentifier), 250);
         await press(tester, s.vUseIdentifier);
-        await tester.enterText(find.byType(TextFormField), 'wrong');
-        await tester.ensureVisible(find.byType(CheckboxListTile));
+        await tester.enterText(find.byType(TextFormField), '000000');
+        await Scrollable.ensureVisible(
+          tester.element(find.byType(CheckboxListTile)),
+          alignment: 0.5,
+        );
+        await tester.pumpAndSettle();
         await tester.tap(find.byType(CheckboxListTile));
         await tester.pumpAndSettle();
         await press(tester, s.vVerify);
@@ -195,8 +199,12 @@ void main() {
         );
         await tester.scrollUntilVisible(find.text(s.vUseIdentifier), 250);
         await press(tester, s.vUseIdentifier);
-        await tester.enterText(find.byType(TextFormField), 'RD-8042');
-        await tester.ensureVisible(find.byType(CheckboxListTile));
+        await tester.enterText(find.byType(TextFormField), '804200');
+        await Scrollable.ensureVisible(
+          tester.element(find.byType(CheckboxListTile)),
+          alignment: 0.5,
+        );
+        await tester.pumpAndSettle();
         await tester.tap(find.byType(CheckboxListTile));
         await tester.pumpAndSettle();
         await press(tester, s.vVerify);

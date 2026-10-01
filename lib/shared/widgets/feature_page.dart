@@ -91,6 +91,9 @@ String failureMessage(Object error, AppLocalizations s) =>
       'password' => s.passwordHelp,
       'validation' => s.validationError,
       'unauthorized' => s.sessionExpired,
+      'accountInactive' => s.accountDeactivated,
+      'retentionPassed' => s.retentionPassedError,
+      'retentionInvalid' => s.retentionInvalidError,
       _ => s.serviceError,
     };
 
