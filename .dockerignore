@@ -1,0 +1,58 @@
+# Git metadata
+**/.git
+
+# Python environments, caches, and compiled files
+**/.venv
+**/venv
+**/env
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/*.py[cod]
+
+# Flutter/Dart and platform build artifacts
+**/.dart_tool
+**/.pub
+**/.pub-cache
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/build
+**/.gradle
+**/Pods
+**/.symlinks
+**/ephemeral
+**/node_modules
+
+# IDE/editor and OS metadata
+**/.idea
+**/.vscode
+**/*.iml
+**/*.swp
+**/*.swo
+**/.DS_Store
+**/Thumbs.db
+
+# Environment files and credentials
+**/.env
+**/.env.*
+**/*.env
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.jks
+**/*.keystore
+**/id_rsa
+**/id_dsa
+**/id_ecdsa
+**/id_ed25519
+**/*service-account*.json
+**/*service_account*.json
+**/*serviceAccount*.json
+**/*firebase-adminsdk*.json
+**/*credentials*.json
+**/.aws
+**/.ssh
+**/.config/gcloud
+**/secrets
