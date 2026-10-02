@@ -14,8 +14,15 @@ from .service import GuardianService
 
 @asynccontextmanager
 async def lifespan(app):
-    delivery_mode()  # Fail startup on an invalid RADD_DELIVERY_MODE.
-    jobs = LocalJobs() if os.getenv('RADD_LOCAL_JOBS') == '1' else None
+    mode = delivery_mode()  # Fail startup on an invalid RADD_DELIVERY_MODE.
+    on_cloud_run = bool(os.getenv('K_SERVICE'))
+    if on_cloud_run and mode == 'queue':
+        raise RuntimeError('RADD_DELIVERY_MODE=queue is not allowed on Cloud Run: queued pushes are lost after the response')
+    local_jobs = os.getenv('RADD_LOCAL_JOBS') == '1'
+    if on_cloud_run and local_jobs:
+        # Maintenance runs as separate Cloud Run Jobs, never inside the web service.
+        logging.getLogger('uvicorn.error').warning('RADD_LOCAL_JOBS is ignored on Cloud Run')
+    jobs = LocalJobs() if local_jobs and not on_cloud_run else None
     if jobs:
         jobs.start()
     try:

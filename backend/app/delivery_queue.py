@@ -3,7 +3,8 @@
 RADD_DELIVERY_MODE=queue (default) hands work to bounded background threads for
 the long-running local FastAPI process. RADD_DELIVERY_MODE=inline runs it in the
 calling thread before returning, for Cloud Run services and jobs where threads
-get no CPU after the response or die when the process exits.
+get no CPU after the response or die when the process exits. When unset on
+Cloud Run (K_SERVICE is set), the default is inline.
 """
 import logging
 import os
@@ -52,7 +53,7 @@ inline_lock = Lock()
 inline_pending = set()
 
 def delivery_mode():
-    mode = os.getenv('RADD_DELIVERY_MODE') or 'queue'
+    mode = os.getenv('RADD_DELIVERY_MODE') or ('inline' if os.getenv('K_SERVICE') else 'queue')
     if mode not in ('queue', 'inline'):
         raise ValueError('RADD_DELIVERY_MODE must be "queue" or "inline"')
     return mode
