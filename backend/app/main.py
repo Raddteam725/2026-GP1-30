@@ -4,6 +4,7 @@ import re
 import os
 from contextlib import asynccontextmanager
 from .local_jobs import LocalJobs
+from .delivery_queue import delivery_mode
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -13,6 +14,7 @@ from .service import GuardianService
 
 @asynccontextmanager
 async def lifespan(app):
+    delivery_mode()  # Fail startup on an invalid RADD_DELIVERY_MODE.
     jobs = LocalJobs() if os.getenv('RADD_LOCAL_JOBS') == '1' else None
     if jobs:
         jobs.start()
