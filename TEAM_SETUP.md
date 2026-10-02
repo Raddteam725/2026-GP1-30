@@ -1,72 +1,90 @@
-# Running the shared Radd app and backend
+# Radd team setup
 
-Use your own clean checkout. Preserve local changes before switching branches; do not discard a stash or reset shared work.
+Radd has a Flutter app for Guardian and Volunteer and a FastAPI backend. Both backend modes use the existing Firebase project `radd-32eb6`.
+
+Run commands from the repository root. Use your own assigned feature branch and preserve local changes and stashes before switching branches.
 
 ```powershell
-git fetch origin
-git switch --track origin/lateef/guardian-sprint0-integration
 flutter pub get
 ```
 
-If the local branch already exists, switch to it normally. Do not merge or push main as part of these steps.
+## LOCAL DEVELOPMENT MODE
 
-## Shared backend
-Python 3.11+ is required. Create a local virtual environment:
+Use this mode when developing against FastAPI on your own computer. Python 3.11+ is required; the commands below select Python 3.11.
+
+Create the virtual environment and install the authoritative locked dependencies:
+
 ```powershell
-py -m venv backend/.venv
-backend/.venv/Scripts/python -m pip install -r backend/requirements.lock
+py -3.11 -m venv backend\.venv
+backend\.venv\Scripts\python -m pip install -r backend\requirements.lock
 ```
 
-Use an individually provisioned service account for the SAME Firebase project, radd-32eb6, with the required Firebase Auth verification, Firestore and Storage permissions. Keep its JSON OUTSIDE the repository. Never share private JSON through Git, chat, or a pull request.
+Keep your Firebase Admin service-account JSON for `radd-32eb6` outside the repository, for example in `C:\secure\FirebaseKeys`. That directory must contain exactly one JSON key file. Never commit or share credentials.
 
-Start the API:
+Start FastAPI with plain Uvicorn in a PowerShell terminal:
+
 ```powershell
-backend/.venv/Scripts/python backend/run_dev.py --credentials-dir 'C:\secure\FirebaseKeys'
+$env:GOOGLE_APPLICATION_CREDENTIALS = (Get-ChildItem "C:\secure\FirebaseKeys" -Filter *.json).FullName
+backend\.venv\Scripts\python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 ```
 
-The directory must contain exactly one JSON file. Alternatively supply GOOGLE_APPLICATION_CREDENTIALS in the backend terminal's process environment. The launcher also detects a single key in Desktop/FirebaseKeys, including redirected OneDrive desktops. It rejects files inside the repository and credential/project mismatches. It does not modify machine environment variables or copy the key.
+This environment variable exists only in that terminal session and is inherited by processes started there. It does not change machine or user environment settings; closing the terminal removes it.
 
-On this development machine, the existing ignored embedded Python can also run the launcher:
+In a separate terminal, start the normal Flutter app:
+
 ```powershell
-backend/.tools/python/python.exe backend/run_dev.py
+flutter devices
+flutter run -d <device-id> -t lib/main.dart
 ```
 
-The server binds 127.0.0.1:8000. GET http://127.0.0.1:8000/health returns 200 for liveness. It is NOT proof of authenticated cloud access. Do not run a second server on that port.
+Replace `<device-id>` with an Android emulator ID from `flutter devices`. Guardian and Volunteer default to `http://10.0.2.2:8000` for local Android emulator debug builds. This address reaches the emulator's host computer; `localhost` inside Android refers to the Android device itself.
 
-## Normal Android app
+Physical devices or other targets may need separate adb/network setup and an appropriate backend address. Use the planned shared mode below for team testing across devices and computers once it is available.
+
+`GET http://127.0.0.1:8000/health` checks liveness only. A successful response does **not** prove Firebase connectivity or authenticated Firestore/Storage access.
+
+## SHARED DEVELOPMENT MODE
+
+**Status: architecture and shared deployment approved; the backend is not deployed yet and the final HTTPS URL is not available yet.**
+
+The target is one hosted FastAPI backend on Google Cloud Run, with service name `radd-api-dev`. It will use the same Firebase project, `radd-32eb6`; no Firebase migration or second Firebase project is needed.
+
+Once the real HTTPS URL is available, replace the placeholder below and start Flutter:
+
 ```powershell
-flutter run -d emulator-5554 -t lib/main.dart
+flutter run --dart-define=RADD_API_URL=https://<shared-radd-dev-backend>
 ```
 
-Use the device ID from flutter devices if different. Debug API requests use the centralized http://10.0.2.2:8000 host bridge in GuardianApi. Do not use localhost inside Android. A different HTTPS service can be supplied with --dart-define=RADD_API_URL=https://your-approved-host. Release builds require HTTPS.
+`https://<shared-radd-dev-backend>` is a placeholder, not a working endpoint. Guardian and Volunteer both use `RADD_API_URL`; the shared URL must use HTTPS. Developers using shared mode do not run a local FastAPI server, need no `adb reverse`, and do not need devices on the same Wi-Fi.
 
-**Two-user test (Guardian + Volunteer on different devices/computers):** `10.0.2.2` only ever reaches the computer running *that* emulator, so two developers each running `run_dev.py` are on two separate backends that merely share Firestore. Both apps must point at ONE FastAPI process. On one Wi-Fi network: start it with `backend/.tools/python/python.exe backend/run_dev.py --host 0.0.0.0` on one PC (its firewall must allow port 8000) and build BOTH apps (debug) with `--dart-define=RADD_API_URL=http://<that PC's LAN IPv4>:8000`. Never commit an address; the final deployment replaces this with one HTTPS Cloud Run URL in the same define. The reviewed push/refetch path and its `Radd event … T1–T9` log lines are documented in docs/realtime-final-implementation.md and docs/realtime-controlled-test.md.
+FastAPI remains the authoritative protected API and business layer. Firebase Auth tokens continue to authenticate requests, and protected Firestore/Storage business access remains server-side.
 
-Use lib/main.dart. The opt-in test/guardian_runtime_app.dart is an isolated UI fixture and must never be used as a production demonstration.
+Cloud Run will use its service identity and Application Default Credentials. No service-account JSON belongs in Flutter, Docker, GitHub, or the deployed container; do not set `GOOGLE_APPLICATION_CREDENTIALS` for the shared service.
 
-## Contracts and ownership
-- One Firebase project, Auth service and FastAPI app serve the team.
-- GET /v1/session verifies the Firebase token, then resolves server-owned role data.
-- Guardian profiles: users/{firebaseUid}; no client-supplied UID is trusted.
-- Registered individuals: users/{firebaseUid}/individuals/{id}.
-- Private photos: guardians/{firebaseUid}/individuals/{id}/{random}.jpg, accessed through the authenticated API.
-- Canonical email comes from Firebase identity; editable profile fields are full_name and phone.
-- Existing Volunteer custom claims (role=volunteer, enabled=true, nonempty volunteerId) remain the Volunteer team's contract. This branch does not provision Volunteer accounts or change its feature logic.
-- A missing Guardian profile can be completed for an existing Auth account without duplicate registration.
-- Signed-out startup and logout retain language but return through Language/Role selection.
-- No case, QR, reporting or AI feature is added by this Guardian integration.
+FCM remains notification infrastructure; notifications are not authoritative state. When a notification is received or the app resumes/reconnects, authoritative state comes from FastAPI.
+
+Deployment commands and confirmed deployment details will be documented in `docs/shared-dev-deployment.md` after the real deployment.
 
 ## Checks
+
 ```powershell
 flutter gen-l10n
 flutter analyze
 flutter test
-backend/.venv/Scripts/python -m pytest backend/tests -q -o cache_dir=backend/.pytest_cache
 ```
 
-Each developer must also test the normal Android app against the real backend. In-memory unit tests do not prove cloud persistence. Camera tests require a working device/emulator camera source; no gallery alternative is provided.
+For backend changes, use the local Python environment:
 
-To exercise the Guardian screens for the Volunteer-driven stages (Search in Progress, Match Confirmed, Awaiting Guardian Verification, Reunited) before the Volunteer app is integrated, advance a real development-event case with `backend/scripts/dev_case_state.py` (see backend/README.md, "Development case-state command"). It writes the same canonical fields the Volunteer workflow writes and refuses non-development events.
+```powershell
+backend\.venv\Scripts\python -m pytest backend/tests -q -o cache_dir=backend/.pytest_cache
+```
 
-## Team Git rules
-Work only on your feature branch. Preserve lateef-guardian-backup and existing stashes. Push only the feature branch without force; open a pull request for review. Do not automatically merge to main. Shared backend changes must be coordinated with the Volunteer owner.
+Test the normal app through `lib/main.dart` against the chosen backend mode. In-memory unit tests and `/health` do not prove cloud persistence. Camera tests require a working device/emulator camera source.
+
+## Team Git workflow and ownership
+
+- Each developer works on their own assigned feature branch.
+- Preserve local changes and existing stashes; do not discard shared work.
+- Push feature branches without force-pushing and open PRs for review.
+- Do not automatically merge to `main`.
+- Leen owns Deployment & Environment. Yatalale owns Notifications & Background Jobs. Shared-backend changes across these areas must be coordinated between them.
