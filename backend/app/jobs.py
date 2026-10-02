@@ -3,12 +3,16 @@
 Cloud Run Jobs run one group per process: `python -m app.jobs retry` (every 15
 minutes) and `python -m app.jobs cleanup` (hourly). Pushes are sent inline
 because queued background threads die when the job process exits. Local
-development runs both groups through local_jobs.LocalJobs.
+development runs both groups through local_jobs.LocalJobs. Cleanup holds an
+expiring Firestore lease so overlapping runs never delete at the same time.
 """
 import argparse
 import logging
 import os
 import sys
+from datetime import datetime, timedelta, timezone
+from uuid import uuid4
+from firebase_admin import firestore
 from . import cleanup, delivery_queue
 from .firebase import database
 from .volunteer_alerts import dispatch
@@ -46,8 +50,54 @@ def _run_group(group):
 def run_retry():
     return _run_group(RETRY_JOBS)
 
+LEASE_COLLECTION, LEASE_DOCUMENT = 'configuration', 'cleanup_lock'
+# The cleanup Cloud Run Job's task timeout must be shorter than this lease
+# (planned: 15 minutes), so a run can never outlive the lease it holds.
+CLEANUP_LEASE_SECONDS = 1200
+
+def _lease(db):
+    return db.collection(LEASE_COLLECTION).document(LEASE_DOCUMENT)
+
+def acquire_cleanup_lease(db, owner, now):
+    ref = _lease(db)
+    @firestore.transactional
+    def acquire(tx):
+        data = ref.get(transaction=tx).to_dict()
+        if data and data.get('owner') != owner and data.get('expires_at') and data['expires_at'] > now:
+            return False
+        tx.set(ref, {'owner': owner, 'expires_at': now + timedelta(seconds=CLEANUP_LEASE_SECONDS),
+                     'acquired_at': firestore.SERVER_TIMESTAMP})
+        return True
+    return acquire(db.transaction())
+
+def release_cleanup_lease(db, owner):
+    ref = _lease(db)
+    @firestore.transactional
+    def release(tx):
+        data = ref.get(transaction=tx).to_dict()
+        if data and data.get('owner') == owner:
+            tx.delete(ref)
+    release(db.transaction())
+
 def run_cleanup():
-    return _run_group(CLEANUP_JOBS)
+    owner = uuid4().hex
+    log = logging.getLogger(__name__)
+    try:
+        db = database()
+        acquired = acquire_cleanup_lease(db, owner, datetime.now(timezone.utc))
+    except Exception as error:
+        log.warning('Cleanup lease unavailable (%s); no cleanup ran', type(error).__name__)
+        return False
+    if not acquired:
+        log.info('Cleanup skipped; another run holds the lease')
+        return True
+    try:
+        return _run_group(CLEANUP_JOBS)
+    finally:
+        try:
+            release_cleanup_lease(db, owner)
+        except Exception as error:
+            log.warning('Cleanup lease release failed (%s); it expires on its own', type(error).__name__)
 
 def main(argv=None):
     parser = argparse.ArgumentParser(prog='python -m app.jobs', description='Run one Radd maintenance job group.')

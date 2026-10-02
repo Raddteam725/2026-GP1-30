@@ -7,8 +7,9 @@ from test_volunteer import db, vol, case
 from test_volunteer_workflow import submit, photos
 
 
-def test_local_jobs_are_one_minute_and_failure_does_not_skip_other_jobs(monkeypatch):
+def test_local_jobs_are_one_minute_and_failure_does_not_skip_other_jobs(db, monkeypatch):
     assert local_jobs.INTERVAL_SECONDS == 60
+    monkeypatch.setattr(jobs, 'database', lambda: db)
     calls = []
     def broken():
         calls.append('queue')
