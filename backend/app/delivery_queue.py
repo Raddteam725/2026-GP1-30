@@ -1,10 +1,13 @@
-"""Immediate local dispatch; durable Firestore records remain the retry source.
+"""Immediate dispatch; durable Firestore records remain the retry source.
 
-This bounded executor is for the current long-running FastAPI process. A cloud
-deployment must replace this transport with managed execution, not rely on an
-in-process queue surviving instance termination.
+RADD_DELIVERY_MODE=queue (default) hands work to bounded background threads for
+the long-running local FastAPI process. RADD_DELIVERY_MODE=inline runs it in the
+calling thread before returning, for Cloud Run services and jobs where threads
+get no CPU after the response or die when the process exits. When unset on
+Cloud Run (K_SERVICE is set), the default is inline.
 """
 import logging
+import os
 from queue import Queue, Full
 from threading import Lock, Thread
 
@@ -46,6 +49,27 @@ class ImmediateDelivery:
                 self.queue.task_done()
 
 dispatcher = ImmediateDelivery()
+inline_lock = Lock()
+inline_pending = set()
+
+def delivery_mode():
+    mode = os.getenv('RADD_DELIVERY_MODE') or ('inline' if os.getenv('K_SERVICE') else 'queue')
+    if mode not in ('queue', 'inline'):
+        raise ValueError('RADD_DELIVERY_MODE must be "queue" or "inline"')
+    return mode
 
 def submit(key, operation):
-    return dispatcher.submit(key, operation)
+    if delivery_mode() == 'queue':
+        return dispatcher.submit(key, operation)
+    with inline_lock:
+        if key in inline_pending:
+            return True
+        inline_pending.add(key)
+    try:
+        operation()
+    except Exception as error:
+        logging.getLogger('uvicorn.error').warning('Delivery pending retry (%s)', type(error).__name__)
+    finally:
+        with inline_lock:
+            inline_pending.remove(key)
+    return True

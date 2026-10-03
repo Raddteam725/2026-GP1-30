@@ -72,13 +72,40 @@ The separate terminal-case scrubber still runs 24 hours after `closed_at` and
 retains only documented statistics. Found photos remain separate: delete on ending
 identification or confirming a match; interrupted deletion is retried.
 
-The opt-in local maintenance worker (`RADD_LOCAL_JOBS=1`, one backend worker) checks
-every 60 seconds. Production scheduling remains a separate deployment decision.
+These retention jobs run in the `cleanup` maintenance group: as the separate
+`python -m app.jobs cleanup` job on Cloud Run, or locally only when `run_dev.py`
+is started with `--local-jobs` (one backend worker, every 60 seconds). See
+[Hosted delivery and maintenance jobs](#hosted-delivery-and-maintenance-jobs).
 Do not run cleanup against live data merely to test it. The terminal-case query
 requires the existing `cases(status ASC, closed_at ASC)` Firestore index.
 
 See [registration retention setup and validation](../docs/registration-retention.md)
 for the model, preview-first event configuration and legacy-data limitations.
+
+## Hosted delivery and maintenance jobs
+
+**Push delivery** (`RADD_DELIVERY_MODE`, `app/delivery_queue.py`):
+- `queue` -- the local default. Pushes are sent by background threads after the HTTP response returns.
+- `inline` -- pushes are sent in the calling thread before the response returns. This is for Cloud Run, where background threads get no CPU after the response. Commands that send pushes become slightly slower.
+- On Cloud Run (`K_SERVICE` set), an unset value defaults to `inline` and an explicit `queue` refuses to start. Any value other than `queue` or `inline` stops startup everywhere.
+
+**Maintenance jobs** (`app/jobs.py`), run from `backend/`:
+- `python -m app.jobs retry` -- the two non-destructive push-retry jobs: Volunteer alerts for cases in active events, then unacknowledged Guardian status notifications.
+- `python -m app.jobs cleanup` -- the four destructive retention jobs, in order: the photo-cleanup queue, expired registrations, terminal-case scrubbing, and finished Found Report photos.
+- Each job runs even if an earlier one failed; a failure is logged with the job name and exception type only.
+- Jobs always send pushes inline: an unset `RADD_DELIVERY_MODE` becomes `inline` for the process, and `queue` is refused before any job runs.
+- Exit codes: `0` = all jobs succeeded; `1` = a job failed (after running all of them), cleanup could not reach Firestore to take its lease, or `queue` was refused; `2` = bad command.
+- A single failed push inside the retry job is logged and retried on the next run; it does not fail the run.
+
+**Cleanup lease**: before deleting anything, `cleanup` takes the `configuration/cleanup_lock` document in a Firestore transaction. The lease expires after 20 minutes, so a crashed run cannot block cleanup for longer, and only its owner releases it. A run that finds another run's live lease skips cleanup and exits successfully. The cleanup Cloud Run Job's task timeout must stay shorter than the lease (planned: 15 minutes). The expiry uses the clock of the machine taking the lease, so do not run `--local-jobs` on a machine with a wrong clock.
+
+**Local jobs** (`run_dev.py`, `app/local_jobs.py`): off by default. `run_dev.py --local-jobs` runs both groups (cleanup, then retry) every 60 seconds and prints a warning, because cleanup deletes data in the shared radd-32eb6 project. With them off, a local backend still sends pushes immediately but does not retry failed ones. On Cloud Run, local jobs never start, even with `RADD_LOCAL_JOBS=1`.
+
+**Planned Cloud Run Job settings** (the team's agreed plan; not yet deployed):
+- The same image as the web service, with the command overridden to `python -m app.jobs retry` or `python -m app.jobs cleanup`.
+- `retry` every 15 minutes. `cleanup` hourly, created paused, run manually once on TEST data while both owners verify it, then enabled.
+- 1 vCPU, 512Mi, max retries 0, task timeout below the interval, `RADD_DELIVERY_MODE=inline`.
+- The `cases(status ASC, closed_at ASC)` Firestore index must be deployed and Ready before cleanup is enabled.
 
 ## Push (FCM)
 An ADDITIONAL delivery channel alongside the Firestore notification records above (cases.create/`_terminate`, volunteer_workflow.confirm/handover_found) -- never a replacement for them, and never allowed to affect the business operation it rides along with. `app.push.notify_guardian` fires right after the same notification doc is written, wrapped in its own try/except at every call site as well as internally, so an FCM exception (or the whole `messaging.send_each` call raising) can never fail case creation/transition/match confirmation/handover, nor stop the notification doc from being written.
@@ -118,8 +145,9 @@ Unit/API tests use isolated fakes only; they do not seed production.
 
 ## Volunteer/shared completion update
 
-The local runner now enables one-minute maintenance (retention and Volunteer
-push retries). See [manual keyless Firebase setup](../docs/firebase-local-setup.md)
+One-minute local maintenance (retention and Volunteer push retries) is off by
+default; `run_dev.py --local-jobs` enables it. See [Hosted delivery and maintenance
+jobs](#hosted-delivery-and-maintenance-jobs) and [manual keyless Firebase setup](../docs/firebase-local-setup.md)
 for the approved local setup; the earlier text above describing unscheduled
 retention and unimplemented Volunteer push is superseded by this section.
 No live Firebase verification is claimed until that manual setup is complete.
@@ -146,8 +174,8 @@ review. The AI endpoint remains explicitly unavailable, with no generated scores
 `POST /v1/volunteer/found-reports/{id}/end` closes only an unmatched identification
 attempt. Confirmation or explicit end makes the photo inaccessible immediately
 and deletes it synchronously before reporting success. Storage failures return
-503, retain a retry reference and reuse the durable cleanup queue; the local
-worker retries. The case transaction and Storage deletion are not one atomic
+503, retain a retry reference and reuse the durable cleanup queue; the cleanup
+job retries (the Cloud Run cleanup job, or locally only with `run_dev.py --local-jobs`). The case transaction and Storage deletion are not one atomic
 operation: a failed delete can leave a confirmed/ended report with deletion
 pending, but it cannot expose the image or report that deletion succeeded.
 Back navigation does not invoke this endpoint.

@@ -2,13 +2,14 @@ import sys
 from pathlib import Path
 from unittest.mock import Mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app import local_jobs, cleanup
+from app import local_jobs, cleanup, jobs
 from test_volunteer import db, vol, case
 from test_volunteer_workflow import submit, photos
 
 
-def test_local_jobs_are_one_minute_and_failure_does_not_skip_other_jobs(monkeypatch):
+def test_local_jobs_are_one_minute_and_failure_does_not_skip_other_jobs(db, monkeypatch):
     assert local_jobs.INTERVAL_SECONDS == 60
+    monkeypatch.setattr(jobs, 'database', lambda: db)
     calls = []
     def broken():
         calls.append('queue')
@@ -17,8 +18,8 @@ def test_local_jobs_are_one_minute_and_failure_does_not_skip_other_jobs(monkeypa
     monkeypatch.setattr(cleanup, 'expire_photos', lambda: calls.append('photos'))
     monkeypatch.setattr(cleanup, 'scrub_terminal_cases', lambda: calls.append('cases'))
     monkeypatch.setattr(cleanup, 'delete_finished_found_photos', lambda: calls.append('found'))
-    monkeypatch.setattr(local_jobs, 'retry_alerts', lambda: calls.append('alerts'))
-    monkeypatch.setattr(local_jobs, 'retry_guardian_alerts', lambda: calls.append('guardian'))
+    monkeypatch.setattr(jobs, 'retry_alerts', lambda: calls.append('alerts'))
+    monkeypatch.setattr(jobs, 'retry_guardian_alerts', lambda: calls.append('guardian'))
     local_jobs.run_once()
     assert calls == ['queue', 'photos', 'cases', 'found', 'alerts', 'guardian']
 
@@ -41,8 +42,8 @@ def test_finished_photo_retry_does_not_delete_active_attempt_or_change_case(db, 
 
 def test_retry_dispatches_existing_cases_without_creating_new_records(db, monkeypatch):
     _, identifier = case()
-    monkeypatch.setattr(local_jobs, 'database', lambda: db)
+    monkeypatch.setattr(jobs, 'database', lambda: db)
     dispatch = Mock()
-    monkeypatch.setattr(local_jobs, 'dispatch', dispatch)
-    local_jobs.retry_alerts()
+    monkeypatch.setattr(jobs, 'dispatch', dispatch)
+    jobs.retry_alerts()
     dispatch.assert_called_once_with(db, identifier, matched=False)
