@@ -19,27 +19,36 @@ py -3.11 -m venv backend\.venv
 backend\.venv\Scripts\python -m pip install -r backend\requirements.lock
 ```
 
-Keep your Firebase Admin service-account JSON for `radd-32eb6` outside the repository, for example in `C:\secure\FirebaseKeys`. That directory must contain exactly one JSON key file. Never commit or share credentials.
+Keyless local Application Default Credentials (ADC) is the preferred credential method; follow [docs/firebase-local-setup.md](docs/firebase-local-setup.md). Never commit or share credentials or place them inside the repository.
 
-Start FastAPI with plain Uvicorn in a PowerShell terminal:
+After configuring keyless ADC, start FastAPI in a PowerShell terminal:
+
+```powershell
+backend\.venv\Scripts\python backend/run_dev.py --adc --host 127.0.0.1 --port 8000
+```
+
+`backend/run_dev.py` keeps local maintenance jobs OFF by default. Normal local development must **not** use `--local-jobs`. This flag is explicit opt-in only and may run cleanup/maintenance against the configured Firebase project; do not enable it casually.
+
+An external Firebase Admin service-account JSON for `radd-32eb6` remains a supported local alternative. Keep it outside the repository, for example in `C:\secure\FirebaseKeys`, with exactly one JSON key file in that directory. Start through `run_dev.py`:
 
 ```powershell
 $env:GOOGLE_APPLICATION_CREDENTIALS = (Get-ChildItem "C:\secure\FirebaseKeys" -Filter *.json).FullName
-backend\.venv\Scripts\python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+backend\.venv\Scripts\python backend/run_dev.py --host 127.0.0.1 --port 8000
 ```
 
 This environment variable exists only in that terminal session and is inherited by processes started there. It does not change machine or user environment settings; closing the terminal removes it.
 
-In a separate terminal, start the normal Flutter app:
+In a separate terminal, forward the Android port and start the normal Flutter app:
 
 ```powershell
-flutter devices
-flutter run -d <device-id> -t lib/main.dart
+adb devices
+adb -s <device-id> reverse tcp:8000 tcp:8000
+flutter run -d <device-id> --dart-define=RADD_API_URL=http://127.0.0.1:8000
 ```
 
-Replace `<device-id>` with an Android emulator ID from `flutter devices`. Guardian and Volunteer default to `http://10.0.2.2:8000` for local Android emulator debug builds. This address reaches the emulator's host computer; `localhost` inside Android refers to the Android device itself.
+Replace `<device-id>` with the actual Android device/emulator ID from `adb devices`. `adb reverse` forwards port 8000 from the Android device/emulator to the developer computer's local FastAPI server at `127.0.0.1:8000`. Both Guardian and Volunteer use the supplied `RADD_API_URL`.
 
-Physical devices or other targets may need separate adb/network setup and an appropriate backend address. Use the planned shared mode below for team testing across devices and computers once it is available.
+Use the planned shared mode below for team testing across devices and computers once it is available.
 
 `GET http://127.0.0.1:8000/health` checks liveness only. A successful response does **not** prove Firebase connectivity or authenticated Firestore/Storage access.
 
@@ -60,6 +69,8 @@ flutter run --dart-define=RADD_API_URL=https://<shared-radd-dev-backend>
 FastAPI remains the authoritative protected API and business layer. Firebase Auth tokens continue to authenticate requests, and protected Firestore/Storage business access remains server-side.
 
 Cloud Run will use its service identity and Application Default Credentials. No service-account JSON belongs in Flutter, Docker, GitHub, or the deployed container; do not set `GOOGLE_APPLICATION_CREDENTIALS` for the shared service.
+
+The Cloud Run web service uses inline delivery. `RADD_LOCAL_JOBS` must not run in the Cloud Run web service; maintenance retry and cleanup run as separate hosted jobs once cloud deployment is configured.
 
 FCM remains notification infrastructure; notifications are not authoritative state. When a notification is received or the app resumes/reconnects, authoritative state comes from FastAPI.
 
@@ -87,4 +98,4 @@ Test the normal app through `lib/main.dart` against the chosen backend mode. In-
 - Preserve local changes and existing stashes; do not discard shared work.
 - Push feature branches without force-pushing and open PRs for review.
 - Do not automatically merge to `main`.
-- Leen owns Deployment & Environment. Yatalale owns Notifications & Background Jobs. Shared-backend changes across these areas must be coordinated between them.
+- Leen owns Deployment & Environment. Tala owns Notifications & Background Jobs. Shared-backend changes across these areas must be coordinated between them.
