@@ -1,6 +1,6 @@
 """Maintenance jobs, split into a safe retry group and a destructive cleanup group.
 
-Cloud Run Jobs run one group per process: `python -m app.jobs retry` (every 15
+Cloud Run Jobs run one group per process: `python -m app.jobs retry` (every 30
 minutes) and `python -m app.jobs cleanup` (hourly). Pushes are sent inline
 because queued background threads die when the job process exits. Local
 development runs both groups through local_jobs.LocalJobs. Cleanup holds an

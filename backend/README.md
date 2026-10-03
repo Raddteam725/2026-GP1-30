@@ -103,8 +103,9 @@ for the model, preview-first event configuration and legacy-data limitations.
 
 **Planned Cloud Run Job settings** (the team's agreed plan; not yet deployed):
 - The same image as the web service, with the command overridden to `python -m app.jobs retry` or `python -m app.jobs cleanup`.
-- `retry` every 15 minutes. `cleanup` hourly, created paused, run manually once on TEST data while both owners verify it, then enabled.
+- `retry` every 30 minutes. `cleanup` hourly, created paused, run manually once on TEST data while both owners verify it, then enabled.
 - 1 vCPU, 512Mi, max retries 0, task timeout below the interval, `RADD_DELIVERY_MODE=inline`.
+- Region: me-central2 (Dammam), the Firestore region.
 - The `cases(status ASC, closed_at ASC)` Firestore index must be deployed and Ready before cleanup is enabled.
 
 ## Push (FCM)
