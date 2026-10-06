@@ -103,9 +103,10 @@ for the model, preview-first event configuration and legacy-data limitations.
 
 **Planned Cloud Run Job settings** (the team's agreed plan; not yet deployed):
 - The same image as the web service, with the command overridden to `python -m app.jobs retry` or `python -m app.jobs cleanup`.
-- `retry` every 15 minutes. `cleanup` hourly, created paused, run manually once on TEST data while both owners verify it, then enabled.
+- `retry` every 30 minutes. `cleanup` hourly: the job is created and run manually once on TEST data while both owners verify it; its schedule is created only after that.
 - 1 vCPU, 512Mi, max retries 0, task timeout below the interval, `RADD_DELIVERY_MODE=inline`.
-- The `cases(status ASC, closed_at ASC)` Firestore index must be deployed and Ready before cleanup is enabled.
+- Region: me-central2 (Dammam), the Firestore region.
+- The `cases(status ASC, closed_at ASC)` Firestore index must be deployed and Ready before the first cleanup run, including the manual TEST run.
 
 ## Push (FCM)
 An ADDITIONAL delivery channel alongside the Firestore notification records above (cases.create/`_terminate`, volunteer_workflow.confirm/handover_found) -- never a replacement for them, and never allowed to affect the business operation it rides along with. `app.push.notify_guardian` fires right after the same notification doc is written, wrapped in its own try/except at every call site as well as internally, so an FCM exception (or the whole `messaging.send_each` call raising) can never fail case creation/transition/match confirmation/handover, nor stop the notification doc from being written.
