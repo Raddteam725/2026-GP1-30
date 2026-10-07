@@ -10,3 +10,4 @@ embeddings/
 *.pt
 *.pth
 .ipynb_checkpoints/
+*_quick.json
