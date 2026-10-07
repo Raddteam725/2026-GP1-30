@@ -1,0 +1,12 @@
+.venv/
+data/
+models/
+embeddings/
+*.npy
+*.npz
+*.h5
+*.onnx
+*.pkl
+*.pt
+*.pth
+.ipynb_checkpoints/
