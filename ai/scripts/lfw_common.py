@@ -17,7 +17,21 @@ EMB_DIR = AI_DIR / "embeddings"
 RESULTS = AI_DIR / "results"
 
 MODELS = ["ArcFace", "Facenet512", "SFace"]
-DETECTOR = "yunet"   # chosen from the detector test: 30/30 faces, 0.01 s per image
+DETECTORS = ["yunet", "mtcnn"]
+NORMALIZATIONS = ["base", "raw", "Facenet", "Facenet2018", "ArcFace", "VGGFace", "VGGFace2"]
+DEFAULT_DETECTOR, DEFAULT_NORMALIZATION = "yunet", "base"
+
+# Simulated field-photo conditions (applied to the second photo of a pair only,
+# like a volunteer's phone photo compared with a registered photo).
+CONDITIONS = ["blur", "low_resolution", "dark", "jpeg"]
+
+
+def config_tag(model, detector=DEFAULT_DETECTOR, normalization=DEFAULT_NORMALIZATION):
+    """Name used for caches and result folders. The default setup keeps the plain
+    model name, so the first runs' cached embeddings are reused."""
+    if detector == DEFAULT_DETECTOR and normalization == DEFAULT_NORMALIZATION:
+        return model
+    return f"{model}_{detector}_{normalization}"
 
 
 def img_path(name, num):
@@ -52,17 +66,37 @@ def check_images(*frames):
         raise FileNotFoundError(f"{len(missing)} images missing, first: {missing[0]}")
 
 
-def embed_one(path, model):
-    """Return (L2-normalised embedding, face_found). If the detector finds no face,
-    fall back to the whole image (LFW images are already centred on the face)."""
+def degrade(path, condition):
+    """Load an image and apply one simulated field-photo condition (BGR uint8)."""
+    import cv2
+    img = cv2.imread(str(path))
+    if condition == "blur":                 # out-of-focus / motion
+        return cv2.GaussianBlur(img, (0, 0), 2.5)
+    if condition == "low_resolution":       # person far away: ~40 px face
+        h, w = img.shape[:2]
+        small = cv2.resize(img, (w // 6, h // 6), interpolation=cv2.INTER_AREA)
+        return cv2.resize(small, (w, h), interpolation=cv2.INTER_LINEAR)
+    if condition == "dark":                 # poor lighting
+        return np.clip(img.astype(np.float32) * 0.35, 0, 255).astype(np.uint8)
+    if condition == "jpeg":                 # heavy compression
+        ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 15])
+        return cv2.imdecode(buf, cv2.IMREAD_COLOR)
+    raise ValueError(condition)
+
+
+def embed_one(source, model, detector, normalization):
+    """source: image path or BGR array. Returns (L2-normalised embedding, face_found).
+    If the detector finds no face, fall back to the whole image (LFW images are
+    already centred on the face)."""
     from deepface import DeepFace
+    src = str(source) if not isinstance(source, np.ndarray) else source
     try:
-        rep = DeepFace.represent(img_path=str(path), model_name=model, detector_backend=DETECTOR,
-                                 enforce_detection=True, align=True)
+        rep = DeepFace.represent(img_path=src, model_name=model, detector_backend=detector,
+                                 enforce_detection=True, align=True, normalization=normalization)
         found = True
     except ValueError:
-        rep = DeepFace.represent(img_path=str(path), model_name=model, detector_backend="skip",
-                                 enforce_detection=False, align=True)
+        rep = DeepFace.represent(img_path=src, model_name=model, detector_backend="skip",
+                                 enforce_detection=False, align=True, normalization=normalization)
         found = False
     if len(rep) > 1:   # several faces: LFW's labelled person is the one in the centre (250x250 images)
         def off_centre(r):
@@ -73,23 +107,26 @@ def embed_one(path, model):
     return v / (np.linalg.norm(v) + 1e-12), found
 
 
-def embed_all(paths, model, cache_name):
-    """Embed every path once, with a cache so an interrupted run can resume."""
+def embed_all(items, model, cache_name, detector=DEFAULT_DETECTOR, normalization=DEFAULT_NORMALIZATION):
+    """items: list of keys. A key is an image path, or 'path|condition' for a
+    degraded copy. Embeds each key once, with a cache so an interrupted run resumes."""
     EMB_DIR.mkdir(exist_ok=True)
     cache = EMB_DIR / f"{cache_name}.npz"
     done = {}
     if cache.exists():
         z = np.load(cache, allow_pickle=False)
         done = {p: (e, bool(f)) for p, e, f in zip(z["paths"], z["emb"], z["found"])}
-    todo = [str(p) for p in paths if str(p) not in done]
-    print(f"{model}: {len(done)} cached, {len(todo)} to embed")
+    keys = [str(k) for k in items]
+    todo = [k for k in dict.fromkeys(keys) if k not in done]
+    print(f"{cache_name}: {len(keys) - len([k for k in keys if k in todo])} cached, {len(todo)} to embed", flush=True)
     t0 = time.perf_counter()
-    for i, p in enumerate(todo, 1):
-        done[p] = embed_one(p, model)
+    for i, k in enumerate(todo, 1):
+        path, _, cond = k.partition("|")
+        done[k] = embed_one(degrade(path, cond) if cond else path, model, detector, normalization)
         if i % 250 == 0 or i == len(todo):
             el = time.perf_counter() - t0
             print(f"  {i}/{len(todo)} images | {el/60:.1f} min elapsed | ~{el/i*(len(todo)-i)/60:.1f} min left", flush=True)
-            keys = list(done)
-            np.savez(cache, paths=np.array(keys), emb=np.stack([done[k][0] for k in keys]),
-                     found=np.array([done[k][1] for k in keys]))
-    return {p: done[str(p)][0] for p in paths}, {p: done[str(p)][1] for p in paths}
+            ks = list(done)
+            np.savez(cache, paths=np.array(ks), emb=np.stack([done[x][0] for x in ks]),
+                     found=np.array([done[x][1] for x in ks]))
+    return {k: done[k][0] for k in keys}, {k: done[k][1] for k in keys}

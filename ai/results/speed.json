@@ -1,0 +1,45 @@
+{
+  "date_utc": "2026-10-09T00:18:39+00:00",
+  "machine": {
+    "system": "Windows",
+    "processor": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "cpu_count": 16,
+    "ram_gb": 16.9,
+    "python": "3.11.6"
+  },
+  "detector": "yunet",
+  "images_timed": 100,
+  "method": "each model measured in a separate fresh process",
+  "models": {
+    "ArcFace": {
+      "load_seconds": 1.75,
+      "process_memory_ready_mb": 846.5,
+      "memory_added_by_model_and_first_runs_mb": 457.0,
+      "process_memory_at_start_mb": 67.4,
+      "weights_file_mb": 137.0,
+      "ms_per_photo_mean": 164.2,
+      "ms_per_photo_median": 157.5,
+      "ms_per_photo_p95": 194.3
+    },
+    "Facenet512": {
+      "load_seconds": 2.64,
+      "process_memory_ready_mb": 623.0,
+      "memory_added_by_model_and_first_runs_mb": 234.3,
+      "process_memory_at_start_mb": 67.1,
+      "weights_file_mb": 95.0,
+      "ms_per_photo_mean": 233.5,
+      "ms_per_photo_median": 206.3,
+      "ms_per_photo_p95": 450.4
+    },
+    "SFace": {
+      "load_seconds": 0.17,
+      "process_memory_ready_mb": 486.9,
+      "memory_added_by_model_and_first_runs_mb": 97.8,
+      "process_memory_at_start_mb": 67.0,
+      "weights_file_mb": 38.7,
+      "ms_per_photo_mean": 30.5,
+      "ms_per_photo_median": 29.7,
+      "ms_per_photo_p95": 35.0
+    }
+  }
+}
