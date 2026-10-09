@@ -14,6 +14,10 @@ What it measures
   known probes = up to 5 other images per person; unknown probes = people with a
   single image (never in the gallery). Rank-1 / Top-5, plus open-set results with a
   search threshold calibrated on half of the unknown people and tested on the other half.
+  Main results use only images where a face was detected (the Radd app asks for a new
+  photo otherwise); results including the no-face fallback are kept for transparency.
+  Also: event-sized galleries (50-1000 registered people, 20 random draws each) and
+  registering 3 photos per person (mean embedding) vs 1 photo.
 - Confidence: a logistic calibration (similarity -> probability of same person)
   fitted on View 1 train, checked on View 2 (Brier score, expected calibration error).
 - Robustness (optional): View 2 folds 1-3 with the second photo blurred, low
@@ -88,52 +92,111 @@ def verification_block(s, y, t):
 
 
 # ---------- identification ----------
-def identification(paths, emb, verif_threshold):
+EVENT_SIZES = (50, 100, 300, 1000)   # registered people in one simulated event
+EVENT_REPEATS = 20
+FPIRS = (0.01, 0.05)                 # target share of unregistered people wrongly matched
+
+
+def search(P, G, true_idx):
+    """P: probe embeddings, G: gallery embeddings, true_idx: correct gallery row per probe.
+    Returns the correct person's score, whether they are ranked 1st, within the top 5."""
+    S = P @ G.T
+    true_s = S[np.arange(len(P)), true_idx]
+    rank = (S > true_s[:, None]).sum(1)
+    return true_s, rank == 0, rank < 5
+
+
+def open_set(true_s, ok1, ok5, un_cal, un_test):
+    """Search threshold set on one half of the unregistered people, tested on the other half."""
+    out = {}
+    for fpir in FPIRS:
+        t = float(np.quantile(un_cal, 1 - fpir))
+        out[f"target_false_alarm_{int(fpir*100)}pct"] = {
+            "search_threshold": t,
+            "unknown_wrongly_matched_on_test_half": float((un_test >= t).mean()),
+            "known_found_first_and_above_threshold": float((ok1 & (true_s >= t)).mean()),
+            "known_in_top5_and_above_threshold": float((ok5 & (true_s >= t)).mean()),
+        }
+    return out
+
+
+def identification(paths, emb, found, verif_threshold, face_only):
+    """Gallery = first image of each person with >= 2 images; known probes = up to 5 of
+    their other images; unknown probes = people with a single image (never registered).
+    face_only=True drops images where no face was detected, as the Radd app asks for a
+    new photo instead of searching with one."""
     people = {}
     for p in sorted(paths, key=str):
+        if face_only and not found[str(p)]:
+            continue
         people.setdefault(p.parent.name, []).append(str(p))
     gallery_names = [n for n, ps in people.items() if len(ps) >= 2]
     G = np.stack([emb[people[n][0]] for n in gallery_names])
-    known = [(p, n) for n in gallery_names for p in people[n][1:6]]
-    unknown_people = sorted(n for n, ps in people.items() if len(ps) == 1)
-    unknown = [people[n][0] for n in unknown_people]
+    known = [(p, i) for i, n in enumerate(gallery_names) for p in people[n][1:6]]
+    P = np.stack([emb[p] for p, _ in known])
+    true_idx = np.array([i for _, i in known])
+    U = np.stack([emb[people[n][0]] for n in sorted(n for n, ps in people.items() if len(ps) == 1)])
 
-    kn_top, kn_ok1, kn_ok5 = [], [], []
-    for p, n in known:
-        sc = G @ emb[p]
-        order = np.argsort(-sc)
-        top = [gallery_names[i] for i in order[:5]]
-        kn_top.append(float(sc[order[0]]))
-        kn_ok1.append(top[0] == n)
-        kn_ok5.append(n in top)
-    kn_top, kn_ok1, kn_ok5 = map(np.array, (kn_top, kn_ok1, kn_ok5))
-    un_top = np.array([float((G @ emb[p]).max()) for p in unknown])
-
-    # Search threshold: calibrate on half of the unknown people, test on the other half.
-    perm = RNG.permutation(len(un_top))
-    cal, test = un_top[perm[: len(perm) // 2]], un_top[perm[len(perm) // 2:]]
-    open_set = {}
-    for fpir in (0.01, 0.05):
-        t = float(np.quantile(cal, 1 - fpir))
-        open_set[f"target_false_alarm_{int(fpir*100)}pct"] = {
-            "search_threshold": t,
-            "unknown_wrongly_matched_on_test_half": float((test >= t).mean()),
-            "known_found_first_and_above_threshold": float((kn_ok1 & (kn_top >= t)).mean()),
-        }
-    return {
-        "gallery_people": len(gallery_names),
-        "known_probes": len(known),
-        "unknown_probes": len(unknown),
-        "rank1": float(kn_ok1.mean()),
-        "rank1_ci95": boot_ci(lambda a: a.mean(), len(kn_ok1), kn_ok1),
-        "top5": float(kn_ok5.mean()),
-        "top5_ci95": boot_ci(lambda a: a.mean(), len(kn_ok5), kn_ok5),
+    true_s, ok1, ok5 = search(P, G, true_idx)
+    SU = U @ G.T
+    perm = RNG.permutation(len(U))
+    cal, test = perm[: len(perm) // 2], perm[len(perm) // 2:]
+    un_top = SU.max(1)
+    res = {
+        "images_used": sum(len(ps) for ps in people.values()),
+        "gallery_people": len(gallery_names), "known_probes": len(known), "unknown_probes": len(U),
+        "rank1": float(ok1.mean()), "rank1_ci95": boot_ci(lambda a: a.mean(), len(ok1), ok1),
+        "top5": float(ok5.mean()), "top5_ci95": boot_ci(lambda a: a.mean(), len(ok5), ok5),
         "with_verification_threshold": {
             "threshold": verif_threshold,
             "unknown_correctly_rejected": float((un_top < verif_threshold).mean()),
         },
-        "open_set": open_set,
+        "open_set": open_set(true_s, ok1, ok5, un_top[cal], un_top[test]),
     }
+    if not face_only:
+        return res
+
+    # Event-sized galleries: Radd searches only the people registered in one event.
+    events = {}
+    for size in EVENT_SIZES:
+        if size > len(gallery_names):
+            continue
+        runs = []
+        for _ in range(EVENT_REPEATS):
+            sel = np.sort(RNG.choice(len(gallery_names), size, replace=False))
+            remap = -np.ones(len(gallery_names), int)
+            remap[sel] = np.arange(size)
+            rows = remap[true_idx] >= 0
+            ts, o1, o5 = search(P[rows], G[sel], remap[true_idx[rows]])
+            ut = SU[:, sel].max(1)
+            runs.append({"rank1": o1.mean(), "top5": o5.mean(),
+                         "open": open_set(ts, o1, o5, ut[cal], ut[test])})
+        events[f"{size}_people"] = {
+            "repeats": EVENT_REPEATS,
+            "rank1_mean": float(np.mean([r["rank1"] for r in runs])),
+            "top5_mean": float(np.mean([r["top5"] for r in runs])),
+            "open_set_mean": {k: {m: float(np.mean([r["open"][k][m] for r in runs]))
+                                  for m in runs[0]["open"][k]} for k in runs[0]["open"]},
+        }
+    res["event_sized_galleries"] = events
+
+    # Registering several photos per person (mean embedding) vs one photo, same people and probes.
+    multi = [n for n, ps in people.items() if len(ps) >= 4]
+    if multi:
+        G1 = np.stack([emb[people[n][0]] for n in multi])
+        G3 = np.stack([np.mean([emb[p] for p in people[n][:3]], 0) for n in multi])
+        G3 /= np.linalg.norm(G3, axis=1, keepdims=True)
+        mk = [(p, i) for i, n in enumerate(multi) for p in people[n][3:8]]
+        Pm, tm = np.stack([emb[p] for p, _ in mk]), np.array([i for _, i in mk])
+        _, a1, a5 = search(Pm, G1, tm)
+        _, b1, b5 = search(Pm, G3, tm)
+        res["multi_photo_registration"] = {
+            "people": len(multi), "probes": len(mk),
+            "one_photo": {"rank1": float(a1.mean()), "top5": float(a5.mean())},
+            "three_photos_averaged": {"rank1": float(b1.mean()), "rank1_ci95": boot_ci(lambda a: a.mean(), len(b1), b1),
+                                      "top5": float(b5.mean())},
+        }
+    return res
 
 
 # ---------- confidence calibration ----------
@@ -186,6 +249,7 @@ def main():
     s_te, y_te = sims(dev_test, emb), dev_test.same.values
     s_v2, y_v2 = sims(view2, emb), view2.same.values
 
+    both = np.array([found[str(a)] and found[str(b)] for a, b in zip(view2.img1, view2.img2)])
     folds = sorted(view2.fold.unique())
     fold_acc = []
     for k in folds:
@@ -208,22 +272,36 @@ def main():
             "view2_10fold_accuracy_std": float(np.std(fold_acc)),
             "view2_folds_used": len(folds),
             "view2_at_view1_threshold": verification_block(s_v2, y_v2, t_dev),
+            "view2_face_detected_pairs_only": {"pairs": int(both.sum()),
+                                               **verification_block(s_v2[both], y_v2[both], t_dev)},
         },
-        "identification": identification(paths, emb, t_dev),
+        "identification": {
+            "face_detected_only": identification(paths, emb, found, t_dev, face_only=True),
+            "all_images_incl_no_face_fallback": identification(paths, emb, found, t_dev, face_only=False),
+        },
         "confidence_calibration": calibration(s_tr, y_tr, s_v2, y_v2),
     }
 
     if args.robustness:
         sub = view2[view2.fold.isin(folds[:3])]
         y_sub = sub.same.values
-        clean = verification_block(sims(sub, emb), y_sub, t_dev)
-        rob = {"pairs": len(sub), "clean": clean}
+        f1 = np.array([found[str(p)] for p in sub.img1])
+
+        def rob_block(s, f2):
+            ok = f1 & f2
+            return {"img2_no_face_rate": float(1 - f2.mean()),
+                    "all_pairs": verification_block(s, y_sub, t_dev),
+                    "face_detected_pairs_only": {"pairs": int(ok.sum()), **verification_block(s[ok], y_sub[ok], t_dev)}}
+
+        rob = {"pairs": len(sub),
+               "clean": rob_block(sims(sub, emb), np.array([found[str(p)] for p in sub.img2]))}
         for cond in CONDITIONS:
             sub = sub.assign(**{f"img2_{cond}": [f"{p}|{cond}" for p in sub.img2]})
-            emb_c, _ = embed_all(list(sub[f"img2_{cond}"]), args.model, cache + "_robust",
-                                 args.detector, args.normalization)
+            emb_c, found_c = embed_all(list(sub[f"img2_{cond}"]), args.model, cache + "_robust",
+                                       args.detector, args.normalization)
             emb_all = {**emb, **emb_c}
-            rob[cond] = verification_block(sims(sub, emb_all, f"img2_{cond}"), y_sub, t_dev)
+            rob[cond] = rob_block(sims(sub, emb_all, f"img2_{cond}"),
+                                  np.array([found_c[k] for k in sub[f"img2_{cond}"]]))
         metrics["robustness_view2_folds_1to3"] = rob
 
     out = RESULTS / tag
