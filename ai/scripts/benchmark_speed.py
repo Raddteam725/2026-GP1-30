@@ -1,7 +1,9 @@
 """Speed and resource benchmark for all candidate models on ONE machine (PBI 13).
 
 Run by ONE person only, so the numbers are comparable:
-    python scripts/benchmark_speed.py
+    python scripts/benchmark_speed.py                       # all models, YuNet, base -> results/speed.json
+    python scripts/benchmark_speed.py --models Facenet512 --detector mtcnn --normalization Facenet2018
+                                                            # -> results/speed_mtcnn_Facenet2018.json
 
 Each model is measured in its own fresh Python process, so memory numbers are
 fair (no model benefits from another having already started TensorFlow).
@@ -23,7 +25,7 @@ from pathlib import Path
 
 import psutil
 
-from lfw_common import MODELS, DEFAULT_DETECTOR, RESULTS, IMG
+from lfw_common import MODELS, DETECTORS, NORMALIZATIONS, DEFAULT_DETECTOR, DEFAULT_NORMALIZATION, RESULTS, IMG
 
 WEIGHTS = {
     "ArcFace": "arcface_weights.h5",
@@ -33,7 +35,7 @@ WEIGHTS = {
 N_IMAGES, WARMUP = 100, 5
 
 
-def measure(model):
+def measure(model, detector, normalization):
     """Runs inside a fresh process."""
     proc = psutil.Process(os.getpid())
     rss_start = proc.memory_info().rss
@@ -41,18 +43,20 @@ def measure(model):
     images = sorted(str(p) for p in IMG.rglob("*.jpg"))
     random.seed(0)
     sample = random.sample(images, N_IMAGES + WARMUP)
-    DeepFace.extract_faces(sample[0], detector_backend=DEFAULT_DETECTOR, enforce_detection=False)
+    DeepFace.extract_faces(sample[0], detector_backend=detector, enforce_detection=False)
     rss_before_model = proc.memory_info().rss
     t0 = time.perf_counter()
     DeepFace.build_model(model)
     load_s = time.perf_counter() - t0
     for p in sample[:WARMUP]:
-        DeepFace.represent(img_path=p, model_name=model, detector_backend=DEFAULT_DETECTOR, enforce_detection=False)
+        DeepFace.represent(img_path=p, model_name=model, detector_backend=detector,
+                          enforce_detection=False, normalization=normalization)
     rss_ready = proc.memory_info().rss
     times = []
     for p in sample[WARMUP:]:
         t = time.perf_counter()
-        DeepFace.represent(img_path=p, model_name=model, detector_backend=DEFAULT_DETECTOR, enforce_detection=False)
+        DeepFace.represent(img_path=p, model_name=model, detector_backend=detector,
+                          enforce_detection=False, normalization=normalization)
         times.append(time.perf_counter() - t)
     w = Path.home() / ".deepface" / "weights" / WEIGHTS[model]
     return {
@@ -70,9 +74,12 @@ def measure(model):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", choices=MODELS, help=argparse.SUPPRESS)  # internal: one model per process
+    ap.add_argument("--models", nargs="+", choices=MODELS, default=MODELS)
+    ap.add_argument("--detector", default=DEFAULT_DETECTOR, choices=DETECTORS)
+    ap.add_argument("--normalization", default=DEFAULT_NORMALIZATION, choices=NORMALIZATIONS)
     args = ap.parse_args()
     if args.model:
-        print("RESULT_JSON " + json.dumps(measure(args.model)), flush=True)
+        print("RESULT_JSON " + json.dumps(measure(args.model, args.detector, args.normalization)), flush=True)
         return
 
     results = {
@@ -80,14 +87,15 @@ def main():
         "machine": {"system": platform.system(), "processor": platform.processor(),
                     "cpu_count": os.cpu_count(), "ram_gb": round(psutil.virtual_memory().total / 1e9, 1),
                     "python": platform.python_version()},
-        "detector": DEFAULT_DETECTOR, "images_timed": N_IMAGES,
+        "detector": args.detector, "normalization": args.normalization, "images_timed": N_IMAGES,
         "method": "each model measured in a separate fresh process",
         "models": {},
     }
-    for model in MODELS:
+    for model in args.models:
         # UTF-8 so DeepFace's emoji warnings don't crash the child process on Windows
         env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
-        out = subprocess.run([sys.executable, __file__, "--model", model], capture_output=True,
+        out = subprocess.run([sys.executable, __file__, "--model", model, "--detector", args.detector,
+                              "--normalization", args.normalization], capture_output=True,
                              text=True, encoding="utf-8", errors="replace", env=env)
         line = next((l for l in out.stdout.splitlines() if l.startswith("RESULT_JSON ")), None)
         if line is None:
@@ -97,8 +105,10 @@ def main():
         print(model, results["models"][model], flush=True)
 
     RESULTS.mkdir(exist_ok=True)
-    (RESULTS / "speed.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
-    print(f"\nSaved to {RESULTS / 'speed.json'}")
+    default = args.detector == DEFAULT_DETECTOR and args.normalization == DEFAULT_NORMALIZATION
+    name = "speed.json" if default else f"speed_{args.detector}_{args.normalization}.json"
+    (RESULTS / name).write_text(json.dumps(results, indent=2), encoding="utf-8")
+    print(f"\nSaved to {RESULTS / name}")
 
 
 if __name__ == "__main__":
