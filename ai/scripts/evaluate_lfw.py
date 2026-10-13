@@ -14,10 +14,12 @@ What it measures
   known probes = up to 5 other images per person; unknown probes = people with a
   single image (never in the gallery). Rank-1 / Top-5, plus open-set results with a
   search threshold calibrated on half of the unknown people and tested on the other half.
-  Main results use only images where a face was detected (the Radd app asks for a new
-  photo otherwise); results including the no-face fallback are kept for transparency.
+  Main search results use only images where a face was detected (an evaluation
+  assumption, not a Radd requirement); results including the no-face fallback are
+  reported alongside for transparency.
   Also: event-sized galleries (50-1000 registered people, 20 random draws each) and
-  registering 3 photos per person (mean embedding) vs 1 photo.
+  an EXPLORATORY experiment averaging 3 photos per person vs 1 photo (Radd's
+  requirements define one reference photo and one stored embedding).
 - Confidence: a logistic calibration (similarity -> probability of same person)
   fitted on View 1 train, checked on View 2 (Brier score, expected calibration error).
 - Robustness (optional): View 2 folds 1-3 with the second photo blurred, low
@@ -123,8 +125,8 @@ def open_set(true_s, ok1, ok5, un_cal, un_test):
 def identification(paths, emb, found, verif_threshold, face_only):
     """Gallery = first image of each person with >= 2 images; known probes = up to 5 of
     their other images; unknown probes = people with a single image (never registered).
-    face_only=True drops images where no face was detected, as the Radd app asks for a
-    new photo instead of searching with one."""
+    face_only=True drops images where no face was detected (evaluation assumption only;
+    the no-face handling in Radd is not defined by this script)."""
     people = {}
     for p in sorted(paths, key=str):
         if face_only and not found[str(p)]:
@@ -156,7 +158,8 @@ def identification(paths, emb, found, verif_threshold, face_only):
     if not face_only:
         return res
 
-    # Event-sized galleries: Radd searches only the people registered in one event.
+    # Event-sized galleries: matching compares against the registered people of one
+    # Active event (PBI 15/16), so search with smaller galleries than all of LFW.
     events = {}
     for size in EVENT_SIZES:
         if size > len(gallery_names):
@@ -180,7 +183,8 @@ def identification(paths, emb, found, verif_threshold, face_only):
         }
     res["event_sized_galleries"] = events
 
-    # Registering several photos per person (mean embedding) vs one photo, same people and probes.
+    # EXPLORATORY only, not a Radd requirement: several photos per person (mean
+    # embedding) vs one photo, on the same people and probes.
     multi = [n for n, ps in people.items() if len(ps) >= 4]
     if multi:
         G1 = np.stack([emb[people[n][0]] for n in multi])
@@ -190,7 +194,8 @@ def identification(paths, emb, found, verif_threshold, face_only):
         Pm, tm = np.stack([emb[p] for p, _ in mk]), np.array([i for _, i in mk])
         _, a1, a5 = search(Pm, G1, tm)
         _, b1, b5 = search(Pm, G3, tm)
-        res["multi_photo_registration"] = {
+        res["exploratory_multi_photo_gallery"] = {
+            "note": "exploratory experiment only; Radd requirements define one reference photo and one embedding",
             "people": len(multi), "probes": len(mk),
             "one_photo": {"rank1": float(a1.mean()), "top5": float(a5.mean())},
             "three_photos_averaged": {"rank1": float(b1.mean()), "rank1_ci95": boot_ci(lambda a: a.mean(), len(b1), b1),
@@ -276,6 +281,7 @@ def main():
                                                **verification_block(s_v2[both], y_v2[both], t_dev)},
         },
         "identification": {
+            "note": "face_detected_only excludes images where no face was detected (evaluation assumption, not a Radd requirement)",
             "face_detected_only": identification(paths, emb, found, t_dev, face_only=True),
             "all_images_incl_no_face_fallback": identification(paths, emb, found, t_dev, face_only=False),
         },
