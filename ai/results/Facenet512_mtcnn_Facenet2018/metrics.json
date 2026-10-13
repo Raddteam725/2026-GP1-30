@@ -1,0 +1,351 @@
+{
+  "model": "Facenet512",
+  "detector": "mtcnn",
+  "normalization": "Facenet2018",
+  "config": "Facenet512_mtcnn_Facenet2018",
+  "similarity": "cosine",
+  "quick_run": false,
+  "date_utc": "2026-10-13T22:45:51+00:00",
+  "machine": {
+    "system": "Windows",
+    "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+    "python": "3.11.9"
+  },
+  "images": {
+    "total": 9056,
+    "no_face_detected": 6
+  },
+  "embedding_minutes_total": 39.38,
+  "verification": {
+    "threshold_from_view1_train": 0.43883511424064636,
+    "view1_train_accuracy": 0.9822727272727273,
+    "view1_test_accuracy_at_threshold": 0.983,
+    "view2_10fold_accuracy_mean": 0.9808333333333332,
+    "view2_10fold_accuracy_std": 0.006718548123582117,
+    "view2_folds_used": 10,
+    "view2_at_view1_threshold": {
+      "accuracy_at_threshold": 0.9791666666666666,
+      "accuracy_ci95": [
+        0.9751624999999999,
+        0.9826708333333334
+      ],
+      "auc": 0.9975021111111111,
+      "tar_at_far_1pct": 0.9706666666666667,
+      "tar_at_far_0_1pct": 0.9206666666666666
+    },
+    "view2_face_detected_pairs_only": {
+      "pairs": 5991,
+      "accuracy_at_threshold": 0.9791353697212486,
+      "accuracy_ci95": [
+        0.9752962777499583,
+        0.9826448005341345
+      ],
+      "auc": 0.9974972746070497,
+      "tar_at_far_1pct": 0.9706373039706373,
+      "tar_at_far_0_1pct": 0.7884551217884551
+    }
+  },
+  "identification": {
+    "note": "face_detected_only excludes images where no face was detected (evaluation assumption, not a Radd requirement)",
+    "face_detected_only": {
+      "images_used": 9050,
+      "gallery_people": 1647,
+      "known_probes": 3599,
+      "unknown_probes": 3262,
+      "rank1": 0.8482911919977771,
+      "rank1_ci95": [
+        0.8360655737704918,
+        0.8599680466796332
+      ],
+      "top5": 0.9424840233398166,
+      "top5_ci95": [
+        0.934419283134204,
+        0.9502639622117255
+      ],
+      "with_verification_threshold": {
+        "threshold": 0.43883511424064636,
+        "unknown_correctly_rejected": 0.00827713059472716
+      },
+      "open_set": {
+        "target_false_alarm_1pct": {
+          "search_threshold": 0.7607613205909729,
+          "unknown_wrongly_matched_on_test_half": 0.00674432863274065,
+          "known_found_first_and_above_threshold": 0.40483467629897196,
+          "known_in_top5_and_above_threshold": 0.405390386218394
+        },
+        "target_false_alarm_5pct": {
+          "search_threshold": 0.6945725679397583,
+          "unknown_wrongly_matched_on_test_half": 0.045370938074800735,
+          "known_found_first_and_above_threshold": 0.6085023617671576,
+          "known_in_top5_and_above_threshold": 0.6107252014448458
+        }
+      },
+      "event_sized_galleries": {
+        "50_people": {
+          "repeats": 20,
+          "rank1_mean": 0.9793195386012672,
+          "top5_mean": 0.9961981862096823,
+          "open_set_mean": {
+            "target_false_alarm_1pct": {
+              "search_threshold": 0.6364454597234726,
+              "unknown_wrongly_matched_on_test_half": 0.011925199264255056,
+              "known_found_first_and_above_threshold": 0.771931520191612,
+              "known_in_top5_and_above_threshold": 0.771931520191612
+            },
+            "target_false_alarm_5pct": {
+              "search_threshold": 0.5643119096755982,
+              "unknown_wrongly_matched_on_test_half": 0.055150214592274684,
+              "known_found_first_and_above_threshold": 0.8895775580770563,
+              "known_in_top5_and_above_threshold": 0.8909648080297285
+            }
+          }
+        },
+        "100_people": {
+          "repeats": 20,
+          "rank1_mean": 0.9613364612232113,
+          "top5_mean": 0.9938029476817848,
+          "open_set_mean": {
+            "target_false_alarm_1pct": {
+              "search_threshold": 0.6643738716840744,
+              "unknown_wrongly_matched_on_test_half": 0.01106683016554261,
+              "known_found_first_and_above_threshold": 0.7094474133328295,
+              "known_in_top5_and_above_threshold": 0.7096949380853046
+            },
+            "target_false_alarm_5pct": {
+              "search_threshold": 0.5962392032146454,
+              "unknown_wrongly_matched_on_test_half": 0.05824647455548744,
+              "known_found_first_and_above_threshold": 0.8451325630111624,
+              "known_in_top5_and_above_threshold": 0.8465479275469482
+            }
+          }
+        },
+        "300_people": {
+          "repeats": 20,
+          "rank1_mean": 0.9262374989628214,
+          "top5_mean": 0.9807555223178868,
+          "open_set_mean": {
+            "target_false_alarm_1pct": {
+              "search_threshold": 0.7023986011743546,
+              "unknown_wrongly_matched_on_test_half": 0.010085836909871245,
+              "known_found_first_and_above_threshold": 0.5896304178644551,
+              "known_in_top5_and_above_threshold": 0.5902440534919852
+            },
+            "target_false_alarm_5pct": {
+              "search_threshold": 0.6393867343664169,
+              "unknown_wrongly_matched_on_test_half": 0.05659104843654199,
+              "known_found_first_and_above_threshold": 0.7502523553078995,
+              "known_in_top5_and_above_threshold": 0.7533617068115455
+            }
+          }
+        },
+        "1000_people": {
+          "repeats": 20,
+          "rank1_mean": 0.8714631999393812,
+          "top5_mean": 0.9573692624115105,
+          "open_set_mean": {
+            "target_false_alarm_1pct": {
+              "search_threshold": 0.7455021440982819,
+              "unknown_wrongly_matched_on_test_half": 0.008123850398528509,
+              "known_found_first_and_above_threshold": 0.4553983414380186,
+              "known_in_top5_and_above_threshold": 0.45571814604847116
+            },
+            "target_false_alarm_5pct": {
+              "search_threshold": 0.6787306755781174,
+              "unknown_wrongly_matched_on_test_half": 0.052973635806253826,
+              "known_found_first_and_above_threshold": 0.6550041819983318,
+              "known_in_top5_and_above_threshold": 0.6586623170354322
+            }
+          }
+        }
+      },
+      "exploratory_multi_photo_gallery": {
+        "note": "exploratory experiment only; Radd requirements define one reference photo and one embedding",
+        "people": 540,
+        "probes": 1396,
+        "one_photo": {
+          "rank1": 0.8968481375358166,
+          "top5": 0.9656160458452722
+        },
+        "three_photos_averaged": {
+          "rank1": 0.9699140401146131,
+          "rank1_ci95": [
+            0.9613180515759312,
+            0.9785279369627508
+          ],
+          "top5": 0.9928366762177651
+        }
+      }
+    },
+    "all_images_incl_no_face_fallback": {
+      "images_used": 9056,
+      "gallery_people": 1650,
+      "known_probes": 3603,
+      "unknown_probes": 3261,
+      "rank1": 0.8479045240077713,
+      "rank1_ci95": [
+        0.8359630863169581,
+        0.8590063835692479
+      ],
+      "top5": 0.9422703302803219,
+      "top5_ci95": [
+        0.9344990285872884,
+        0.9494865389952817
+      ],
+      "with_verification_threshold": {
+        "threshold": 0.43883511424064636,
+        "unknown_correctly_rejected": 0.00827966881324747
+      },
+      "open_set": {
+        "target_false_alarm_1pct": {
+          "search_threshold": 0.7570948600769043,
+          "unknown_wrongly_matched_on_test_half": 0.009809932556713672,
+          "known_found_first_and_above_threshold": 0.4157646405772967,
+          "known_in_top5_and_above_threshold": 0.4163197335553705
+        },
+        "target_false_alarm_5pct": {
+          "search_threshold": 0.6856614351272583,
+          "unknown_wrongly_matched_on_test_half": 0.07418761496014716,
+          "known_found_first_and_above_threshold": 0.6369691923397169,
+          "known_in_top5_and_above_threshold": 0.6416874826533444
+        }
+      }
+    }
+  },
+  "confidence_calibration": {
+    "method": "logistic regression on cosine similarity, fitted on View 1 train",
+    "coef": 12.501310783939601,
+    "intercept": -5.11169955995975,
+    "view2_brier_score": 0.016984540654385937,
+    "view2_expected_calibration_error": 0.03107626842914059,
+    "similarity_for_probability": {
+      "0.50": 0.4088930871574472,
+      "0.80": 0.5197850076191687,
+      "0.90": 0.5846526227222287,
+      "0.95": 0.6444235071314193,
+      "0.99": 0.7764641306705744
+    }
+  },
+  "robustness_view2_folds_1to3": {
+    "pairs": 1800,
+    "clean": {
+      "img2_no_face_rate": 0.0,
+      "all_pairs": {
+        "accuracy_at_threshold": 0.9761111111111112,
+        "accuracy_ci95": [
+          0.9694444444444444,
+          0.9827777777777778
+        ],
+        "auc": 0.9984000000000001,
+        "tar_at_far_1pct": 0.9611111111111111,
+        "tar_at_far_0_1pct": 0.7855555555555556
+      },
+      "face_detected_pairs_only": {
+        "pairs": 1798,
+        "accuracy_at_threshold": 0.9760845383759733,
+        "accuracy_ci95": [
+          0.9688403781979977,
+          0.9827586206896551
+        ],
+        "auc": 0.9983989131416566,
+        "tar_at_far_1pct": 0.9610678531701891,
+        "tar_at_far_0_1pct": 0.7864293659621802
+      }
+    },
+    "blur": {
+      "img2_no_face_rate": 0.0,
+      "all_pairs": {
+        "accuracy_at_threshold": 0.9061111111111111,
+        "accuracy_ci95": [
+          0.8927638888888889,
+          0.9183333333333333
+        ],
+        "auc": 0.9871197530864197,
+        "tar_at_far_1pct": 0.8633333333333333,
+        "tar_at_far_0_1pct": 0.7133333333333334
+      },
+      "face_detected_pairs_only": {
+        "pairs": 1798,
+        "accuracy_at_threshold": 0.9060066740823137,
+        "accuracy_ci95": [
+          0.8926446051167964,
+          0.9182424916573971
+        ],
+        "auc": 0.9870972691199342,
+        "tar_at_far_1pct": 0.8620689655172413,
+        "tar_at_far_0_1pct": 0.7130144605116796
+      }
+    },
+    "low_resolution": {
+      "img2_no_face_rate": 0.0005555555555555314,
+      "all_pairs": {
+        "accuracy_at_threshold": 0.7616666666666667,
+        "accuracy_ci95": [
+          0.7433194444444444,
+          0.7800138888888889
+        ],
+        "auc": 0.9504814814814815,
+        "tar_at_far_1pct": 0.5988888888888889,
+        "tar_at_far_0_1pct": 0.2866666666666667
+      },
+      "face_detected_pairs_only": {
+        "pairs": 1797,
+        "accuracy_at_threshold": 0.761825264329438,
+        "accuracy_ci95": [
+          0.7423344462993878,
+          0.7818725653867556
+        ],
+        "auc": 0.9511942247139237,
+        "tar_at_far_1pct": 0.589086859688196,
+        "tar_at_far_0_1pct": 0.28619153674832964
+      }
+    },
+    "dark": {
+      "img2_no_face_rate": 0.0005555555555555314,
+      "all_pairs": {
+        "accuracy_at_threshold": 0.9444444444444444,
+        "accuracy_ci95": [
+          0.9333333333333333,
+          0.955
+        ],
+        "auc": 0.9888345679012346,
+        "tar_at_far_1pct": 0.9133333333333333,
+        "tar_at_far_0_1pct": 0.6722222222222223
+      },
+      "face_detected_pairs_only": {
+        "pairs": 1797,
+        "accuracy_at_threshold": 0.9443516972732332,
+        "accuracy_ci95": [
+          0.9343350027824151,
+          0.9543683917640512
+        ],
+        "auc": 0.9888269817243113,
+        "tar_at_far_1pct": 0.9010011123470523,
+        "tar_at_far_0_1pct": 0.6718576195773082
+      }
+    },
+    "jpeg": {
+      "img2_no_face_rate": 0.0,
+      "all_pairs": {
+        "accuracy_at_threshold": 0.965,
+        "accuracy_ci95": [
+          0.9572083333333333,
+          0.9733333333333334
+        ],
+        "auc": 0.9971222222222222,
+        "tar_at_far_1pct": 0.9377777777777778,
+        "tar_at_far_0_1pct": 0.7477777777777778
+      },
+      "face_detected_pairs_only": {
+        "pairs": 1798,
+        "accuracy_at_threshold": 0.9649610678531702,
+        "accuracy_ci95": [
+          0.9566184649610678,
+          0.9727474972191323
+        ],
+        "auc": 0.9971195284341395,
+        "tar_at_far_1pct": 0.9377085650723026,
+        "tar_at_far_0_1pct": 0.7486095661846496
+      }
+    }
+  }
+}
