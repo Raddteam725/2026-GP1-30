@@ -1,0 +1,228 @@
+{
+  "model": "ArcFace",
+  "detector": "yunet",
+  "normalization": "base",
+  "config": "ArcFace",
+  "similarity": "cosine",
+  "quick_run": false,
+  "date_utc": "2026-10-13T22:05:43+00:00",
+  "machine": {
+    "system": "Windows",
+    "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+    "python": "3.11.9"
+  },
+  "images": {
+    "total": 9056,
+    "no_face_detected": 106
+  },
+  "embedding_minutes_total": 0.0,
+  "verification": {
+    "threshold_from_view1_train": 0.2702666223049164,
+    "view1_train_accuracy": 0.9627272727272728,
+    "view1_test_accuracy_at_threshold": 0.956,
+    "view2_10fold_accuracy_mean": 0.96,
+    "view2_10fold_accuracy_std": 0.009516068282413468,
+    "view2_folds_used": 10,
+    "view2_at_view1_threshold": {
+      "accuracy_at_threshold": 0.961,
+      "accuracy_ci95": [
+        0.9561666666666667,
+        0.966
+      ],
+      "auc": 0.9827442222222222,
+      "tar_at_far_1pct": 0.9196666666666666,
+      "tar_at_far_0_1pct": 0.859
+    },
+    "view2_face_detected_pairs_only": {
+      "pairs": 5874,
+      "accuracy_at_threshold": 0.9696969696969697,
+      "accuracy_ci95": [
+        0.9654409261150834,
+        0.9736125297923051
+      ],
+      "auc": 0.9938011573197897,
+      "tar_at_far_1pct": 0.9370534195304525,
+      "tar_at_far_0_1pct": 0.8734263354882613
+    }
+  },
+  "identification": {
+    "note": "face_detected_only excludes images where no face was detected (evaluation assumption, not a Radd requirement)",
+    "face_detected_only": {
+      "images_used": 8950,
+      "gallery_people": 1633,
+      "known_probes": 3557,
+      "unknown_probes": 3234,
+      "rank1": 0.8023615406241215,
+      "rank1_ci95": [
+        0.7891481585605847,
+        0.8144503795333146
+      ],
+      "top5": 0.9069440539780714,
+      "top5_ci95": [
+        0.8976665729547372,
+        0.9162215350014057
+      ],
+      "with_verification_threshold": {
+        "threshold": 0.2702666223049164,
+        "unknown_correctly_rejected": 0.00030921459492888067
+      },
+      "open_set": {
+        "target_false_alarm_1pct": {
+          "search_threshold": 0.5585256814956665,
+          "unknown_wrongly_matched_on_test_half": 0.017934446505875078,
+          "known_found_first_and_above_threshold": 0.4821478774247962,
+          "known_in_top5_and_above_threshold": 0.4841158279448974
+        },
+        "target_false_alarm_5pct": {
+          "search_threshold": 0.5152453184127808,
+          "unknown_wrongly_matched_on_test_half": 0.05380333951762523,
+          "known_found_first_and_above_threshold": 0.6058476244025864,
+          "known_in_top5_and_above_threshold": 0.6100646612313747
+        }
+      },
+      "event_sized_galleries": {
+        "50_people": {
+          "repeats": 20,
+          "rank1_mean": 0.9408133823399455,
+          "top5_mean": 0.9815063457664707,
+          "open_set_mean": {
+            "target_false_alarm_1pct": {
+              "search_threshold": 0.4599281132221222,
+              "unknown_wrongly_matched_on_test_half": 0.011688311688311689,
+              "known_found_first_and_above_threshold": 0.7368996511311903,
+              "known_in_top5_and_above_threshold": 0.7377402246990366
+            },
+            "target_false_alarm_5pct": {
+              "search_threshold": 0.3983382686972618,
+              "unknown_wrongly_matched_on_test_half": 0.056586270871985166,
+              "known_found_first_and_above_threshold": 0.8431264800965298,
+              "known_in_top5_and_above_threshold": 0.8456282978458685
+            }
+          }
+        },
+        "100_people": {
+          "repeats": 20,
+          "rank1_mean": 0.9225233871644193,
+          "top5_mean": 0.9787152203232727,
+          "open_set_mean": {
+            "target_false_alarm_1pct": {
+              "search_threshold": 0.4860517650842667,
+              "unknown_wrongly_matched_on_test_half": 0.01137909709338281,
+              "known_found_first_and_above_threshold": 0.6766783628394129,
+              "known_in_top5_and_above_threshold": 0.6782786821645026
+            },
+            "target_false_alarm_5pct": {
+              "search_threshold": 0.4249081969261169,
+              "unknown_wrongly_matched_on_test_half": 0.05439084724799011,
+              "known_found_first_and_above_threshold": 0.797588532488955,
+              "known_in_top5_and_above_threshold": 0.8003080507781567
+            }
+          }
+        },
+        "300_people": {
+          "repeats": 20,
+          "rank1_mean": 0.8854279729882635,
+          "top5_mean": 0.9580819407520813,
+          "open_set_mean": {
+            "target_false_alarm_1pct": {
+              "search_threshold": 0.5225999817252159,
+              "unknown_wrongly_matched_on_test_half": 0.011904761904761904,
+              "known_found_first_and_above_threshold": 0.5923972803566594,
+              "known_in_top5_and_above_threshold": 0.593406049300239
+            },
+            "target_false_alarm_5pct": {
+              "search_threshold": 0.45940222442150114,
+              "unknown_wrongly_matched_on_test_half": 0.059802102659245515,
+              "known_found_first_and_above_threshold": 0.7351459258483802,
+              "known_in_top5_and_above_threshold": 0.7392482805738971
+            }
+          }
+        },
+        "1000_people": {
+          "repeats": 20,
+          "rank1_mean": 0.8307575230130919,
+          "top5_mean": 0.9240694471459229,
+          "open_set_mean": {
+            "target_false_alarm_1pct": {
+              "search_threshold": 0.5550367951393127,
+              "unknown_wrongly_matched_on_test_half": 0.013327149041434755,
+              "known_found_first_and_above_threshold": 0.4966713821346083,
+              "known_in_top5_and_above_threshold": 0.4981087455392027
+            },
+            "target_false_alarm_5pct": {
+              "search_threshold": 0.5010879248380661,
+              "unknown_wrongly_matched_on_test_half": 0.053370439084724795,
+              "known_found_first_and_above_threshold": 0.6488519821851914,
+              "known_in_top5_and_above_threshold": 0.6526734821092077
+            }
+          }
+        }
+      },
+      "exploratory_multi_photo_gallery": {
+        "note": "exploratory experiment only; Radd requirements define one reference photo and one embedding",
+        "people": 530,
+        "probes": 1371,
+        "one_photo": {
+          "rank1": 0.849744711889132,
+          "top5": 0.9416484318016046
+        },
+        "three_photos_averaged": {
+          "rank1": 0.9693654266958425,
+          "rank1_ci95": [
+            0.9591539022611233,
+            0.9781181619256017
+          ],
+          "top5": 0.9905178701677607
+        }
+      }
+    },
+    "all_images_incl_no_face_fallback": {
+      "images_used": 9056,
+      "gallery_people": 1650,
+      "known_probes": 3603,
+      "unknown_probes": 3261,
+      "rank1": 0.7882320288648349,
+      "rank1_ci95": [
+        0.774909797391063,
+        0.8009991673605329
+      ],
+      "top5": 0.8870385789619761,
+      "top5_ci95": [
+        0.8756591729114627,
+        0.8967527060782681
+      ],
+      "with_verification_threshold": {
+        "threshold": 0.2702666223049164,
+        "unknown_correctly_rejected": 0.00030665440049064706
+      },
+      "open_set": {
+        "target_false_alarm_1pct": {
+          "search_threshold": 0.9812420606613159,
+          "unknown_wrongly_matched_on_test_half": 0.008583690987124463,
+          "known_found_first_and_above_threshold": 0.0002775464890369137,
+          "known_in_top5_and_above_threshold": 0.0002775464890369137
+        },
+        "target_false_alarm_5pct": {
+          "search_threshold": 0.5285922884941101,
+          "unknown_wrongly_matched_on_test_half": 0.04475781729000613,
+          "known_found_first_and_above_threshold": 0.5620316402997502,
+          "known_in_top5_and_above_threshold": 0.5645295587010825
+        }
+      }
+    }
+  },
+  "confidence_calibration": {
+    "method": "logistic regression on cosine similarity, fitted on View 1 train",
+    "coef": 13.156261909247588,
+    "intercept": -3.623212495062713,
+    "view2_brier_score": 0.03694706063367861,
+    "view2_expected_calibration_error": 0.043381398805775614,
+    "similarity_for_probability": {
+      "0.50": 0.27539832515161033,
+      "0.80": 0.38076977265566614,
+      "0.90": 0.4424081180922466,
+      "0.95": 0.4992034606435377,
+      "0.99": 0.6246707766908018
+    }
+  }
+}
