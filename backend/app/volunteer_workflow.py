@@ -13,6 +13,7 @@ from .firebase import bucket
 from .service import normalize_photo, photo_expired
 from .case_models import STAGES, age_group
 from . import found_reports as found_lifecycle
+from . import face_matching
 from .push import notify_guardian
 from .volunteer_alerts import safe_dispatch
 
@@ -268,8 +269,25 @@ class VolunteerWorkflow:
             raise HTTPException(409, detail='identification_ended')
         if not data.get('photo_path'):
             raise HTTPException(409, detail='capture_required')
-        # Explicit contract for the future model worker; zero fabricated candidates.
-        return {'state': 'unavailable', 'candidates': []}
+        # Ranked candidates for human review (PBI 15/16); never automatic confirmation.
+        # Embeddings stay server-side: only registration DTOs and scores are returned.
+        engine = face_matching.get_engine()
+        if engine is None:
+            return {'state': 'unavailable', 'candidates': []}
+        try:
+            probe = engine.embed(bucket().blob(data['photo_path']).download_as_bytes())
+        except face_matching.Unavailable:
+            return {'state': 'unavailable', 'candidates': []}
+        if probe is None:
+            return {'state': 'no_reliable_candidate', 'candidates': [], 'reason': 'no_face_detected'}
+        gallery = [(doc, doc.to_dict().get(face_matching.EMBEDDING_FIELD))
+                   for doc in self.registrations() if self.eligible(doc)]
+        matches = face_matching.match(probe, gallery)
+        if not matches:
+            return {'state': 'no_reliable_candidate', 'candidates': []}
+        return {'state': 'candidates', 'candidates': [
+            {'person': self.public_registration(doc), 'similarity': face_matching.display_score(score)}
+            for doc, score in matches]}
 
     def submit_manual(self, value):
         self.profile(require_active=True)
