@@ -2,6 +2,11 @@
 import json
 import math
 import pytest
+import sys
+from types import SimpleNamespace
+from fastapi.testclient import TestClient
+from app.main import app
+from app.firebase import identity
 from app import face_matching, volunteer_workflow, service
 from app.volunteer_workflow import FoundInput
 from test_volunteer import db, vol
@@ -85,8 +90,87 @@ def test_threshold_and_top_k_come_from_settings(monkeypatch):
 
 
 def test_matching_can_be_switched_off(monkeypatch):
+    monkeypatch.delenv('RADD_FACE_MATCHING', raising=False)
+    assert REAL_GET_ENGINE() is None
     monkeypatch.setenv('RADD_FACE_MATCHING', 'off')
     assert REAL_GET_ENGINE() is None
+
+
+@pytest.fixture
+def ai_modules(monkeypatch):
+    """Fake package imports and array conversion; never import any real AI package."""
+    class Array:
+        def __getitem__(self, index):
+            return self
+    class FaceNotDetected(ValueError):
+        pass
+    deepface = SimpleNamespace(build_model=lambda model: None, represent=lambda **kw: [])
+    monkeypatch.setitem(sys.modules, 'numpy', SimpleNamespace(
+        asarray=lambda image: Array(), ascontiguousarray=lambda array: array))
+    monkeypatch.setitem(sys.modules, 'deepface', SimpleNamespace(DeepFace=deepface))
+    monkeypatch.setitem(sys.modules, 'deepface.modules', SimpleNamespace())
+    monkeypatch.setitem(sys.modules, 'deepface.modules.exceptions', SimpleNamespace(
+        FaceNotDetected=FaceNotDetected))
+    return deepface, FaceNotDetected
+
+
+def real_engine(monkeypatch):
+    monkeypatch.setenv('RADD_FACE_MATCHING', 'on')
+    monkeypatch.setattr(face_matching, '_engine', None)
+    return REAL_GET_ENGINE()
+
+
+@pytest.mark.parametrize('package', ['numpy', 'deepface'])
+def test_enabled_missing_package_raises_when_embedding(monkeypatch, ai_modules, package):
+    monkeypatch.setitem(sys.modules, package, None)
+    engine = real_engine(monkeypatch)
+    assert isinstance(engine, face_matching.DeepFaceEngine)
+    assert REAL_GET_ENGINE() is engine
+    with pytest.raises(face_matching.Unavailable):
+        engine.embed(service.normalize_photo(photo()))
+
+
+@pytest.mark.parametrize('error', [ModuleNotFoundError('tensorflow'),
+                                  ModuleNotFoundError('tf_keras'), ValueError('model loading')])
+def test_model_loading_failure_is_unavailable(monkeypatch, ai_modules, error):
+    def fail(model):
+        raise error
+    ai_modules[0].build_model = fail
+    with pytest.raises(face_matching.Unavailable):
+        real_engine(monkeypatch).embed(service.normalize_photo(photo()))
+
+
+def test_no_face_exception_is_distinct_from_model_failure(monkeypatch, ai_modules):
+    deepface, no_face = ai_modules
+    engine = real_engine(monkeypatch)
+    def fail(error):
+        def represent(**kwargs):
+            raise error
+        deepface.represent = represent
+    fail(no_face('no face'))
+    assert engine.embed(service.normalize_photo(photo())) is None
+    for error in (ValueError('detector loading'), RuntimeError('inference')):
+        fail(error)
+        with pytest.raises(face_matching.Unavailable):
+            engine.embed(service.normalize_photo(photo()))
+
+
+def test_engine_preserves_configuration_and_normalizes_largest_face(monkeypatch, ai_modules):
+    deepface, _ = ai_modules
+    models, options = [], []
+    deepface.build_model = models.append
+    def represent(**kwargs):
+        options.append(kwargs)
+        return [dict(facial_area=dict(w=1, h=1), embedding=[0, 2] + [0] * (SIZE - 2)),
+                dict(facial_area=dict(w=2, h=2), embedding=[3] + [0] * (SIZE - 1))]
+    deepface.represent = represent
+    engine = real_engine(monkeypatch)
+    assert engine.embed(service.normalize_photo(photo())) == unit(1)
+    assert engine.embed(service.normalize_photo(photo())) == unit(1)
+    assert models == ['Facenet512']
+    assert all({k: v for k, v in o.items() if k != 'img_path'} == dict(
+        model_name='Facenet512', detector_backend='mtcnn', enforce_detection=True,
+        align=True, normalization='Facenet2018') for o in options)
 
 
 # ---------- candidates endpoint ----------
@@ -126,10 +210,46 @@ def test_registrations_without_embedding_are_not_ai_candidates_but_stay_listed(d
     assert len(vol().profiles_list()) == 1  # still available for manual review
 
 
+def test_registration_with_explicit_null_embedding_is_not_an_ai_candidate_but_stays_listed(db, monkeypatch):
+    guardian, person = guardian_with_individual('guardian-a')
+    ref = guardian.user.collection('individuals').document(person)
+    ref.update({face_matching.EMBEDDING_FIELD: None})
+    stored = ref.get().to_dict()
+    assert face_matching.EMBEDDING_FIELD in stored
+    assert stored[face_matching.EMBEDDING_FIELD] is None
+    reviewer = vol()
+    assert reviewer.eligible(ref.get())
+    manual_profiles = reviewer.profiles_list()
+    assert len(manual_profiles) == 1
+    engine = use_engine(monkeypatch, unit(1))
+    assert reviewer.candidates(submit()['id']) == {'state': 'no_reliable_candidate', 'candidates': []}
+    assert engine.calls == 1
+    assert reviewer.profiles_list() == manual_profiles
+
+
 def test_model_failure_reports_unavailable_for_manual_review(db, monkeypatch):
     register(db, 'guardian-a', unit(1))
     use_engine(monkeypatch, 'unavailable')
     assert vol().candidates(submit()['id']) == {'state': 'unavailable', 'candidates': []}
+
+
+@pytest.mark.parametrize('enabled', [False, True])
+def test_candidates_endpoint_unavailable_when_disabled_or_dependencies_missing(
+        db, monkeypatch, ai_modules, enabled):
+    register(db, 'guardian-a', unit(1))
+    report = submit()
+    monkeypatch.setattr(face_matching, 'get_engine', REAL_GET_ENGINE)
+    monkeypatch.setattr(face_matching, '_engine', None)
+    if enabled:
+        monkeypatch.setenv('RADD_FACE_MATCHING', 'on')
+        monkeypatch.setitem(sys.modules, 'deepface', None)
+    else:
+        monkeypatch.delenv('RADD_FACE_MATCHING', raising=False)
+    app.dependency_overrides[identity] = lambda: {'uid': 'one', 'role': 'volunteer'}
+    with TestClient(app) as client:
+        response = client.get(f"/v1/volunteer/found-reports/{report['id']}/candidates")
+    assert response.status_code == 200
+    assert response.json() == {'state': 'unavailable', 'candidates': []}
 
 
 def test_other_event_registrations_are_never_candidates(db, monkeypatch):

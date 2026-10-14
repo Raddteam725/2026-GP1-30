@@ -13,7 +13,7 @@ Rules:
   'unavailable' and the Volunteer uses manual review.
 
 Settings (environment variables, defaults from the evaluation):
-  RADD_FACE_MATCHING      'off' disables matching entirely
+  RADD_FACE_MATCHING      'on' enables matching; unset or 'off' disables it
   RADD_MATCH_THRESHOLD    minimum similarity for a reliable candidate. Default
                           0.596 is the INITIAL integration value: the LFW search
                           threshold for ~5% false alarms with 100 registered
@@ -23,7 +23,6 @@ Settings (environment variables, defaults from the evaluation):
                           validation during integration.
   RADD_MATCH_TOP_K        maximum number of candidates returned (5)
 """
-import importlib.util
 import io
 import logging
 import math
@@ -59,16 +58,19 @@ class DeepFaceEngine:
     def __init__(self):
         self._lock = threading.Lock()
         self._deepface = None
+        self._face_not_detected = ()
 
     def _load(self):
         if self._deepface is None:
             try:
                 from deepface import DeepFace
+                from deepface.modules.exceptions import FaceNotDetected
                 DeepFace.build_model(MODEL)
             except Exception as error:  # missing package, weights download, TensorFlow
                 log.error("face model unavailable: %s", type(error).__name__)
                 raise Unavailable() from None
             self._deepface = DeepFace
+            self._face_not_detected = FaceNotDetected
 
     def warm_up(self):
         with self._lock:
@@ -78,27 +80,27 @@ class DeepFaceEngine:
         """Return the unit-length embedding of the main face, or None if no face is detected."""
         try:
             import numpy as np  # AI-only dependency; the rest of the backend never needs it
-        except ImportError:
+            with Image.open(io.BytesIO(image_bytes)) as image:
+                rgb = np.asarray(ImageOps.exif_transpose(image).convert("RGB"))
+            bgr = np.ascontiguousarray(rgb[:, :, ::-1])
+            with self._lock:
+                self._load()
+                try:
+                    faces = self._deepface.represent(
+                        img_path=bgr, model_name=MODEL, detector_backend=DETECTOR,
+                        enforce_detection=True, align=True, normalization=NORMALIZATION)
+                except self._face_not_detected:
+                    return None  # DeepFace 0.0.101's specific no-face exception
+            if not faces:
+                return None
+            # Several faces: use the largest, i.e. the person the photograph is of.
+            face = max(faces, key=lambda f: f["facial_area"]["w"] * f["facial_area"]["h"])
+            return normalize(face["embedding"])
+        except Unavailable:
+            raise
+        except Exception as error:
+            log.error("face embedding failed: %s", type(error).__name__)
             raise Unavailable() from None
-        with Image.open(io.BytesIO(image_bytes)) as image:
-            rgb = np.asarray(ImageOps.exif_transpose(image).convert("RGB"))
-        bgr = np.ascontiguousarray(rgb[:, :, ::-1])
-        with self._lock:
-            self._load()
-            try:
-                faces = self._deepface.represent(
-                    img_path=bgr, model_name=MODEL, detector_backend=DETECTOR,
-                    enforce_detection=True, align=True, normalization=NORMALIZATION)
-            except ValueError:
-                return None  # DeepFace raises ValueError when no face is detected
-            except Exception as error:
-                log.error("face embedding failed: %s", type(error).__name__)
-                raise Unavailable() from None
-        if not faces:
-            return None
-        # Several faces: use the largest, i.e. the person the photograph is of.
-        face = max(faces, key=lambda f: f["facial_area"]["w"] * f["facial_area"]["h"])
-        return normalize(face["embedding"])
 
 
 _engine = None
@@ -106,20 +108,21 @@ _engine_lock = threading.Lock()
 
 
 def get_engine():
-    """The shared engine, or None when matching is disabled or not installed."""
+    """The shared lazy engine, or None unless matching is explicitly enabled.
+
+    Missing AI dependencies fail with Unavailable on embed(), never as disabled.
+    """
     global _engine
-    if os.environ.get("RADD_FACE_MATCHING", "on").lower() == "off":
+    if os.environ.get("RADD_FACE_MATCHING", "off").lower() != "on":
         return None
     with _engine_lock:
         if _engine is None:
-            if importlib.util.find_spec("deepface") is None:
-                return None
             _engine = DeepFaceEngine()
         return _engine
 
 
 def set_engine(engine):
-    """Replace the engine (tests use a fake; None disables matching)."""
+    """Replace the engine (tests use a fake; None resets lazy construction)."""
     global _engine
     _engine = engine
 

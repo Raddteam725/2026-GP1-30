@@ -11,6 +11,7 @@ from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 from .firebase import database, bucket
 from .events import active_event
+from . import face_matching
 
 Image.MAX_IMAGE_PIXELS = 20_000_000
 
@@ -248,6 +249,15 @@ class GuardianService:
         new_path = None
         if value.photo_base64:
             content = normalize_photo(value.photo_base64)
+            # Inference precedes both upload and the retriable transaction.
+            # DELETE_FIELD distinguishes disabled matching from a detected no-face (None).
+            embedding = firestore.DELETE_FIELD
+            try:
+                engine = face_matching.get_engine()
+                if engine is not None:
+                    embedding = engine.embed(content)
+            except face_matching.Unavailable:
+                raise HTTPException(503, detail="face_matching_unavailable") from None
             new_path = "guardians/" + self.uid + "/individuals/" + ref.id + "/" + uuid4().hex + ".jpg"
             bucket().blob(new_path).upload_from_string(content, content_type="image/jpeg")
         transaction = self.db.transaction()
@@ -275,9 +285,9 @@ class GuardianService:
             data.update(guardian_id=self.uid, updated_at=firestore.SERVER_TIMESTAMP)
             if new_path:
                 data["photo_path"] = new_path
-                # Capture metadata is not a retention deadline. Invalidate the
-                # old reference embedding when replacing the photograph.
-                data["face_embedding"] = firestore.DELETE_FIELD
+                # The photograph and its new embedding (or removal) commit together.
+                # Capture metadata is not a retention deadline.
+                data[face_matching.EMBEDDING_FIELD] = embedding
                 data["embedding_path"] = firestore.DELETE_FIELD
                 data["photo_captured_at"] = firestore.SERVER_TIMESTAMP
             if existing is None:
