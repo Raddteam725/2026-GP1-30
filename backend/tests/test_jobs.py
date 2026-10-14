@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import Mock
 import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app import jobs, cleanup
+from app import jobs, cleanup, delivery_queue
 from test_volunteer import db
 
 real_retry_alerts = jobs.retry_alerts
@@ -50,6 +50,11 @@ def test_failing_job_does_not_stop_the_others(calls, monkeypatch):
     assert jobs.run_cleanup() is False
     assert calls == CLEANUP
 
+needs_inline_delivery = pytest.mark.skipif(
+    not hasattr(delivery_queue, 'delivery_mode'),
+    reason='inline push delivery belongs to the paused hosting work, not this branch')
+
+@needs_inline_delivery
 def test_main_retry_defaults_to_inline_delivery(calls, mode):
     assert jobs.main(['retry']) == 0
     assert os.environ['RADD_DELIVERY_MODE'] == 'inline'
@@ -62,6 +67,7 @@ def test_main_refuses_queue_delivery_and_runs_nothing(calls, monkeypatch):
     assert exit_info.value.code not in (0, None)
     assert calls == []
 
+@needs_inline_delivery
 def test_main_returns_1_when_a_job_fails(calls, mode, monkeypatch):
     def broken():
         calls.append('guardian')
@@ -69,6 +75,13 @@ def test_main_returns_1_when_a_job_fails(calls, mode, monkeypatch):
     monkeypatch.setattr(jobs, 'retry_guardian_alerts', broken)
     assert jobs.main(['retry']) == 1
     assert calls == RETRY
+
+@pytest.mark.skipif(hasattr(delivery_queue, 'delivery_mode'), reason='only on branches without inline delivery')
+def test_cli_refuses_to_run_jobs_without_inline_delivery(calls, mode):
+    with pytest.raises(SystemExit) as exit_info:
+        jobs.main(['cleanup'])
+    assert exit_info.value.code not in (0, None)
+    assert calls == []
 
 def test_unknown_command_exits_2(calls, mode):
     with pytest.raises(SystemExit) as exit_info:

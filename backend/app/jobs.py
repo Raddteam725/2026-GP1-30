@@ -109,6 +109,11 @@ def main(argv=None):
         os.environ['RADD_DELIVERY_MODE'] = 'inline'
     elif mode == 'queue':
         sys.exit('RADD_DELIVERY_MODE=queue is not allowed for jobs: queued pushes die when the process exits')
+    if not hasattr(delivery_queue, 'delivery_mode'):
+        # This branch has no inline push delivery (that belongs to the paused
+        # hosting work), so a one-shot job could exit before queued pushes are
+        # sent. Locally, maintenance runs only through `run_dev.py --local-jobs`.
+        sys.exit('The maintenance CLI needs inline push delivery, which is not part of this branch; use run_dev.py --local-jobs')
     delivery_queue.delivery_mode()
     succeeded = run_retry() if args.group == 'retry' else run_cleanup()
     return 0 if succeeded else 1
