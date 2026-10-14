@@ -90,6 +90,11 @@ def embed_one(source, model, detector, normalization):
     already centred on the face)."""
     from deepface import DeepFace
     src = str(source) if not isinstance(source, np.ndarray) else source
+    if isinstance(src, str) and not src.isascii():
+        # DeepFace rejects non-English characters in file paths (e.g. some AgeDB
+        # names), so read the image ourselves; same BGR pixels as cv2.imread.
+        import cv2
+        src = cv2.imdecode(np.fromfile(src, dtype=np.uint8), cv2.IMREAD_COLOR)
     try:
         rep = DeepFace.represent(img_path=src, model_name=model, detector_backend=detector,
                                  enforce_detection=True, align=True, normalization=normalization)

@@ -1,0 +1,98 @@
+{
+  "dataset": "AgeDB (official photo release, team-generated pairs, seed 0)",
+  "model": "ArcFace",
+  "detector": "yunet",
+  "normalization": "ArcFace",
+  "config": "ArcFace_yunet_ArcFace",
+  "quick_run": false,
+  "date_utc": "2026-10-14T22:27:45+00:00",
+  "machine": {
+    "system": "Darwin",
+    "processor": "arm",
+    "python": "3.11.9"
+  },
+  "photos": {
+    "people": 567,
+    "photos": 16488,
+    "files_skipped_bad_name": 0,
+    "used": 16487,
+    "no_face_detected": 1242
+  },
+  "embedding_minutes": 20.44,
+  "agedb30_style_protocol": {
+    "same_person_pairs": 3000,
+    "different_person_pairs": 3000,
+    "tenfold_accuracy_mean": 0.8090407769461683,
+    "tenfold_accuracy_std": 0.0227619968990717,
+    "auc": 0.8823187777777779,
+    "tar_at_far_1pct": 0.366,
+    "at_lfw_threshold": {
+      "threshold": 0.27211296558380127,
+      "accuracy": 0.7385,
+      "accuracy_ci95": [
+        0.7276625,
+        0.7498375
+      ],
+      "same_person_accepted": 0.5026666666666667,
+      "different_person_wrongly_accepted": 0.025666666666666667
+    }
+  },
+  "same_person_accepted_at_lfw_threshold_by_group": {
+    "gap_5_9_years": {
+      "pairs": 46021,
+      "same_person_accepted": 0.8120205992916277,
+      "ci95": [
+        0.8082179874405163,
+        0.8158237543730036
+      ]
+    },
+    "gap_10_19_years": {
+      "pairs": 67803,
+      "same_person_accepted": 0.7698331932215389,
+      "ci95": [
+        0.7667791248174859,
+        0.773020367830332
+      ]
+    },
+    "gap_20_29_years": {
+      "pairs": 45237,
+      "same_person_accepted": 0.6863850387956761,
+      "ci95": [
+        0.6822954661007582,
+        0.6906077989256583
+      ]
+    },
+    "gap_30_plus_years": {
+      "pairs": 51328,
+      "same_person_accepted": 0.5085528366583542,
+      "ci95": [
+        0.5039159912718204,
+        0.5131312344139651
+      ]
+    },
+    "younger_photo_child_under_13": {
+      "pairs": 2603,
+      "same_person_accepted": 0.2773722627737226,
+      "ci95": [
+        0.2597003457548982,
+        0.29390126776796005
+      ]
+    },
+    "younger_photo_teen_13_17": {
+      "pairs": 5783,
+      "same_person_accepted": 0.46100639806328897,
+      "ci95": [
+        0.4485561127442504,
+        0.4738025246411897
+      ]
+    },
+    "younger_photo_adult_18_plus": {
+      "pairs": 202003,
+      "same_person_accepted": 0.7095538185076459,
+      "ci95": [
+        0.707429963911427,
+        0.7113509452829909
+      ]
+    }
+  }
+}
