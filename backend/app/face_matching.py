@@ -14,8 +14,13 @@ Rules:
 
 Settings (environment variables, defaults from the evaluation):
   RADD_FACE_MATCHING      'off' disables matching entirely
-  RADD_MATCH_THRESHOLD    minimum similarity for a reliable candidate (0.596:
-                          ~5% false alarms for 100 registered people on LFW)
+  RADD_MATCH_THRESHOLD    minimum similarity for a reliable candidate. Default
+                          0.596 is the INITIAL integration value: the LFW search
+                          threshold for ~5% false alarms with 100 registered
+                          people. The evaluation showed the threshold changes
+                          with gallery size, so it is not validated for every
+                          event size; the final threshold policy still needs
+                          validation during integration.
   RADD_MATCH_TOP_K        maximum number of candidates returned (5)
 """
 import importlib.util
