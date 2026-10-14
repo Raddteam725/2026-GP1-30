@@ -30,7 +30,6 @@ import math
 import os
 import threading
 
-import numpy as np
 from PIL import Image, ImageOps
 
 MODEL = "Facenet512"
@@ -77,6 +76,10 @@ class DeepFaceEngine:
 
     def embed(self, image_bytes):
         """Return the unit-length embedding of the main face, or None if no face is detected."""
+        try:
+            import numpy as np  # AI-only dependency; the rest of the backend never needs it
+        except ImportError:
+            raise Unavailable() from None
         with Image.open(io.BytesIO(image_bytes)) as image:
             rgb = np.asarray(ImageOps.exif_transpose(image).convert("RGB"))
         bgr = np.ascontiguousarray(rgb[:, :, ::-1])
@@ -122,11 +125,11 @@ def set_engine(engine):
 
 
 def normalize(vector):
-    v = np.asarray(vector, dtype=np.float64)
-    n = float(np.linalg.norm(v))
-    if v.shape != (EMBEDDING_SIZE,) or not math.isfinite(n) or n == 0:
+    v = [float(x) for x in vector]
+    n = math.sqrt(sum(x * x for x in v))
+    if len(v) != EMBEDDING_SIZE or not math.isfinite(n) or n == 0:
         raise Unavailable()
-    return (v / n).tolist()
+    return [x / n for x in v]
 
 
 def valid_embedding(value):
@@ -136,7 +139,7 @@ def valid_embedding(value):
 
 def similarity(a, b):
     """Cosine similarity of two unit-length embeddings (-1..1)."""
-    return float(np.dot(np.asarray(a, dtype=np.float64), np.asarray(b, dtype=np.float64)))
+    return float(sum(x * y for x, y in zip(a, b)))
 
 
 def display_score(value):
