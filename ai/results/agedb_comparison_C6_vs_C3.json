@@ -1,0 +1,56 @@
+{
+  "script_version": "v2",
+  "dataset": "AgeDB photo release, team-generated AgeDB-30-style pairs (seed 0); not the official AgeDB-30 protocol",
+  "configs": {
+    "C6": "Facenet512_mtcnn_Facenet2018",
+    "C3": "ArcFace_yunet_ArcFace"
+  },
+  "lfw_thresholds": {
+    "C6": 0.43883511424064636,
+    "C3": 0.27211296558380127
+  },
+  "date_utc": "2026-10-15T21:18:31+00:00",
+  "all_photos": {
+    "pairs": 6000,
+    "auc": {
+      "C6": 0.9403594444444445,
+      "C3": 0.8894497777777777,
+      "difference_C6_minus_C3": 0.05090966666666685,
+      "difference_ci95_identity_bootstrap": [
+        0.03921374508716789,
+        0.06200612356509565
+      ]
+    },
+    "accuracy_at_own_lfw_threshold": {
+      "C6": 0.7635,
+      "C3": 0.7416666666666667,
+      "difference_C6_minus_C3": 0.02183333333333326,
+      "difference_ci95_identity_bootstrap": [
+        0.006067088284345152,
+        0.03647703331691188
+      ]
+    }
+  },
+  "face_detected_in_both_configs": {
+    "pairs": 5083,
+    "auc": {
+      "C6": 0.9438230444489472,
+      "C3": 0.9153864814673673,
+      "difference_C6_minus_C3": 0.028436562981579816,
+      "difference_ci95_identity_bootstrap": [
+        0.017890081886065255,
+        0.03893535551820044
+      ]
+    },
+    "accuracy_at_own_lfw_threshold": {
+      "C6": 0.7643124139287822,
+      "C3": 0.7621483375959079,
+      "difference_C6_minus_C3": 0.0021640763328742985,
+      "difference_ci95_identity_bootstrap": [
+        -0.013856979985828072,
+        0.017503058049756777
+      ]
+    }
+  },
+  "note": "Paired identity-level bootstrap. A CI excluding 0 supports a difference on these pairs only."
+}
