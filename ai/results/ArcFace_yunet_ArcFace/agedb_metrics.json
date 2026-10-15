@@ -1,5 +1,5 @@
 {
-  "script_version": "v2",
+  "script_version": "v2.1",
   "dataset": "AgeDB photo release, team-generated pairs (seed 0); not the official AgeDB-30 protocol",
   "protocol_notes": [
     "Team-generated pairs (seed 0); the official AgeDB-30 pair list is not used.",
@@ -13,7 +13,7 @@
   "detector": "yunet",
   "normalization": "ArcFace",
   "config": "ArcFace_yunet_ArcFace",
-  "date_utc": "2026-10-15T21:18:18+00:00",
+  "date_utc": "2026-10-15T21:44:49+00:00",
   "machine": {
     "system": "Darwin",
     "processor": "arm",
@@ -31,7 +31,15 @@
     "documented_subjects": 568,
     "names_with_both_genders": 5,
     "median_photos_per_name": 29.0,
-    "max_photos_per_name": 78
+    "max_photos_per_name": 78,
+    "potentially_affected_pairs": {
+      "names_flagged": 5,
+      "same_person_pairs_involving_flagged_names": 6200,
+      "same_person_pairs_total": 210389,
+      "share_of_same_person_pairs": 0.02946922129959266,
+      "main_protocol_same_person_pairs_involving_flagged_names": 134,
+      "main_protocol_different_person_pairs_involving_flagged_names": 75
+    }
   },
   "embedding_minutes": 0.0,
   "agedb30_style_protocol": {
@@ -481,6 +489,7 @@
     }
   },
   "interpretation_limits": [
+    "Dataset limitation: potential identity-label inconsistencies were identified in 5 names (both genders appear in their file names), including one that may combine two individuals. 2.9% of same-person pairs involve these names; this is a count of potentially affected pairs, not a verified number of mislabelled pairs. The impact on evaluation metrics and on the comparison between configurations has not been quantified.",
     "Children: pairs compare a photo taken before age 13 with a photo of the same person at least 5 years later; this is not Radd's same-event identification accuracy for children.",
     "1:1 verification only; it does not measure 1:N search or validate Radd's search threshold."
   ]

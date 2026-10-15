@@ -56,7 +56,7 @@ from sklearn.metrics import roc_auc_score, roc_curve
 from lfw_common import (AI_DIR, MODELS, DETECTORS, NORMALIZATIONS, DEFAULT_DETECTOR,
                         DEFAULT_NORMALIZATION, RESULTS, config_tag, embed_all)
 
-VERSION = "v2"
+VERSION = "v2.1"  # v2.1: documentation only (identity-label limitation); same method and numbers as v2
 AGEDB = AI_DIR / "data" / "agedb"
 NAME = re.compile(r"^(\d+)_(.+)_(\d+)_([mf])\.jpg$", re.IGNORECASE)
 DOCUMENTED_SUBJECTS = 568
@@ -109,6 +109,28 @@ def identity_check(people, genders):
         "median_photos_per_name": float(np.median(list(counts.values()))),
         "max_photos_per_name": int(max(counts.values())),
     }
+
+
+def identity_limitation(genders, same, main_same, neg):
+    """Documents names whose file names carry both genders (possible label errors or
+    two people sharing a name). Counts pairs that involve them; changes no result."""
+    flagged = {n for n, g in genders.items() if len(g) > 1}
+    involves = lambda pairs: sum(1 for p in pairs if p[5] in flagged or p[6] in flagged)
+    share = involves(same) / len(same) if same else 0.0
+    counts = {
+        "names_flagged": len(flagged),
+        "same_person_pairs_involving_flagged_names": involves(same),
+        "same_person_pairs_total": len(same),
+        "share_of_same_person_pairs": share,
+        "main_protocol_same_person_pairs_involving_flagged_names": involves(main_same),
+        "main_protocol_different_person_pairs_involving_flagged_names": involves(neg),
+    }
+    note = (f"Dataset limitation: potential identity-label inconsistencies were identified in "
+            f"{len(flagged)} names (both genders appear in their file names), including one that may "
+            f"combine two individuals. {share:.1%} of same-person pairs involve these names; this is a "
+            f"count of potentially affected pairs, not a verified number of mislabelled pairs. The impact "
+            f"on evaluation metrics and on the comparison between configurations has not been quantified.")
+    return counts, note
 
 
 def build_pairs(people):
@@ -291,6 +313,7 @@ def main():
     people, genders, skipped = load_photos()
     ids = identity_check(people, genders)
     same, main_same, neg_matched, neg_random = build_pairs(people)
+    limitation_counts, limitation_note = identity_limitation(genders, same, main_same, neg_matched)
     paths = sorted({str(x) for pairs in (same, main_same, neg_matched, neg_random) for p in pairs for x in p[:2]})
     t0 = time.perf_counter()
     emb, found = embed_all(paths, args.model, tag + "_agedb", args.detector, args.normalization)
@@ -313,12 +336,13 @@ def main():
         "photos": {"distinct_names": len(people), "photos": sum(len(v) for v in people.values()),
                    "files_skipped_bad_name": skipped, "used": len(paths),
                    "no_face_detected": int(sum(not found[p] for p in paths))},
-        "identity_check": ids,
+        "identity_check": {**ids, "potentially_affected_pairs": limitation_counts},
         "embedding_minutes": round(minutes, 2),
         "agedb30_style_protocol": views(lambda f: protocol_block(f(main_same), f(neg_matched), score, boot, lfw_threshold)),
         "variant_random_negatives": views(lambda f: protocol_block(f(main_same), f(neg_random), score, boot, lfw_threshold)),
         "same_person_accepted_at_lfw_threshold_by_group": views(lambda f: breakdown(f(same), score, boot, lfw_threshold)),
         "interpretation_limits": [
+            limitation_note,
             "Children: pairs compare a photo taken before age 13 with a photo of the same person at least 5 years later; "
             "this is not Radd's same-event identification accuracy for children.",
             "1:1 verification only; it does not measure 1:N search or validate Radd's search threshold.",

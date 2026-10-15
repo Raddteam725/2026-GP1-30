@@ -1,5 +1,5 @@
 {
-  "script_version": "v2",
+  "script_version": "v2.1",
   "dataset": "AgeDB photo release, team-generated AgeDB-30-style pairs (seed 0); not the official AgeDB-30 protocol",
   "configs": {
     "C6": "Facenet512_mtcnn_Facenet2018",
@@ -9,7 +9,7 @@
     "C6": 0.43883511424064636,
     "C3": 0.27211296558380127
   },
-  "date_utc": "2026-10-15T21:18:31+00:00",
+  "date_utc": "2026-10-15T21:45:10+00:00",
   "all_photos": {
     "pairs": 6000,
     "auc": {
@@ -52,5 +52,6 @@
       ]
     }
   },
-  "note": "Paired identity-level bootstrap. A CI excluding 0 supports a difference on these pairs only."
+  "note": "Paired identity-level bootstrap. A CI excluding 0 supports a difference on these pairs only.",
+  "dataset_limitation": "Dataset limitation: potential identity-label inconsistencies were identified in 5 names (both genders appear in their file names), including one that may combine two individuals. 2.9% of same-person pairs involve these names; this is a count of potentially affected pairs, not a verified number of mislabelled pairs. The impact on evaluation metrics and on the comparison between configurations has not been quantified."
 }

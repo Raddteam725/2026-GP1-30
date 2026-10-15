@@ -22,15 +22,16 @@ from datetime import datetime, timezone
 import numpy as np
 from sklearn.metrics import roc_auc_score
 
-from evaluate_agedb import (RESULTS, IdentityBootstrap, build_pairs, load_photos, VERSION)
+from evaluate_agedb import (RESULTS, IdentityBootstrap, build_pairs, identity_limitation, load_photos, VERSION)
 from lfw_common import config_tag, embed_all
 
 CONFIGS = {"C6": ("Facenet512", "mtcnn", "Facenet2018"), "C3": ("ArcFace", "yunet", "ArcFace")}
 
 
 def main():
-    people, _, _ = load_photos()
+    people, genders, _ = load_photos()
     same, main_same, neg_matched, _ = build_pairs(people)
+    _, limitation_note = identity_limitation(genders, same, main_same, neg_matched)
     pairs = main_same + neg_matched
     y = np.array([True] * len(main_same) + [False] * len(neg_matched))
     paths = sorted({str(x) for p in pairs for x in p[:2]})
@@ -82,6 +83,7 @@ def main():
         "all_photos": compare(np.ones(len(pairs), bool)),
         "face_detected_in_both_configs": compare(detected["C6"] & detected["C3"]),
         "note": "Paired identity-level bootstrap. A CI excluding 0 supports a difference on these pairs only.",
+        "dataset_limitation": limitation_note,
     }
     out = RESULTS / "agedb_comparison_C6_vs_C3.json"
     out.write_text(json.dumps(result, indent=2), encoding="utf-8")
