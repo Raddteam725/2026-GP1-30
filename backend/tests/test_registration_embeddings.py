@@ -123,7 +123,7 @@ def test_details_only_edit_preserves_embedding_without_calling_ai(storage, monke
 
 @pytest.mark.parametrize('replacement', [False, True])
 @pytest.mark.parametrize('failure', ['engine', 'missing_dependency'])
-def test_unavailable_ai_returns_http_503_without_saved_data_or_orphan_photo(
+def test_unavailable_ai_blocks_startup_or_returns_503_without_side_effects(
         storage, monkeypatch, ai_modules, replacement, failure):
     db, bucket = storage
     owner = guardian('owner')
@@ -141,6 +141,13 @@ def test_unavailable_ai_returns_http_503_without_saved_data_or_orphan_photo(
         monkeypatch.setitem(sys.modules, 'deepface', None)
     app.dependency_overrides[identity] = lambda: {'uid': 'owner'}
     try:
+        if failure == 'missing_dependency':
+            # Enabled AI must fail startup before serving registration requests.
+            with pytest.raises(RuntimeError, match='AI startup check failed'):
+                with TestClient(app):
+                    pytest.fail('The server must not accept requests without its enabled AI')
+            assert db.data == before_db and bucket.data == before_photos
+            return
         with TestClient(app) as client:
             response = (client.put(f'/v1/individuals/{item_id}', json=value().model_dump())
                         if replacement else client.post('/v1/individuals', json=value().model_dump()))

@@ -245,6 +245,12 @@ def test_candidates_endpoint_unavailable_when_disabled_or_dependencies_missing(
         monkeypatch.setitem(sys.modules, 'deepface', None)
     else:
         monkeypatch.delenv('RADD_FACE_MATCHING', raising=False)
+    if enabled:
+        # Enabled AI that cannot load must now fail before accepting requests.
+        with pytest.raises(RuntimeError, match='AI startup check failed'):
+            with TestClient(app):
+                pass
+        return
     app.dependency_overrides[identity] = lambda: {'uid': 'one', 'role': 'volunteer'}
     with TestClient(app) as client:
         response = client.get(f"/v1/volunteer/found-reports/{report['id']}/candidates")

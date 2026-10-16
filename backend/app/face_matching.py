@@ -73,8 +73,36 @@ class DeepFaceEngine:
             self._face_not_detected = FaceNotDetected
 
     def warm_up(self):
-        with self._lock:
-            self._load()
+        """Preflight recognition inference and MTCNN detection separately.
+
+        A synthetic image is not expected to contain a face, so the detector's
+        FaceNotDetected exception is normal. No private photo is used.
+        """
+        try:
+            import numpy as np
+            synthetic = np.full((160, 160, 3), 127, dtype=np.uint8)
+            with self._lock:
+                self._load()
+                # Skip detection ONLY for the recognition inference test.
+                embeddings = self._deepface.represent(
+                    img_path=synthetic, model_name=MODEL,
+                    detector_backend="skip", enforce_detection=False,
+                    align=False, normalization=NORMALIZATION)
+                if not embeddings:
+                    raise Unavailable()
+                normalize(embeddings[0]["embedding"])
+                # Exercise the real configured detector separately.
+                try:
+                    self._deepface.extract_faces(
+                        img_path=synthetic, detector_backend=DETECTOR,
+                        enforce_detection=True, align=True)
+                except self._face_not_detected:
+                    pass  # Expected on a uniform, faceless synthetic image.
+        except Unavailable:
+            raise
+        except Exception as error:
+            log.error("face warm-up failed: %s", type(error).__name__)
+            raise Unavailable() from None
 
     def embed(self, image_bytes):
         """Return the unit-length embedding of the main face, or None if no face is detected."""

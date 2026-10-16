@@ -37,7 +37,14 @@ no engine. To enable it, install `backend/requirements.txt` (including
 `$env:RADD_FACE_MATCHING = 'on'` before starting the backend. See
 [the environment example](.env.example); this file is documentation, not
 automatically loaded configuration. AI packages and model weights require extra
-disk/memory; the model loads lazily and may download weights on first use.
+disk/memory. When matching is enabled, FastAPI startup loads Facenet512 and
+performs one synthetic embedding inference (recognition with detection skipped),
+then exercises MTCNN detection separately on that synthetic image. A no-face
+result is expected; unexpected errors prevent API startup. Neither step reads,
+stores, or logs real user photos or embeddings. This check does not prove
+real-photo detection accuracy or end-to-end phone connectivity. When matching
+is disabled the server starts without loading the AI model. The first enabled
+start may download model weights.
 The existing lock file includes the three AI pins; its AI transitive dependencies
 are resolved by pip rather than fully locked.
 

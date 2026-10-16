@@ -13,6 +13,18 @@ from .service import GuardianService
 
 @asynccontextmanager
 async def lifespan(app):
+    # Execute before yielding: requests cannot be served if enabled AI fails.
+    if os.getenv('RADD_FACE_MATCHING', 'off').lower() == 'on':
+        from . import face_matching
+        try:
+            engine = face_matching.get_engine()
+            if engine is None:
+                raise face_matching.Unavailable()
+            engine.warm_up()
+        except Exception as error:
+            logging.getLogger('uvicorn.error').error(
+                'AI startup check failed (%s)', type(error).__name__)
+            raise RuntimeError('AI startup check failed') from None
     jobs = LocalJobs() if os.getenv('RADD_LOCAL_JOBS') == '1' else None
     if jobs:
         jobs.start()
