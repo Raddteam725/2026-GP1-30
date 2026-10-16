@@ -32,8 +32,9 @@ POST/GET /v1/cases; GET /v1/cases/{id}; PUT /v1/cases/{id}/guided-report; POST /
 ## Face matching and registration embeddings
 
 Matching is **off by default**: an unset `RADD_FACE_MATCHING` or `off` returns
-no engine. To enable it, install `backend/requirements.txt` (including
-`deepface==0.0.101`, `tensorflow==2.21.0`, `tf_keras==2.21.0`) and set
+no engine. Install the base backend using `backend/requirements.txt`. For AI-enabled
+environments, install `backend/requirements-ai.txt` instead; it includes the
+base requirements plus DeepFace, TensorFlow, and tf_keras. Then set
 `$env:RADD_FACE_MATCHING = 'on'` before starting the backend. See
 [the environment example](.env.example); this file is documentation, not
 automatically loaded configuration. AI packages and model weights require extra
@@ -45,7 +46,8 @@ stores, or logs real user photos or embeddings. This check does not prove
 real-photo detection accuracy or end-to-end phone connectivity. When matching
 is disabled the server starts without loading the AI model. The first enabled
 start may download model weights.
-The existing lock file includes the three AI pins; its AI transitive dependencies
+The base `requirements.lock` excludes AI dependencies. The optional AI
+packages are pinned in `requirements-ai.txt`; their transitive dependencies
 are resolved by pip rather than fully locked.
 
 Registration and photo replacement embed the normalized JPEG before upload and
@@ -90,7 +92,10 @@ backend/.venv/Scripts/python backend/scripts/backfill_face_embeddings.py --proje
 
 Only registrations in the specified single Active Event, owned by enabled
 Guardians, with valid unexpired retention and a private stored photo are eligible.
-Deleting registrations and active case/found-report edit locks are skipped.
+Deleting registrations are skipped. Active case and found-report edit locks
+do not prevent backfilling a missing embedding, provided the registration
+remains valid and eligible. Backfill does not modify the registered
+photograph, case associations, or other profile fields.
 Unknown legacy retention is skipped; this command never invents retention periods.
 Existing embeddings and explicit `null` are never reprocessed. Missing fields
 are embedded using the same engine from their existing stored JPEGs. Each write

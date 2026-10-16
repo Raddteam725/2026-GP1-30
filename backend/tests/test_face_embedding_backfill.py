@@ -83,7 +83,7 @@ def test_backfill_transaction_retries_do_not_repeat_inference(storage, monkeypat
 
 
 @pytest.mark.parametrize('reason', ['embedding', 'null', 'expired', 'legacy', 'deleting',
-                                  'active_case', 'active_found', 'other_event',
+                                  'other_event',
                                   'ownership', 'no_photo', 'foreign_photo',
                                   'disabled_guardian', 'wrong_role'])
 def test_ineligible_registrations_never_run_ai(storage, monkeypatch, reason):
@@ -95,8 +95,6 @@ def test_ineligible_registrations_never_run_ai(storage, monkeypatch, reason):
         'expired': {'registration_expires_at': datetime.now(timezone.utc) - timedelta(seconds=1)},
         'legacy': {'registration_expires_at': None},
         'deleting': {'deleting': True},
-        'active_case': {'active_case_id': 'active'},
-        'active_found': {'active_found_report_id': 'active'},
         'other_event': {'event_id': 'other'},
         'ownership': {'guardian_id': 'other'},
         'no_photo': {'photo_path': None},
@@ -113,6 +111,34 @@ def test_ineligible_registrations_never_run_ai(storage, monkeypatch, reason):
     result = script.backfill(db, bucket, 'test-event', dry_run=False)
     assert result['eligible'] == 0 and result['written'] == 0 and engine.calls == 0
     assert db.data == before
+
+
+@pytest.mark.parametrize('field', ['active_case_id', 'active_found_report_id'])
+def test_active_case_or_found_report_can_receive_missing_embedding(storage, monkeypatch, field):
+    db, bucket = storage
+    owner, item_id, ref = registration()
+    ref.update({field: 'active'})
+    before = ref.get().to_dict()
+    photos = dict(bucket.data)
+    engine = use_engine(monkeypatch, unit(1))
+
+    preview = script.backfill(db, bucket, 'test-event')
+    assert preview['eligible'] == 1
+    assert preview['written'] == 0
+    assert engine.calls == 0
+
+    result = script.backfill(db, bucket, 'test-event', dry_run=False)
+    assert result['written'] == 1
+    assert result['changed'] == 0
+    assert ref.get().to_dict() == {
+        **before, face_matching.EMBEDDING_FIELD: unit(1)
+    }
+    assert bucket.data == photos
+    assert engine.calls == 1
+
+    again = script.backfill(db, bucket, 'test-event', dry_run=False)
+    assert again['written'] == 0
+    assert engine.calls == 1
 
 
 @pytest.mark.parametrize('new_embedding', [unit(0, 1), 'disabled'])
@@ -175,10 +201,15 @@ def test_backfill_rechecks_concurrent_changes_inside_transaction(storage, monkey
         return original(content)
     engine.embed = changed
     result = script.backfill(db, bucket, 'test-event', dry_run=False)
-    assert result['changed'] == 1 and result['written'] == 0
+    expected_written = 1 if change == 'active_case' else 0
+    assert result['written'] == expected_written
+    assert result['changed'] == 1 - expected_written
     current = ref.get().to_dict() or {}
     if change in ('embedding', 'null'):
         assert current[face_matching.EMBEDDING_FIELD] == (None if change == 'null' else unit(0, 1))
+    elif change == 'active_case':
+        assert current['active_case_id'] == 'case'
+        assert current[face_matching.EMBEDDING_FIELD] == unit(1)
     else:
         assert face_matching.EMBEDDING_FIELD not in current
 

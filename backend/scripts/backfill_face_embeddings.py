@@ -22,7 +22,6 @@ def eligible(data, guardian, event_id, uid, item_id):
     return (guardian.get('role') == 'guardian' and guardian.get('active') is not False
             and data.get('guardian_id') == uid and data.get('event_id') == event_id
             and face_matching.EMBEDDING_FIELD not in data
-            and not data.get('active_case_id') and not data.get('active_found_report_id')
             and registration_available(data)
             and isinstance(path, str)
             and path.startswith(f'guardians/{uid}/individuals/{item_id}/'))
