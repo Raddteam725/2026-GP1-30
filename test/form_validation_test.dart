@@ -51,4 +51,27 @@ void main() {
       expect(FormValidation.password(weak, s), s.passwordHelp, reason: weak);
     }
   });
+
+  test('Password confirmation must exactly match the password', () {
+    expect(
+      FormValidation.confirmPassword('', 'ValidPass1#', s),
+      s.requiredField,
+    );
+    expect(
+      FormValidation.confirmPassword(null, 'ValidPass1#', s),
+      s.requiredField,
+    );
+    expect(
+      FormValidation.confirmPassword('ValidPass1!', 'ValidPass1#', s),
+      s.passwordMismatch,
+    );
+    expect(
+      FormValidation.confirmPassword('ValidPass1# ', 'ValidPass1#', s),
+      s.passwordMismatch,
+    );
+    expect(
+      FormValidation.confirmPassword('ValidPass1#', 'ValidPass1#', s),
+      isNull,
+    );
+  });
 }

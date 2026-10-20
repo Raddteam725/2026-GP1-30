@@ -33,7 +33,8 @@ class _AuthScreenState extends State<AuthScreen> {
   final _name = TextEditingController(),
       _email = TextEditingController(),
       _phone = TextEditingController(),
-      _password = TextEditingController();
+      _password = TextEditingController(),
+      _confirm = TextEditingController();
   bool _busy = false,
       _adult = false,
       _privacy = false,
@@ -46,7 +47,7 @@ class _AuthScreenState extends State<AuthScreen> {
       widget.mode == AuthMode.completeProfile;
   @override
   void dispose() {
-    for (final c in [_name, _email, _phone, _password]) {
+    for (final c in [_name, _email, _phone, _password, _confirm]) {
       c.dispose();
     }
     super.dispose();
@@ -105,7 +106,8 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
     final reset = widget.mode == AuthMode.reset,
-        complete = widget.mode == AuthMode.completeProfile;
+        complete = widget.mode == AuthMode.completeProfile,
+        signUp = widget.mode == AuthMode.register;
     return PopScope(
       canPop: !_busy,
       child: FeaturePage(
@@ -288,13 +290,31 @@ class _AuthScreenState extends State<AuthScreen> {
                               ? AutofillHints.newPassword
                               : AutofillHints.password,
                         ],
-                        onFieldSubmitted: (_) => _submit(),
+                        textInputAction: signUp
+                            ? TextInputAction.next
+                            : TextInputAction.done,
+                        onFieldSubmitted: signUp ? null : (_) => _submit(),
                       ),
                       if (_register) ...[
                         const SizedBox(height: 8),
                         Text(
                           s.passwordHelp,
                           style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                      if (signUp) ...[
+                        const SizedBox(height: 16),
+                        PasswordInput(
+                          label: s.confirmPassword,
+                          controller: _confirm,
+                          enabled: !_busy && !_accountCreated,
+                          validator: (v) => FormValidation.confirmPassword(
+                            v,
+                            _password.text,
+                            s,
+                          ),
+                          autofillHints: const [AutofillHints.newPassword],
+                          onFieldSubmitted: (_) => _submit(),
                         ),
                       ],
                       const SizedBox(height: 16),

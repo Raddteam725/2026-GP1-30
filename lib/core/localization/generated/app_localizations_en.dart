@@ -91,6 +91,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get password => 'Password';
 
   @override
+  String get confirmPassword => 'Confirm Password';
+
+  @override
   String get fullName => 'Full Name';
 
   @override
@@ -233,6 +236,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get passwordHelp =>
       'Use at least 8 characters, including an uppercase English letter, a lowercase English letter, a number, and a special character such as !, @, #, or \$.';
+
+  @override
+  String get passwordMismatch => 'Passwords do not match.';
 
   @override
   String get confirmRequired => 'Both confirmations are required.';
