@@ -2,17 +2,17 @@ import re
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-# The current release supports Saudi Arabian phone numbers (Sprint-0 scope);
+# The current release supports Saudi Arabian mobile numbers (Sprint-0 scope);
 # other numbering plans are future work. Any common way of writing a Saudi
 # number is accepted -- +966…, 00966…, 966… or the national 0… form, with
 # spaces/dashes and Arabic-Indic digits -- and stored in one canonical
 # international form. Shared by Guardian self-registration and Admin
 # Volunteer creation; the Flutter validator mirrors it (lib/shared/saudi_phone.dart).
-SAUDI_PHONE_CANONICAL = r"^\+966[1-9][0-9]{8}$"
+SAUDI_PHONE_CANONICAL = r"^\+9665[0-9]{8}$"
 _ARABIC_INDIC = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 
 def normalize_saudi_phone(value):
-    """Canonical +966XXXXXXXXX, or None when the value is not a Saudi number."""
+    """Canonical +9665XXXXXXXX, or None for an invalid Saudi mobile number."""
     if not isinstance(value, str):
         return None
     digits = re.sub(r"[\s\-().]", "", value.translate(_ARABIC_INDIC))
@@ -26,7 +26,7 @@ def normalize_saudi_phone(value):
         national = digits[1:]
     else:
         return None
-    return "+966" + national if re.fullmatch(r"[1-9][0-9]{8}", national) else None
+    return "+966" + national if re.fullmatch(r"5[0-9]{8}", national) else None
 
 class ProfileUpdate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")

@@ -16,6 +16,19 @@ def missing(*a, **kw):
     raise cli.auth.UserNotFoundError('not found')
 
 
+@pytest.mark.parametrize('phone', ['0412345678', '0112345678', '+966412345678'])
+def test_provision_rejects_non_mobile_without_writing(db, phone):
+    before = dict(db.data)
+    with pytest.raises(ValueError, match='saudi_phone_required'):
+        provision(db, SimpleNamespace(uid='new', email='new@example.test'), 'Volunteer', phone, 'VOL-NEW')
+    assert db.data == before
+
+
+def test_provision_uses_shared_mobile_normalization(db):
+    provision(db, SimpleNamespace(uid='new', email='new@example.test'), 'Volunteer', '٠٥١٢٣٤٥٦٧٨', 'VOL-NEW')
+    assert db.data['users/new']['phone'] == '+966512345678'
+
+
 def test_preview_never_creates_auth_or_profile_or_reads_password(db, monkeypatch):
     monkeypatch.setattr(cli.auth, 'get_user_by_email', missing)
     monkeypatch.setattr(cli.auth, 'create_user', lambda **kw: pytest.fail('write'))

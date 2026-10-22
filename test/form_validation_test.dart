@@ -18,13 +18,20 @@ void main() {
       '00966 50 123 4567': '+966501234567',
       '966-50-123-4567': '+966501234567',
       '٠٥٠١٢٣٤٥٦٧': '+966501234567', // Arabic-Indic digits
-      '+966112345678': '+966112345678', // landline
-      ' 0112345678 ': '+966112345678',
+      ' (05) 012.345-67 ': '+966501234567',
+      '+٩٦٦٥٠١٢٣٤٥٦٧': '+966501234567',
     }.entries) {
       expect(normalizeSaudiPhone(entry.key), entry.value, reason: entry.key);
       expect(FormValidation.phone(entry.key, s), isNull, reason: entry.key);
     }
     for (final bad in [
+      '0412345678',
+      '0112345678',
+      '+966412345678',
+      '+966112345678',
+      '٠٤١٢٣٤٥٦٧٨',
+      '966612345678',
+      '٠٥١٢٣٤٥٦٧٨٩',
       '+201234567890', // another country
       '+9665123456789', // too long
       '05123', // too short
@@ -36,6 +43,11 @@ void main() {
       expect(FormValidation.phone(bad, s), isNotNull, reason: bad);
     }
     expect(FormValidation.phone('abc', s), s.invalidPhone);
+    expect(normalizeSaudiPhone(null), isNull);
+    for (final locale in ['en', 'ar']) {
+      final localized = lookupAppLocalizations(Locale(locale));
+      expect(FormValidation.phone('0412345678', localized), localized.invalidPhone);
+    }
   });
 
   test('Password policy: at least 8 with upper, lower, number and symbol', () {

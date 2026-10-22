@@ -240,16 +240,22 @@ def test_guided_report_completes_without_a_textual_last_seen_answer(storage):
     ("+966512345678", "+966512345678"), ("0512345678", "+966512345678"),  # mobile, either form
     ("00966 51 234 5678", "+966512345678"), ("966-51-234-5678", "+966512345678"),
     ("٠٥١٢٣٤٥٦٧٨", "+966512345678"),  # Arabic-Indic digits
-    ("+966112345678", "+966112345678"), ("0112345678", "+966112345678"),  # Riyadh landline
+    (" (05) 123.456-78 ", "+966512345678"), ("+٩٦٦٥١٢٣٤٥٦٧٨", "+966512345678"),
+    ("+966112345678", None), ("0112345678", None),
+    ("0412345678", None), ("+966412345678", None), ("٠٤١٢٣٤٥٦٧٨", None),
+    ("966612345678", None), ("٠٥١٢٣٤٥٦٧٨٩", None), (None, None),
     ("+201234567890", None), ("+9665123456789", None), ("05123", None), ("+96601234567", None), ("", None)])
-def test_guardian_registration_accepts_any_saudi_number_and_stores_it_canonically(phone, canonical):
-    from app.models import ProfileUpdate, normalize_saudi_phone
+def test_guardian_registration_accepts_only_saudi_mobile_numbers(phone, canonical):
+    import re
+    from app.models import ProfileCreate, ProfileUpdate, SAUDI_PHONE_CANONICAL, normalize_saudi_phone
     assert normalize_saudi_phone(phone) == canonical
-    if canonical:
-        assert ProfileUpdate(full_name="G", phone=phone).phone == canonical
-    else:
-        with pytest.raises(ValidationError):
-            ProfileUpdate(full_name="G", phone=phone)
+    for model, extra in ((ProfileUpdate, {}), (ProfileCreate, {'age_confirmed': True, 'privacy_accepted': True})):
+        if canonical:
+            assert re.fullmatch(SAUDI_PHONE_CANONICAL, canonical)
+            assert model(full_name="G", phone=phone, **extra).phone == canonical
+        else:
+            with pytest.raises(ValidationError):
+                model(full_name="G", phone=phone, **extra)
 
 def test_terminal_vocabulary_is_the_documented_one():
     assert TERMINAL_STATUSES == ("reunited", "resolved", "cancelled", "referred_to_authority")

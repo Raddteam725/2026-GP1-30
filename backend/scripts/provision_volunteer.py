@@ -5,10 +5,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from firebase_admin import auth, firestore
 from app.firebase import database, firebase_app
+from app.models import normalize_saudi_phone
 
 def provision(db, user, name, phone, volunteer_id, *, create_only=False):
     if not all(isinstance(value, str) and value.strip() for value in (user.uid, user.email, name, phone, volunteer_id)):
         raise ValueError('An existing email/password Auth account and non-empty profile fields are required')
+    phone = normalize_saudi_phone(phone)
+    if phone is None:
+        raise ValueError('saudi_phone_required')
     ref = db.collection('users').document(user.uid)
     @firestore.transactional
     def save(tx):

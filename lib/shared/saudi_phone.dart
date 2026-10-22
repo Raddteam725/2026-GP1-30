@@ -1,9 +1,9 @@
-/// Saudi Arabian phone numbers (the current release's documented scope).
+/// Saudi Arabian mobile numbers (the current release's documented scope).
 ///
 /// Accepts every common way of writing one -- `+966…`, `00966…`, `966…` or
 /// the national `0…` form, with spaces/dashes and Arabic-Indic digits -- and
-/// returns the one canonical international form `+966XXXXXXXXX`, or null
-/// when the value is not a Saudi number. Mirrors the backend's
+/// returns the one canonical international form `+9665XXXXXXXX`, or null
+/// when the value is not a Saudi mobile number. Mirrors the backend's
 /// `normalize_saudi_phone`, so the stored value is identical whichever side
 /// validated it.
 String? normalizeSaudiPhone(String? value) {
@@ -27,5 +27,5 @@ String? normalizeSaudiPhone(String? value) {
   } else {
     return null;
   }
-  return RegExp(r'^[1-9][0-9]{8}$').hasMatch(national) ? '+966$national' : null;
+  return RegExp(r'^5[0-9]{8}$').hasMatch(national) ? '+966$national' : null;
 }
