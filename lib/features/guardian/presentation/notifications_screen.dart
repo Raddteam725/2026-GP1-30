@@ -79,8 +79,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     try {
       await AppServices.of(context).guardian.readNotification(value.id);
       if (!mounted) return;
-      await Navigator.of(context)
-          .pushNamed(AppRoutes.caseStatus, arguments: value.caseId);
+      await Navigator.of(context).pushNamed(
+        value.foundReportId != null ? AppRoutes.qrCode : AppRoutes.caseStatus,
+        arguments: value.caseId,
+      );
       if (mounted) _reload();
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -125,9 +127,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         : Icons.notifications_active_outlined,
                     color: caseStatusColor(value.status),
                   ),
-                  title: Text(caseStatusLabel(value.status, s)),
+                  title: Text(
+                    value.foundReportId == null
+                        ? caseStatusLabel(value.status, s)
+                        : value.status == 'reunited'
+                        ? s.foundReportReunitedNotification(
+                            value.individualName ?? '',
+                          )
+                        : s.foundReportIdentifiedNotification(
+                            value.individualName ?? '',
+                          ),
+                  ),
                   subtitle: Text(
-                    '${value.caseId}\n${caseDate(context, value.createdAt)}',
+                    '${value.foundReportId ?? value.caseId}\n${caseDate(context, value.createdAt)}',
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => _open(value),

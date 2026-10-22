@@ -60,18 +60,23 @@ const terminalStatuses = {
 class GuardianNotification {
   const GuardianNotification({
     required this.id,
-    required this.caseId,
+    this.caseId,
+    this.foundReportId,
+    this.individualName,
     required this.status,
     required this.read,
     this.createdAt,
   });
-  final String id, caseId, status;
+  final String id, status;
+  final String? caseId, foundReportId, individualName;
   final bool read;
   final DateTime? createdAt;
   factory GuardianNotification.fromJson(Map<String, dynamic> j) =>
       GuardianNotification(
         id: j['id'] as String,
-        caseId: j['case_id'] as String,
+        caseId: j['case_id'] as String?,
+        foundReportId: j['found_report_id'] as String?,
+        individualName: j['individual_name'] as String?,
         status: j['status'] as String,
         read: j['read_at'] != null,
         createdAt: DateTime.tryParse(j['created_at']?.toString() ?? ''),

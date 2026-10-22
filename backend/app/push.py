@@ -52,25 +52,27 @@ _NOTIFICATION_TEXT = {
 def _registrations(db, guardian_uid):
     return db.collection("users").document(guardian_uid).collection("fcm_registrations")
 
-def notify_guardian(guardian_uid, *, kind, status, case_id, event_id):
+def notify_guardian(guardian_uid, *, kind, status, event_id, case_id=None, found_report_id=None):
     """Persist first, then enqueue an immediate bounded local delivery attempt."""
     try:
         db = database()
-        ref = db.collection('users').document(guardian_uid).collection('notifications').document(case_id + '-' + status)
+        context = {'found_report_id': found_report_id} if found_report_id else {'case_id': case_id}
+        context_id = found_report_id or case_id
+        ref = db.collection('users').document(guardian_uid).collection('notifications').document(context_id + '-' + status)
         @firestore.transactional
         def record(tx):
             if not ref.get(transaction=tx).exists:
-                tx.set(ref, {'case_id': case_id, 'event_id': event_id, 'kind': kind,
+                tx.set(ref, {**context, 'event_id': event_id, 'kind': kind,
                     'status': status, 'created_at': firestore.SERVER_TIMESTAMP, 'read_at': None})
         if not ref.get().exists:
             record(db.transaction())
         logging.getLogger('uvicorn.error').info('Radd Guardian event %s T3 history_ready epoch_ms=%d', ref.id, time.time()*1000)
         delivery_queue.submit(ref.path, lambda: _deliver_guardian(guardian_uid, kind=kind,
-            status=status, case_id=case_id, event_id=event_id))
+            status=status, event_id=event_id, **context))
     except Exception as error:
         logging.getLogger('uvicorn.error').warning('Guardian event pending retry (%s)', type(error).__name__)
 
-def _deliver_guardian(guardian_uid, *, kind, status, case_id, event_id):
+def _deliver_guardian(guardian_uid, *, kind, status, event_id, case_id=None, found_report_id=None):
     """Recheck live session eligibility in the worker; never return a fake receipt."""
     try:
         db = database()
@@ -86,10 +88,12 @@ def _deliver_guardian(guardian_uid, *, kind, status, case_id, event_id):
         if account.disabled:
             return
         docs = [d for d in docs if d.to_dict().get('session_auth_time', 0) >= account.tokens_valid_after_timestamp / 1000]
-        notification = db.collection('users').document(guardian_uid).collection('notifications').document(case_id + '-' + status)
+        context = {'found_report_id': found_report_id} if found_report_id else {'case_id': case_id}
+        context_id = found_report_id or case_id
+        notification = db.collection('users').document(guardian_uid).collection('notifications').document(context_id + '-' + status)
         if not notification.get().exists:
             return
-        data = {"kind": kind, "status": status, "case_id": case_id, "event_id": event_id, "role": "guardian", "notification_id": case_id + "-" + status}
+        data = {"kind": kind, "status": status, **context, "event_id": event_id, "role": "guardian", "notification_id": context_id + "-" + status}
         pairs = []
         for doc in docs:
             receipt = notification.collection('deliveries').document(doc.id)
@@ -158,6 +162,12 @@ def retry_guardian_alerts():
     for user in db.collection('users').where(filter=FieldFilter('role', '==', 'guardian')).stream():
         for note in user.reference.collection('notifications').stream():
             data = note.to_dict() or {}
+            if data.get('found_report_id'):
+                report = db.collection('found_reports').document(data['found_report_id']).get().to_dict() or {}
+                if report and data.get('status') and data.get('event_id') == report.get('event_id'):
+                    delivery_queue.submit(note.reference.path, lambda uid=user.id, d=data: _deliver_guardian(uid,
+                        kind='found_report', status=d['status'], found_report_id=d['found_report_id'], event_id=d['event_id']))
+                continue
             case = db.collection('cases').document(data.get('case_id', '_missing')).get().to_dict() or {}
             closed = case.get('closed_at')
             if not case or case.get('scrubbed_at') or (closed and datetime.now(timezone.utc)-closed >= timedelta(hours=24)):

@@ -35,6 +35,58 @@ def code_of(db, report_id):
     (what the Guardian endpoint shows); the document id is never accepted."""
     return db.data['found_reports/' + report_id]['verification_code']
 
+
+@pytest.mark.parametrize('method', ['camera', 'manual'])
+@pytest.mark.parametrize('push_fails', [False, True])
+def test_standalone_notifies_owner_at_confirmation_and_handover(db, monkeypatch, method, push_fails):
+    guardian, person = guardian_with_individual('guardian')
+    other, _ = guardian_with_individual('other-guardian')
+    profile_id = volunteer_workflow.key(guardian.get(person))
+    pushes = []
+    writes = []
+    original = vol().found_notification
+    def record(self, tx, *args):
+        assert tx is db
+        writes.append(db.transactions)
+        return original(tx, *args)
+    monkeypatch.setattr(volunteer_workflow.VolunteerWorkflow, 'found_notification', record)
+    def push(uid=None, **data):
+        owner = uid or data['guardian_uid']
+        notes = CaseService(guardian).list_notifications()
+        note = next(n for n in notes if n['status'] == data['status'])
+        assert owner == guardian.uid
+        assert note['found_report_id'] == data['found_report_id']
+        assert 'case_id' not in note
+        assert note['individual_name'] == 'Missing Person'
+        assert db.data['found_reports/' + note['found_report_id']]['status'] == data['status']
+        pushes.append(data)
+        if push_fails:
+            raise OSError('push unavailable')
+    monkeypatch.setattr(volunteer_workflow, 'notify_guardian', push)
+    if method == 'camera':
+        report = submit()
+        report = vol().confirm(report['id'], profile_id)
+    else:
+        report = manual(profile_id=profile_id)
+    assert report['status'] == 'identity_confirmed'
+    vol().confirm(report['id'], profile_id)
+    assert len(pushes) == 1
+    vol().begin_verification(report['id'])
+    vol().verify_guardian_identifier(report['id'], code_of(db, report['id']))
+    assert vol().handover_found(report['id'])['status'] == 'reunited'
+    vol().handover_found(report['id'])
+    assert [p['status'] for p in pushes] == ['identity_confirmed', 'reunited']
+    assert len(writes) == 2 and writes[0] < writes[1]
+    assert len(CaseService(guardian).list_notifications()) == 2
+    assert CaseService(other).list_notifications() == []
+    app.dependency_overrides[identity] = lambda: {'uid': 'other-guardian'}
+    client = TestClient(app)
+    assert client.get('/v1/notifications').json() == []
+    note_id = report['id'] + '-identity_confirmed'
+    assert client.put('/v1/notifications/' + note_id + '/read').status_code == 404
+    app.dependency_overrides[identity] = lambda: {'uid': 'guardian'}
+    assert len(client.get('/v1/notifications').json()) == 2
+
 def test_found_upload_is_real_private_idempotent_and_ai_explicitly_unavailable(db):
     report = submit()
     retry = submit()

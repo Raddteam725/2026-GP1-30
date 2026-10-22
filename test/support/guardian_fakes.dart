@@ -329,6 +329,8 @@ class TestRepository implements GuardianRepository {
         GuardianNotification(
           id: n.id,
           caseId: n.caseId,
+          foundReportId: n.foundReportId,
+          individualName: n.individualName,
           status: n.status,
           read: true,
           createdAt: n.createdAt,

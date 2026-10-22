@@ -49,6 +49,20 @@ def valid_id(value):
     return value
 
 class VolunteerWorkflow:
+    def found_notification(self, tx, report_id, status, guardian_id, event_id, name):
+        tx.set(self.db.collection('users').document(guardian_id).collection('notifications').document(report_id + '-' + status),
+            {'found_report_id': report_id, 'event_id': event_id, 'kind': 'found_report',
+             'individual_name': name, 'status': status, 'created_at': firestore.SERVER_TIMESTAMP, 'read_at': None})
+        return dict(guardian_uid=guardian_id, found_report_id=report_id, event_id=event_id,
+                    kind='found_report', status=status)
+
+    def push_found_notification(self, push):
+        if push:
+            try:
+                notify_guardian(**push)
+            except Exception:
+                pass
+
     def registrations(self):
         self.profile(require_active=True)
         event = self.participation_event()
@@ -294,6 +308,7 @@ class VolunteerWorkflow:
             return self.public_found(found)
         person_ref = self.registration(profile_id).reference
         push = {}
+        found_push = {}
         @firestore.transactional
         def confirm(tx):
             self.profile(tx, require_active=True)
@@ -343,6 +358,8 @@ class VolunteerWorkflow:
                 # Standalone only: the short Guardian-readable fallback code,
                 # fixed for this report's whole active life.
                 tx.update(report.reference, {**identity, 'verification_code': rd.get('verification_code') or found_lifecycle.new_verification_code()})
+                found_push.update(self.found_notification(tx, report_id, found_lifecycle.IDENTIFIED,
+                    pd['guardian_id'], rd['event_id'], pd['full_name']))
                 return
             ref = self.cases.document(case_id)
             old = ref.get(transaction=tx)
@@ -366,6 +383,7 @@ class VolunteerWorkflow:
         if isinstance(outcome, dict) and outcome.get('resume'):
             # Nothing was written: hand back the existing report as it stands.
             return self.public_found(self.found_owned(outcome['resume']))
+        self.push_found_notification(found_push)
         if push:
             logging.getLogger('uvicorn.error').info('Radd event %s-match_confirmed T2 committed epoch_ms=%d', push['case_id'], time.time()*1000)
         self.delete_found_photo(report_id)
@@ -507,6 +525,7 @@ class VolunteerWorkflow:
         if report.get('matched_profile_id'):
             self.delete_found_photo(report_id)
         push = {}
+        found_push = {}
         @firestore.transactional
         def handover(tx):
             case = self.reunification_context(report_id, tx)
@@ -527,6 +546,8 @@ class VolunteerWorkflow:
                 tx.set(case.reference, found_lifecycle.minimal_completed(completed))
                 if person.exists and person.to_dict().get('active_found_report_id') == report_id:
                     tx.update(person.reference, {'active_found_report_id': firestore.DELETE_FIELD})
+                found_push.update(self.found_notification(tx, report_id, found_lifecycle.REUNITED,
+                    cd['guardian_id'], cd['event_id'], (person.to_dict() or {}).get('full_name', '')))
                 return
             tx.update(case.reference, {'status': 'reunited', 'updated_at': now, 'stage_timestamps.reunited': now,
                 'handed_over_at': now, 'handed_over_by': self.uid, 'closed_at': now,
@@ -539,6 +560,7 @@ class VolunteerWorkflow:
                 {'case_id': case.id, 'event_id': cd['event_id'], 'kind': 'status_update', 'status': 'reunited', 'created_at': now, 'read_at': None})
             push.update(guardian_id=cd['guardian_id'], case_id=case.id, event_id=cd['event_id'])
         handover(self.db.transaction())
+        self.push_found_notification(found_push)
         if push:
             logging.getLogger('uvicorn.error').info('Radd event %s-reunited T2 committed epoch_ms=%d', push['case_id'], time.time()*1000)
             safe_dispatch(self.db, push['case_id'])

@@ -3265,6 +3265,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'View Privacy Policy'**
   String get vViewPrivacyPolicy;
+
+  /// No description provided for @foundReportIdentifiedNotification.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} has been found by a volunteer. Open Radd to verify and collect them.'**
+  String foundReportIdentifiedNotification(String name);
+
+  /// No description provided for @foundReportReunitedNotification.
+  ///
+  /// In en, this message translates to:
+  /// **'Handover of {name} is complete.'**
+  String foundReportReunitedNotification(String name);
 }
 
 class _AppLocalizationsDelegate

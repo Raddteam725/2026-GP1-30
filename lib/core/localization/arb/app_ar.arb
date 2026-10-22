@@ -615,5 +615,7 @@
   "vPrivacyTitle": "سياسة الخصوصية",
   "vLocationPrivacyTitle": "إشعار الموقع والخصوصية",
   "vLocationPrivacyBody": "الوصول إلى الموقع مطلوب أثناء المشاركة في الفعالية النشطة. يستخدم Radd موقعك لدعم تنسيق العمل وإعطاء الأولوية للمتطوعين القريبين، وقد يستمر تحديث الموقع في الخلفية أثناء المشاركة الفعلية.",
-  "vViewPrivacyPolicy": "عرض سياسة الخصوصية"
+  "vViewPrivacyPolicy": "عرض سياسة الخصوصية",
+  "foundReportIdentifiedNotification": "عثر أحد المتطوعين على {name}. افتح راد للتحقق من الهوية واستلامه.",
+  "foundReportReunitedNotification": "اكتمل تسليم {name}."
 }

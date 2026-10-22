@@ -1744,4 +1744,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get vViewPrivacyPolicy => 'عرض سياسة الخصوصية';
+
+  @override
+  String foundReportIdentifiedNotification(String name) {
+    return 'عثر أحد المتطوعين على $name. افتح راد للتحقق من الهوية واستلامه.';
+  }
+
+  @override
+  String foundReportReunitedNotification(String name) {
+    return 'اكتمل تسليم $name.';
+  }
 }

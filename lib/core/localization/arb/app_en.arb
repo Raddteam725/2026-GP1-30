@@ -656,5 +656,9 @@
   "vPrivacyTitle": "Privacy Policy",
   "vLocationPrivacyTitle": "Location & Privacy Notice",
   "vLocationPrivacyBody": "Location access is required while participating in the active event. Radd uses your location to support event coordination and proximity-based Volunteer prioritization. Location may continue updating in the background during active event participation.",
-  "vViewPrivacyPolicy": "View Privacy Policy"
+  "vViewPrivacyPolicy": "View Privacy Policy",
+  "foundReportIdentifiedNotification": "{name} has been found by a volunteer. Open Radd to verify and collect them.",
+  "@foundReportIdentifiedNotification": {"placeholders": {"name": {"type": "String"}}},
+  "foundReportReunitedNotification": "Handover of {name} is complete.",
+  "@foundReportReunitedNotification": {"placeholders": {"name": {"type": "String"}}}
 }

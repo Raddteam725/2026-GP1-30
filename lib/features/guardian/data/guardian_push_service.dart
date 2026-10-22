@@ -44,8 +44,10 @@ class GuardianNotice {
     required this.caseId,
     required this.status,
     required this.kind,
+    this.foundReportId,
   });
   final String id, caseId, status, kind;
+  final String? foundReportId;
 
   /// Outcomes only the Guardian can produce (cancel/resolve) and the
   /// Guardian's own report creation: the screen they are on already shows
@@ -59,13 +61,16 @@ class GuardianNotice {
 
   static GuardianNotice? fromData(Map<String, dynamic> data) {
     if (!GuardianPushRefresh.valid(data)) return null;
-    final caseId = data['case_id'] as String, status = data['status'] as String;
+    final caseId = data['case_id'] as String? ?? '';
+    final foundReportId = data['found_report_id'] as String?;
+    final status = data['status'] as String;
     final supplied = data['notification_id'];
     return GuardianNotice(
       id: supplied is String && supplied.isNotEmpty
           ? supplied
-          : '$caseId-$status',
+          : '${foundReportId ?? caseId}-$status',
       caseId: caseId,
+      foundReportId: foundReportId,
       status: status,
       kind: data['kind']?.toString() ?? 'status_update',
     );
@@ -115,6 +120,16 @@ class GuardianPushRefresh extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   static bool valid(Map<String, dynamic> data) {
+    if (data['found_report_id'] != null) {
+      final id = data['found_report_id'];
+      return data['role'] == 'guardian' &&
+          data['kind'] == 'found_report' &&
+          data['case_id'] == null &&
+          id is String &&
+          id.isNotEmpty &&
+          !id.contains('/') &&
+          const {'identity_confirmed', 'reunited'}.contains(data['status']);
+    }
     final role = data['role'], id = data['case_id'], status = data['status'];
     return (role == null || role == 'guardian') &&
         id is String &&
@@ -134,7 +149,8 @@ class GuardianPushRefresh extends ChangeNotifier with WidgetsBindingObserver {
 
   bool acceptPush(Map<String, dynamic> data) {
     if (!valid(data)) return false;
-    final key = '${data['case_id']}|${data['status']}';
+    final key =
+        '${data['found_report_id'] ?? data['case_id']}|${data['status']}';
     final id = data['notification_id'];
     if (_events.contains(key) || (id is String && _ids.contains(id))) {
       return false;
@@ -145,7 +161,7 @@ class GuardianPushRefresh extends ChangeNotifier with WidgetsBindingObserver {
       _ids.add(id);
       if (_ids.length > 256) _ids.remove(_ids.first);
     }
-    caseId = data['case_id'] as String;
+    caseId = data['case_id'] as String?;
     notifyListeners();
     return true;
   }
@@ -177,6 +193,13 @@ class GuardianPushRefresh extends ChangeNotifier with WidgetsBindingObserver {
 class GuardianPushRouter {
   GuardianPushRouter._();
   static String? _pendingCaseId;
+  static String? _pendingFoundReportId;
+
+  static String? consumePendingFoundReportId() {
+    final id = _pendingFoundReportId;
+    _pendingFoundReportId = null;
+    return id;
+  }
 
   /// Called once, when normal authenticated application state is available
   /// (see GuardianGate) -- returns and clears the pending case id, if any.
@@ -188,6 +211,8 @@ class GuardianPushRouter {
 
   static void _setPending(RemoteMessage? message) {
     if (message == null || !GuardianPushRefresh.valid(message.data)) return;
+    _pendingFoundReportId = message.data['found_report_id'] as String?;
+    _pendingCaseId = null;
     final caseId = message.data['case_id'];
     if (caseId is String && caseId.isNotEmpty) _pendingCaseId = caseId;
   }
@@ -379,6 +404,8 @@ class GuardianPushService {
   static Future<void> handleLogout(GuardianRepository guardian) async {
     ++_generation;
     GuardianPushRefresh.instance.reset();
+    GuardianPushRouter.consumePendingFoundReportId();
+    GuardianPushRouter.consumePendingCaseId();
     if (_observing) {
       WidgetsBinding.instance.removeObserver(GuardianPushRefresh.instance);
       _observing = false;

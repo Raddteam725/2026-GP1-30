@@ -29,6 +29,10 @@ class _GuardianGateState extends State<GuardianGate> {
       return;
     }
     final caseId = GuardianPushRouter.consumePendingCaseId();
+    final foundReportId = GuardianPushRouter.consumePendingFoundReportId();
+    if (foundReportId != null && AppServices.of(context).auth.signedIn) {
+      Navigator.of(context).pushNamed(AppRoutes.qrCode);
+    }
     if (caseId != null && AppServices.of(context).auth.signedIn) {
       Navigator.of(context).pushNamed(AppRoutes.caseStatus, arguments: caseId);
     }
@@ -88,6 +92,11 @@ class _GuardianGateState extends State<GuardianGate> {
               ) {
                 if (!mounted || !context.mounted) return;
                 final caseId = GuardianPushRouter.consumePendingCaseId();
+                final foundReportId =
+                    GuardianPushRouter.consumePendingFoundReportId();
+                if (foundReportId != null) {
+                  Navigator.of(context).pushNamed(AppRoutes.qrCode);
+                }
                 if (caseId != null) {
                   Navigator.of(context)
                       .pushNamed(AppRoutes.caseStatus, arguments: caseId);

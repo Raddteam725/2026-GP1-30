@@ -1770,4 +1770,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get vViewPrivacyPolicy => 'View Privacy Policy';
+
+  @override
+  String foundReportIdentifiedNotification(String name) {
+    return '$name has been found by a volunteer. Open Radd to verify and collect them.';
+  }
+
+  @override
+  String foundReportReunitedNotification(String name) {
+    return 'Handover of $name is complete.';
+  }
 }
