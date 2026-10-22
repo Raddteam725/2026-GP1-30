@@ -530,6 +530,17 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
   void _open(VolunteerView page) {
     _update(() => _stack.add(page));
     if (page == VolunteerView.cases) unawaited(_refreshCaseLists());
+    if (page == VolunteerView.notifications) {
+      unawaited(_markNotificationsViewed());
+    }
+  }
+
+  Future<void> _markNotificationsViewed() async {
+    try {
+      await repo.markAllRead(account.uid);
+    } catch (error) {
+      if (mounted) _message(s.vLoadFailed);
+    }
   }
 
   void _replace(VolunteerView page) {

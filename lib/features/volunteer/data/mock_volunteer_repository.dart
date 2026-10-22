@@ -164,6 +164,13 @@ class MockVolunteerRepository extends VolunteerRepository {
   @override
   List<VolunteerAlert> alertsFor(String uid) =>
       List.unmodifiable(_alerts[uid] ?? []);
+  @override
+  Future<void> markAllRead(String uid) async {
+    final now = DateTime.now();
+    _alerts[uid] = [for (final alert in alertsFor(uid)) alert.withReadAt(now)];
+    notifyListeners();
+  }
+
   void _active(VolunteerAccount a) {
     if (!a.active) throw StateError('inactive');
   }

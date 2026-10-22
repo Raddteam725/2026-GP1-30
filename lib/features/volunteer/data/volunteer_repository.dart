@@ -12,6 +12,7 @@ abstract class VolunteerRepository extends ChangeNotifier {
   List<VolunteerCase> get cases;
   List<RegisteredPerson> get profiles;
   List<VolunteerAlert> alertsFor(String uid);
+  Future<void> markAllRead(String uid);
   List<FoundReport> get foundReports => const [];
   List<VolunteerCase> availableFor(String uid) =>
       cases.where((c) => c.joinable && !c.joinedBy.contains(uid)).toList();
@@ -70,6 +71,8 @@ abstract class VolunteerRepository extends ChangeNotifier {
 
 /// No mock data is returned to a real signed-in account.
 class UnconnectedVolunteerRepository extends VolunteerRepository {
+  @override
+  Future<void> markAllRead(String uid) async => _unavailable();
   @override
   bool get isPreview => false;
   @override

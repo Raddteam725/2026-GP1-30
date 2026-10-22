@@ -65,13 +65,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _data ??= AppServices.of(context).guardian.notifications();
+    _data ??= _viewNotifications();
+  }
+
+  Future<List<GuardianNotification>> _viewNotifications() async {
+    final repo = AppServices.of(context).guardian;
+    await repo.readAllNotifications();
+    return repo.notifications();
   }
 
   void _reload() {
     if (!mounted) return;
     setState(() {
-      _data = AppServices.of(context).guardian.notifications();
+      _data = _viewNotifications();
     });
   }
 

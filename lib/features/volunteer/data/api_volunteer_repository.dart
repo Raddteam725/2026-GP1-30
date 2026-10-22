@@ -822,6 +822,21 @@ class ApiVolunteerRepository extends VolunteerRepository {
     _refreshAfterAction();
   }
 
+  @override
+  Future<void> markAllRead(String uid) async {
+    if (uid != account?.uid) throw StateError('unauthorized');
+    final listedIds = _alerts.map((alert) => alert.id).toSet();
+    await _request('PUT', '/notifications/read-all');
+    if (_disposed || _accessLost || uid != account?.uid) return;
+    final now = DateTime.now();
+    _alerts = [
+      for (final alert in _alerts)
+        listedIds.contains(alert.id) ? alert.withReadAt(now) : alert,
+    ];
+    notifyListeners();
+    await refreshEvent();
+  }
+
   Future<VolunteerCase> loadCase(String id) async {
     final row = jsonDecode(
       (await _request('GET', '/cases/${Uri.encodeComponent(id)}')).body,

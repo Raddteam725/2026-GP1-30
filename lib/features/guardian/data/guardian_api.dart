@@ -255,6 +255,11 @@ class GuardianApi implements GuardianRepository {
   }
 
   @override
+  Future<void> readAllNotifications() async {
+    await _request('PUT', '/notifications/read-all');
+  }
+
+  @override
   Future<List<GuardianFoundReport>> activeFoundReports() async =>
       _list(await _request('GET', '/guardian/found-reports'))
           .map(

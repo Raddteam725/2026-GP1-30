@@ -15,6 +15,7 @@ from .case_models import STAGES, age_group
 from . import found_reports as found_lifecycle
 from .push import notify_guardian
 from .volunteer_alerts import safe_dispatch
+from .notifications import mark_all_read, read_update
 
 class FoundInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -608,9 +609,16 @@ class VolunteerWorkflow:
             doc = ref.get(transaction=tx)
             if not doc.exists:
                 raise HTTPException(404, detail='not_found')
-            if doc.to_dict().get('read_at') is None:
-                tx.update(ref, {'read_at': firestore.SERVER_TIMESTAMP})
+            update = read_update(doc.to_dict())
+            if update:
+                tx.update(ref, update)
         mark(self.db.transaction())
+
+    def notifications_read_all(self):
+        # Listing also materializes eligible new-case alerts for this caller.
+        self.notifications_list()
+        event = self.participation_event()
+        mark_all_read(self.db, self.user.collection('volunteer_notifications'), event_id=event.id)
 
 def register_workflow(router, service):
     @router.get('/cases/{case_id}')
@@ -675,4 +683,8 @@ def register_workflow(router, service):
     @router.put('/notifications/{notification_id}/read', status_code=204)
     def read(notification_id: str, s=Depends(service)):
         s.notification_read(notification_id)
+        return Response(status_code=204)
+    @router.put('/notifications/read-all', status_code=204)
+    def read_all(s=Depends(service)):
+        s.notifications_read_all()
         return Response(status_code=204)

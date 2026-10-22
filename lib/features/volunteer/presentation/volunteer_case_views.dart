@@ -55,6 +55,7 @@ extension _VolunteerCaseViews on _VolunteerWorkspaceState {
                 ),
                 if (repo.alertsFor(account.uid).any((a) => a.readAt == null))
                   const PositionedDirectional(
+                    key: ValueKey('volunteer-notification-dot'),
                     end: 12,
                     top: 10,
                     child: DecoratedBox(

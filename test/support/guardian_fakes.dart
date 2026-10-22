@@ -320,6 +320,12 @@ class TestRepository implements GuardianRepository {
   Future<List<GuardianNotification>> notifications() async =>
       List.of(notificationRecords);
   @override
+  Future<void> readAllNotifications() async {
+    for (final notification in List.of(notificationRecords)) {
+      if (!notification.read) await readNotification(notification.id);
+    }
+  }
+  @override
   Future<void> readNotification(String id) async {
     final n = notificationRecords.singleWhere((n) => n.id == id);
     if (n.read) return;

@@ -329,6 +329,7 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
                 ),
                 if (hasUnread)
                   const PositionedDirectional(
+                    key: ValueKey('guardian-notification-dot'),
                     end: 12,
                     top: 10,
                     child: DecoratedBox(

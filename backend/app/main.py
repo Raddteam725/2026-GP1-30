@@ -192,6 +192,11 @@ def read_notification(notification_id: str, s=Depends(cases_service)):
     s.mark_read(notification_id)
     return Response(status_code=204)
 
+@app.put("/v1/notifications/read-all", status_code=204)
+def read_all_notifications(s=Depends(cases_service)):
+    s.mark_all_read()
+    return Response(status_code=204)
+
 from .volunteer import router as volunteer_router
 app.include_router(volunteer_router)
 

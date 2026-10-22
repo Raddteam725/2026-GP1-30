@@ -202,6 +202,7 @@ abstract class GuardianRepository {
   Future<MissingCase> saveGuidedReport(String id, Map<String, dynamic> report);
   Future<List<GuardianNotification>> notifications();
   Future<void> readNotification(String id);
+  Future<void> readAllNotifications();
 
   /// Account-level: one Guardian QR, not one per case.
   Future<GuardianVerification> accountVerification();
