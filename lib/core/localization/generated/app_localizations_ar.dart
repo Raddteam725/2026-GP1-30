@@ -470,7 +470,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get enterFullName => 'أدخل الاسم الكامل';
 
   @override
-  String get enterAge => 'أدخل العمر';
+  String get enterAge => 'اختر العمر';
 
   @override
   String get selectRelationship => 'اختر صلة القرابة';

@@ -480,7 +480,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get enterFullName => 'Enter full name';
 
   @override
-  String get enterAge => 'Enter age';
+  String get enterAge => 'Select age';
 
   @override
   String get selectRelationship => 'Select relationship';

@@ -47,6 +47,7 @@ class AppTextInput extends StatelessWidget {
     controller: controller,
     focusNode: focusNode,
     validator: validator,
+    autovalidateMode: AutovalidateMode.onUserInteraction,
     onChanged: onChanged,
     onFieldSubmitted: onFieldSubmitted,
     keyboardType: keyboardType,

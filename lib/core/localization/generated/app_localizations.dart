@@ -959,7 +959,7 @@ abstract class AppLocalizations {
   /// No description provided for @enterAge.
   ///
   /// In en, this message translates to:
-  /// **'Enter age'**
+  /// **'Select age'**
   String get enterAge;
 
   /// No description provided for @selectRelationship.

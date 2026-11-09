@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/feature_page.dart';
 import '../../../shared/widgets/app_text_input.dart';
 import '../../../shared/widgets/password_input.dart';
+import '../../../shared/widgets/required_checkbox.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../onboarding/presentation/widgets/onboarding_layout.dart';
 import '../../guardian/data/guardian_repository.dart';
@@ -35,11 +36,7 @@ class _AuthScreenState extends State<AuthScreen> {
       _phone = TextEditingController(),
       _password = TextEditingController(),
       _confirm = TextEditingController();
-  bool _busy = false,
-      _adult = false,
-      _privacy = false,
-      _confirmError = false,
-      _sent = false;
+  bool _busy = false, _adult = false, _privacy = false, _sent = false;
   Object? _error;
   bool _accountCreated = false;
   bool get _register =>
@@ -56,8 +53,7 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> _submit() async {
     if (_busy) return;
     final valid = _form.currentState!.validate();
-    setState(() => _confirmError = _register && (!_adult || !_privacy));
-    if (!valid || _confirmError) return;
+    if (!valid || (_register && (!_adult || !_privacy))) return;
     FocusScope.of(context).unfocus();
     setState(() {
       _busy = true;
@@ -281,6 +277,10 @@ class _AuthScreenState extends State<AuthScreen> {
                       PasswordInput(
                         label: s.password,
                         controller: _password,
+                        // Rebuild to revalidate an already edited confirmation
+                        // when its source password changes, without touching
+                        // any pristine fields.
+                        onChanged: (_) => setState(() {}),
                         enabled: !_busy && !_accountCreated,
                         validator: (v) => _register
                             ? FormValidation.password(v, s)
@@ -320,23 +320,19 @@ class _AuthScreenState extends State<AuthScreen> {
                       const SizedBox(height: 16),
                     ],
                     if (_register) ...[
-                      CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
+                      RequiredCheckbox(
                         value: _adult,
-                        onChanged: _busy
-                            ? null
-                            : (v) => setState(() => _adult = v!),
-                        title: Text(s.ageConfirm),
+                        enabled: !_busy,
+                        onChanged: (v) => setState(() => _adult = v),
+                        label: Text(s.ageConfirm),
+                        errorText: s.requiredField,
                       ),
-                      CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
+                      RequiredCheckbox(
                         value: _privacy,
-                        onChanged: _busy
-                            ? null
-                            : (v) => setState(() => _privacy = v!),
-                        title: Text(s.privacyConfirm),
+                        enabled: !_busy,
+                        onChanged: (v) => setState(() => _privacy = v),
+                        label: Text(s.privacyConfirm),
+                        errorText: s.requiredField,
                       ),
                       Align(
                         alignment: AlignmentDirectional.centerStart,
@@ -347,8 +343,6 @@ class _AuthScreenState extends State<AuthScreen> {
                           child: Text(s.privacyTitle),
                         ),
                       ),
-                      if (_confirmError)
-                        ErrorNotice(message: s.confirmRequired),
                     ],
                     if (!_register && !reset)
                       Align(

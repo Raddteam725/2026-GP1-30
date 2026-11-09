@@ -134,7 +134,7 @@ void main() {
     await t.enterText(fields.at(3), 'ValidPass1!');
     await t.enterText(fields.at(4), 'ValidPass1!');
     await tapText(t, 'Create Account');
-    expect(find.text('Both confirmations are required.'), findsOneWidget);
+    expect(find.text('This field is required.'), findsNWidgets(2));
     expect(auth.registrations, 0);
     await t.ensureVisible(find.byType(CheckboxListTile).first);
     await t.tap(find.byType(CheckboxListTile).first);
@@ -232,7 +232,12 @@ void main() {
       await route(t, AppRoutes.addIndividual);
       final fields = find.byType(TextFormField);
       await t.enterText(fields.at(0), 'Test Person');
-      await t.enterText(fields.at(1), '9');
+      await t.ensureVisible(find.byKey(const ValueKey('individual-age')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('individual-age')));
+      await t.pumpAndSettle();
+      await t.tap(find.text('9').last);
+      await t.pumpAndSettle();
       await tapText(t, 'Female');
       expect(find.text('Specify relationship'), findsNothing);
       await t.tap(find.byType(DropdownButtonFormField<String>).first);
@@ -241,7 +246,7 @@ void main() {
       await t.pumpAndSettle();
       // Selecting Other immediately reveals the required custom-text field.
       expect(find.text('Specify relationship'), findsWidgets);
-      await t.enterText(find.byType(TextFormField).at(2), 'Family friend');
+      await t.enterText(find.byType(TextFormField).at(1), 'Family friend');
       await tapText(t, 'Save');
       // The relationship is now satisfied; only the still-missing photo blocks saving.
       expect(find.text('Photo required.'), findsOneWidget);
