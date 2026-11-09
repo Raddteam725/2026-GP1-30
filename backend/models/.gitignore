@@ -1,0 +1,3 @@
+# Model weights are downloaded with scripts/download_face_model.py, never committed.
+*
+!.gitignore

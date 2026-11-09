@@ -9,59 +9,66 @@ from app import face_matching
 from app.main import app, lifespan
 
 
-class NoFace(Exception):
-    pass
-
-
-def fake_ai(monkeypatch, *, recognition=None, detector_error=None):
-    """Mock heavy AI packages so unit tests never load TensorFlow or weights."""
+def fake_ai(monkeypatch, tmp_path, *, recognition=None, detector_error=None):
+    """Fake onnxruntime and MTCNN so unit tests never load TensorFlow or weights."""
+    pytest.importorskip('numpy')
     events = []
-    embedding = ([1.0] + [0.0] * 511) if recognition is None else recognition
+    output = ([1.0] + [0.0] * 511) if recognition is None else recognition
 
-    def represent(**kw):
-        events.append(('recognition', kw))
-        return [{'embedding': embedding}]
+    class Session:
+        def __init__(self, path, providers):
+            events.append(('load', providers))
 
-    def extract_faces(**kw):
-        events.append(('detector', kw))
-        raise detector_error if detector_error is not None else NoFace('no face')
+        def get_inputs(self):
+            return [SimpleNamespace(name='input.1')]
 
-    model = SimpleNamespace(
-        build_model=lambda model: events.append(('load', model)),
-        represent=represent, extract_faces=extract_faces)
-    monkeypatch.setitem(sys.modules, 'deepface', SimpleNamespace(DeepFace=model))
-    monkeypatch.setitem(sys.modules, 'deepface.modules', SimpleNamespace())
-    monkeypatch.setitem(sys.modules, 'deepface.modules.exceptions',
-                        SimpleNamespace(FaceNotDetected=NoFace))
-    monkeypatch.setitem(sys.modules, 'numpy', SimpleNamespace(
-        full=lambda shape, fill_value, dtype: object(), uint8=object()))
+        def run(self, outputs, feed):
+            events.append(('recognition', feed['input.1'].shape))
+            return [[output]]
+
+    class MTCNN:
+        def detect_faces(self, image):
+            events.append(('detector', image.shape))
+            if detector_error is not None:
+                raise detector_error
+            return []
+
+    model = tmp_path / 'w600k_r50.onnx'
+    model.write_bytes(b'fake')
+    monkeypatch.setenv('RADD_FACE_MODEL_PATH', str(model))
+    monkeypatch.setitem(sys.modules, 'onnxruntime', SimpleNamespace(InferenceSession=Session))
+    monkeypatch.setitem(sys.modules, 'mtcnn', SimpleNamespace(MTCNN=MTCNN))
     return events
 
 
-def test_warm_up_invokes_recognition_then_real_detector(monkeypatch):
-    events = fake_ai(monkeypatch)
-    face_matching.DeepFaceEngine().warm_up()
+def test_warm_up_invokes_recognition_then_real_detector(monkeypatch, tmp_path):
+    events = fake_ai(monkeypatch, tmp_path)
+    face_matching.ArcFaceEngine().warm_up()
     assert [event[0] for event in events] == ['load', 'recognition', 'detector']
-    assert events[1][1]['model_name'] == 'Facenet512'
-    assert events[1][1]['detector_backend'] == 'skip'
-    assert events[1][1]['normalization'] == 'Facenet2018'
-    assert events[2][1]['detector_backend'] == 'mtcnn'
-    assert events[2][1]['enforce_detection'] is True
+    assert events[0][1] == ['CPUExecutionProvider']
+    assert events[1][1] == (1, 3, 112, 112)
 
 
 @pytest.mark.parametrize('embedding', [[], [0.0] * 512, [1.0] * 511,
                                        [float('nan')] + [0.0] * 511])
-def test_warm_up_rejects_bad_recognition_embedding(monkeypatch, embedding):
-    events = fake_ai(monkeypatch, recognition=embedding)
+def test_warm_up_rejects_bad_recognition_embedding(monkeypatch, tmp_path, embedding):
+    events = fake_ai(monkeypatch, tmp_path, recognition=embedding)
     with pytest.raises(face_matching.Unavailable):
-        face_matching.DeepFaceEngine().warm_up()
+        face_matching.ArcFaceEngine().warm_up()
     assert 'detector' not in [e[0] for e in events]
 
 
-def test_warm_up_rejects_detector_initialization_error(monkeypatch):
-    fake_ai(monkeypatch, detector_error=RuntimeError('mtcnn unavailable'))
+def test_warm_up_rejects_detector_initialization_error(monkeypatch, tmp_path):
+    fake_ai(monkeypatch, tmp_path, detector_error=RuntimeError('mtcnn unavailable'))
     with pytest.raises(face_matching.Unavailable):
-        face_matching.DeepFaceEngine().warm_up()
+        face_matching.ArcFaceEngine().warm_up()
+
+
+def test_warm_up_rejects_missing_model_file(monkeypatch, tmp_path):
+    fake_ai(monkeypatch, tmp_path)
+    monkeypatch.setenv('RADD_FACE_MODEL_PATH', str(tmp_path / 'missing.onnx'))
+    with pytest.raises(face_matching.Unavailable):
+        face_matching.ArcFaceEngine().warm_up()
 
 
 def test_disabled_ai_skips_warm_up(monkeypatch):

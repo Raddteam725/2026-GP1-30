@@ -34,25 +34,30 @@ POST/GET /v1/cases; GET /v1/cases/{id}; PUT /v1/cases/{id}/guided-report; POST /
 Matching is **off by default**: an unset `RADD_FACE_MATCHING` or `off` returns
 no engine. Install the base backend using `backend/requirements.txt`. For AI-enabled
 environments, install `backend/requirements-ai.txt` instead; it includes the
-base requirements plus DeepFace, TensorFlow, and tf_keras. Then set
+base requirements plus DeepFace (for the MTCNN detector), TensorFlow, tf_keras and
+onnxruntime. Download the recognition model once with
+`python scripts/download_face_model.py` (saved to `backend/models/`, ignored by Git;
+or set `RADD_FACE_MODEL_PATH`). Then set
 `$env:RADD_FACE_MATCHING = 'on'` before starting the backend. See
 [the environment example](.env.example); this file is documentation, not
 automatically loaded configuration. AI packages and model weights require extra
-disk/memory. When matching is enabled, FastAPI startup loads Facenet512 and
-performs one synthetic embedding inference (recognition with detection skipped),
-then exercises MTCNN detection separately on that synthetic image. A no-face
+disk/memory. When matching is enabled, FastAPI startup loads the ArcFace model and
+MTCNN and performs one synthetic recognition inference, then exercises MTCNN
+detection separately on a synthetic image. A no-face
 result is expected; unexpected errors prevent API startup. Neither step reads,
 stores, or logs real user photos or embeddings. This check does not prove
 real-photo detection accuracy or end-to-end phone connectivity. When matching
 is disabled the server starts without loading the AI model. The first enabled
-start may download model weights.
+start may download MTCNN weights; a missing ArcFace model file stops startup.
 The base `requirements.lock` excludes AI dependencies. The optional AI
 packages are pinned in `requirements-ai.txt`; their transitive dependencies
 are resolved by pip rather than fully locked.
 
 Registration and photo replacement embed the normalized JPEG before upload and
 before the Firestore transaction. A detected face stores a private 512-dimensional
-`face_embedding`; no detected face stores explicit `null` and accepts the save.
+`face_embedding_arcface_r50`; no detected face stores explicit `null` and accepts the
+save. An embedding from the previous model (`face_embedding`) is removed in the same
+write and is never compared with the current model.
 With matching disabled, new registrations omit the field and photo replacement
 removes a previous embedding. Detail-only edits preserve it. With AI enabled,
 missing dependencies, model-loading or inference failures return HTTP 503
@@ -61,15 +66,23 @@ photograph. Transaction failures retain the existing photo-cleanup behavior.
 Photo and embedding changes commit together; ownership, edit locks and retention
 rules still apply. Embeddings never appear in API responses or logs.
 
-The engine uses Facenet512 + MTCNN + Facenet2018, largest-face selection and
-L2-normalized embeddings. The initial cosine threshold remains **0.596**
-(`RADD_MATCH_THRESHOLD`), with at most 5 candidates (`RADD_MATCH_TOP_K`). This
-threshold still needs gallery-size validation. Disabled or unavailable AI returns
+The engine (configuration C7) uses InsightFace ArcFace ResNet-50 (WebFace600K,
+`w600k_r50.onnx`, non-commercial research licence) with MTCNN detection,
+largest-face selection, 5-point alignment and L2-normalized embeddings. Whether a
+candidate is shown depends on the registered person's age: 0.65 (ages 0-2),
+0.60 (3-5), 0.38 (6-17), 0.30 (18-59), 0.38 (60+); ages 0-5 are also shown as a
+"clear winner" when the score is at least 0.45 and at least 0.25 (0-2) or 0.15 (3-5)
+above every other registered person. People with an open missing-person case come
+first: other people are then shown only if they score higher. Override the rules
+with `RADD_MATCH_RULES`; at most 5 candidates (`RADD_MATCH_TOP_K`). The response
+gives each candidate's similarity (0..1, not a probability). Disabled or unavailable AI returns
 `state: unavailable` from the candidates endpoint for manual review.
 
 ### Manual backfill
 
 Enabling matching does **not** backfill existing registrations or start a job.
+After the model change to C7, every registration needs a new embedding: the backfill
+visits registrations without `face_embedding_arcface_r50` and removes the old field.
 Use `scripts/backfill_face_embeddings.py` only as a separately authorized
 operation. **Do not execute it against the shared Firebase project during
 development**, including a preview. Unit tests use mocked Firebase and fake AI.

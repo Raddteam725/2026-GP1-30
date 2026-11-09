@@ -1,4 +1,7 @@
 -r requirements.txt
+# Face matching (configuration C7): MTCNN detector (installed with deepface, runs on
+# TensorFlow) + InsightFace ArcFace R50 run with onnxruntime.
 deepface==0.0.101
 tensorflow==2.21.0
 tf_keras==2.21.0
+onnxruntime==1.31.1

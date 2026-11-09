@@ -295,9 +295,12 @@ class VolunteerWorkflow:
             return {'state': 'unavailable', 'candidates': []}
         if probe is None:
             return {'state': 'no_reliable_candidate', 'candidates': [], 'reason': 'no_face_detected'}
-        gallery = [(doc, doc.to_dict().get(face_matching.EMBEDDING_FIELD))
-                   for doc in self.registrations() if self.eligible(doc)]
-        matches = face_matching.match(probe, gallery)
+        # Eligible registrations with an active case are in an open stage (see eligible()),
+        # so active_case_id marks the people searched first.
+        gallery = [(doc, data.get(face_matching.EMBEDDING_FIELD), data.get('age'), bool(data.get('active_case_id')))
+                   for doc in self.registrations() if self.eligible(doc)
+                   for data in (doc.to_dict(),)]
+        matches = face_matching.search(probe, gallery)
         if not matches:
             return {'state': 'no_reliable_candidate', 'candidates': []}
         return {'state': 'candidates', 'candidates': [

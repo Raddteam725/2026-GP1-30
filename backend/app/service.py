@@ -288,6 +288,8 @@ class GuardianService:
                 # The photograph and its new embedding (or removal) commit together.
                 # Capture metadata is not a retention deadline.
                 data[face_matching.EMBEDDING_FIELD] = embedding
+                for legacy in face_matching.LEGACY_EMBEDDING_FIELDS:
+                    data[legacy] = firestore.DELETE_FIELD  # an earlier model's embedding
                 data["embedding_path"] = firestore.DELETE_FIELD
                 data["photo_captured_at"] = firestore.SERVER_TIMESTAMP
             if existing is None:

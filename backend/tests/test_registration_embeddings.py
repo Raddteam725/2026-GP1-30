@@ -138,7 +138,7 @@ def test_unavailable_ai_blocks_startup_or_returns_503_without_side_effects(
         monkeypatch.setenv('RADD_FACE_MATCHING', 'on')
         monkeypatch.setattr(face_matching, '_engine', None)
         monkeypatch.setattr(face_matching, 'get_engine', REAL_GET_ENGINE)
-        monkeypatch.setitem(sys.modules, 'deepface', None)
+        monkeypatch.setitem(sys.modules, 'onnxruntime', None)
     app.dependency_overrides[identity] = lambda: {'uid': 'owner'}
     try:
         if failure == 'missing_dependency':

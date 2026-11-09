@@ -77,7 +77,10 @@ def backfill(db, storage, event_id, *, dry_run=True, limit=None):
                         or current.get('photo_path') != data['photo_path']
                         or current.get('photo_captured_at') != data.get('photo_captured_at')):
                     return False
-                tx.update(person.reference, {face_matching.EMBEDDING_FIELD: embedding})
+                update = {face_matching.EMBEDDING_FIELD: embedding}
+                # An earlier model's embedding is removed in the same write.
+                update.update({f: firestore.DELETE_FIELD for f in face_matching.LEGACY_EMBEDDING_FIELDS if f in current})
+                tx.update(person.reference, update)
                 return True
 
             if save(db.transaction()):
