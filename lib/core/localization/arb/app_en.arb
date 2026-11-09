@@ -255,6 +255,7 @@
   "vSimilarity": "Similarity",
   "vViewDetails": "View Details",
   "vManualFallback": "No useful match? Continue with manual review.",
+  "vRetakeOrManual": "If the face was covered or unclear, end this attempt and take a new, clear front photo. Otherwise, continue with manual review.",
   "vManualReview": "Manual Review",
   "vSearchName": "Search by name",
   "vAll": "All",

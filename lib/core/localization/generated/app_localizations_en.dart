@@ -762,6 +762,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get vManualFallback => 'No useful match? Continue with manual review.';
 
   @override
+  String get vRetakeOrManual =>
+      'If the face was covered or unclear, end this attempt and take a new, clear front photo. Otherwise, continue with manual review.';
+
+  @override
   String get vManualReview => 'Manual Review';
 
   @override

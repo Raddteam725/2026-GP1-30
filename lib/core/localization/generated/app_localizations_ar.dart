@@ -752,6 +752,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get vManualFallback => 'لا يوجد تطابق مناسب؟ تابع بالمراجعة اليدوية.';
 
   @override
+  String get vRetakeOrManual =>
+      'إذا كان الوجه مغطى أو غير واضح، أنهِ هذه المحاولة والتقط صورة جديدة واضحة من الأمام. وإلا فتابع بالمراجعة اليدوية.';
+
+  @override
   String get vManualReview => 'المراجعة اليدوية';
 
   @override
