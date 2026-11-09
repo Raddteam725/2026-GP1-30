@@ -75,6 +75,35 @@ class FakeSendEach:
         self.calls.append(list(messages))
         return messaging.BatchResponse([self.outcomes[m.token] for m in messages])
 
+
+@pytest.mark.parametrize('status', ['identity_confirmed', 'reunited'])
+def test_found_report_push_is_owner_scoped_private_and_retryable(storage, monkeypatch, status):
+    db, _ = storage
+    owner, _ = guardian_with_individual('owner')
+    other, _ = guardian_with_individual('other')
+    owner.register_fcm_token('owner-device')
+    other.register_fcm_token('other-device')
+    db.collection('found_reports').document('FR-test').set({'status': status, 'event_id': 'test-event'})
+    ref = owner.user.collection('notifications').document('FR-test-' + status)
+    ref.set({'found_report_id': 'FR-test', 'individual_name': 'Private Name',
+             'event_id': 'test-event', 'status': status, 'kind': 'found_report', 'read_at': None})
+    def fail(*args, **kwargs):
+        raise OSError('delivery unavailable')
+    monkeypatch.setattr(push.messaging, 'send_each', fail)
+    push.notify_guardian('owner', kind='found_report', status=status,
+                         found_report_id='FR-test', event_id='test-event')
+    assert ref.get().to_dict()['individual_name'] == 'Private Name'
+    sender = FakeSendEach({'owner-device': success()})
+    monkeypatch.setattr(push.messaging, 'send_each', sender)
+    push.retry_guardian_alerts()
+    message = sender.calls[0][0]
+    assert message.token == 'owner-device'
+    assert message.data['found_report_id'] == 'FR-test'
+    assert 'case_id' not in message.data
+    assert 'Private Name' not in str(message.data) + message.notification.body
+    push.retry_guardian_alerts()
+    assert len(sender.calls) == 1
+
 # --- Registration storage/lifecycle -------------------------------------
 
 def test_a_guardian_can_register_only_their_own_registration(storage):

@@ -25,6 +25,15 @@ abstract final class FormValidation {
       RegExp(r'[^A-Za-z0-9\s]').hasMatch(v);
   static String? password(String? v, AppLocalizations s) =>
       required(v, s) ?? (!strongPassword(v!) ? s.passwordHelp : null);
+  static String? confirmPassword(
+    String? v,
+    String password,
+    AppLocalizations s,
+  ) => v == null || v.isEmpty
+      ? s.requiredField
+      : v != password
+      ? s.passwordMismatch
+      : null;
   static String? age(String? v, AppLocalizations s) {
     final n = int.tryParse(v?.trim() ?? '');
     return n == null || n < 0 || n > 130 ? s.invalidAge : null;

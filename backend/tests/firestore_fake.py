@@ -107,6 +107,9 @@ class Collection:
 class Database:
     def __init__(self):
         self.data, self.counter = {}, 0
+        self.batches = 0
+    def batch(self):
+        return WriteBatch(self)
     def collection(self, name):
         return Collection(self, name)
     def transaction(self):
@@ -122,6 +125,18 @@ class Database:
         self.data[ref.path] = base
     def update(self, ref, value):
         self.set(ref, value, merge=True)
+
+
+class WriteBatch:
+    def __init__(self, db):
+        self.db, self.updates = db, []
+    def update(self, ref, value):
+        self.updates.append((ref, value))
+    def commit(self):
+        assert len(self.updates) <= 500
+        self.db.batches += 1
+        for ref, value in self.updates:
+            self.db.update(ref, value)
 
 class Blob:
     def __init__(self, store, path, failures):

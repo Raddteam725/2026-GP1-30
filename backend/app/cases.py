@@ -14,6 +14,7 @@ from .alerts import general_alert
 from .push import notify_guardian
 from .volunteer_alerts import safe_dispatch
 from .found_reports import new_verification_code
+from .notifications import mark_all_read, read_update
 
 def public_case(doc):
     data = doc.to_dict()
@@ -230,9 +231,13 @@ class CaseService:
             doc = ref.get(transaction=tx)
             if not doc.exists:
                 raise HTTPException(404)
-            if doc.to_dict().get("read_at") is None:
-                tx.update(ref, {"read_at": firestore.SERVER_TIMESTAMP})
+            update = read_update(doc.to_dict())
+            if update:
+                tx.update(ref, update)
         mark(self.db.transaction())
+
+    def mark_all_read(self):
+        mark_all_read(self.db, self.notifications)
 
     def verification(self, case_id):
         """Compatibility issuer for the existing Volunteer case-specific QR flow."""

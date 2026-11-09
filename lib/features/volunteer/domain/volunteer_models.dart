@@ -221,4 +221,13 @@ class VolunteerAlert {
   final AlertKind kind;
   final DateTime at;
   final CaseStatus? status;
+
+  VolunteerAlert withReadAt(DateTime time) => VolunteerAlert(
+    id: id,
+    caseId: caseId,
+    kind: kind,
+    at: at,
+    status: status,
+    readAt: readAt ?? time,
+  );
 }

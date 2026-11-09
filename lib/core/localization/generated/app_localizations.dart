@@ -248,6 +248,12 @@ abstract class AppLocalizations {
   /// **'Password'**
   String get password;
 
+  /// No description provided for @confirmPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm Password'**
+  String get confirmPassword;
+
   /// No description provided for @fullName.
   ///
   /// In en, this message translates to:
@@ -493,6 +499,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Use at least 8 characters, including an uppercase English letter, a lowercase English letter, a number, and a special character such as !, @, #, or \$.'**
   String get passwordHelp;
+
+  /// No description provided for @passwordMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords do not match.'**
+  String get passwordMismatch;
 
   /// No description provided for @confirmRequired.
   ///
@@ -3253,6 +3265,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'View Privacy Policy'**
   String get vViewPrivacyPolicy;
+
+  /// No description provided for @foundReportIdentifiedNotification.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} has been found by a volunteer. Open Radd to verify and collect them.'**
+  String foundReportIdentifiedNotification(String name);
+
+  /// No description provided for @foundReportReunitedNotification.
+  ///
+  /// In en, this message translates to:
+  /// **'Handover of {name} is complete.'**
+  String foundReportReunitedNotification(String name);
 }
 
 class _AppLocalizationsDelegate

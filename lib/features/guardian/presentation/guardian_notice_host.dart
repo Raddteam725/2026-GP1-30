@@ -99,6 +99,14 @@ class _GuardianNoticeHostState extends State<GuardianNoticeHost> {
     // the Guardian's own authenticated case record. Until it arrives (or if
     // it cannot be loaded) the banner shows the case reference instead.
     try {
+      if (notice.foundReportId != null) {
+        final values = await services.guardian.notifications();
+        final value = values.firstWhere((n) => n.id == notice.id);
+        if (mounted && generation == _generation) {
+          setState(() => _individualName = value.individualName);
+        }
+        return;
+      }
       final value = await services.guardian.missingCase(notice.caseId);
       if (mounted && generation == _generation) {
         setState(() => _individualName = value.name);
@@ -123,6 +131,10 @@ class _GuardianNoticeHostState extends State<GuardianNoticeHost> {
     final navigator = widget.navigatorKey.currentState;
     if (navigator == null) return;
     final top = GuardianNoticeHost.routeObserver.current?.settings;
+    if (notice.foundReportId != null) {
+      if (top?.name != AppRoutes.qrCode) navigator.pushNamed(AppRoutes.qrCode);
+      return;
+    }
     if (top?.name == AppRoutes.caseStatus && top?.arguments == notice.caseId) {
       return; // Already on this case: the refresh already updated it.
     }
@@ -152,15 +164,23 @@ class _GuardianNoticeHostState extends State<GuardianNoticeHost> {
                   child: NoticeBanner(
                     materialKey: ValueKey('guardian-notice-${notice.id}'),
                     title: s.caseUpdateBanner,
-                    message:
-                        '${caseStatusLabel(notice.status, s)}. '
-                        '${caseStageDescription(notice.status, s)}',
-                    context: name ?? caseDisplayId(notice.caseId),
+                    message: notice.foundReportId != null
+                        ? notice.status == 'reunited'
+                              ? s.foundReportReunitedNotification(name ?? '')
+                              : s.foundReportIdentifiedNotification(name ?? '')
+                        : '${caseStatusLabel(notice.status, s)}. '
+                              '${caseStageDescription(notice.status, s)}',
+                    context:
+                        name ??
+                        notice.foundReportId ??
+                        caseDisplayId(notice.caseId),
                     contextTextDirection: name == null
                         ? TextDirection.ltr
                         : null,
                     icon: Icons.notifications_active_outlined,
-                    actionLabel: s.viewCase,
+                    actionLabel: notice.foundReportId != null
+                        ? s.qrCode
+                        : s.viewCase,
                     closeTooltip: s.close,
                     onOpen: () => _open(notice),
                     onDismiss: _dismiss,

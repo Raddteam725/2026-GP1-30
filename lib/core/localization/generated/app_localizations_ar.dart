@@ -91,6 +91,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get password => 'كلمة المرور';
 
   @override
+  String get confirmPassword => 'تأكيد كلمة المرور';
+
+  @override
   String get fullName => 'الاسم الكامل';
 
   @override
@@ -227,6 +230,9 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get passwordHelp =>
       'يجب أن تتكون كلمة المرور من 8 أحرف على الأقل، وتشمل حرفًا إنجليزيًا كبيرًا، وحرفًا إنجليزيًا صغيرًا، ورقمًا، ورمزًا خاصًا مثل ! أو @ أو # أو \$.';
+
+  @override
+  String get passwordMismatch => 'كلمتا المرور غير متطابقتين.';
 
   @override
   String get confirmRequired => 'يجب تأكيد كلا الخيارين.';
@@ -1738,4 +1744,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get vViewPrivacyPolicy => 'عرض سياسة الخصوصية';
+
+  @override
+  String foundReportIdentifiedNotification(String name) {
+    return 'عثر أحد المتطوعين على $name. افتح راد للتحقق من الهوية واستلامه.';
+  }
+
+  @override
+  String foundReportReunitedNotification(String name) {
+    return 'اكتمل تسليم $name.';
+  }
 }

@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from firebase_admin import auth, firestore
 from app.firebase import firebase_app, database
+from app.models import normalize_saudi_phone
 from scripts.provision_volunteer import provision
 
 PROJECT = 'radd-32eb6'
@@ -15,6 +16,9 @@ PROJECT = 'radd-32eb6'
 def inspect(db, app, *, email, name, phone, volunteer_id, existing_uid=None):
     if app.project_id != PROJECT:
         raise ValueError('Unexpected Firebase project; expected radd-32eb6')
+    phone = normalize_saudi_phone(phone)
+    if phone is None:
+        raise ValueError('saudi_phone_required')
     try:
         user = auth.get_user_by_email(email, app=app)
     except auth.UserNotFoundError:

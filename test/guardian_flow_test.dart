@@ -20,6 +20,7 @@ import 'package:radd/features/guardian/presentation/guardian_qr_screen.dart';
 import 'package:radd/features/guardian/presentation/notifications_screen.dart';
 import 'package:radd/features/guardian/presentation/guided_report_screen.dart';
 import 'package:radd/features/onboarding/presentation/screens/language_selection_screen.dart';
+import 'package:radd/shared/widgets/password_input.dart';
 
 void main() {
   late TestAuth auth;
@@ -131,6 +132,7 @@ void main() {
     await t.enterText(fields.at(1), 'test@example.test');
     await t.enterText(fields.at(2), '+966500000001');
     await t.enterText(fields.at(3), 'ValidPass1!');
+    await t.enterText(fields.at(4), 'ValidPass1!');
     await tapText(t, 'Create Account');
     expect(find.text('Both confirmations are required.'), findsOneWidget);
     expect(auth.registrations, 0);
@@ -159,6 +161,35 @@ void main() {
     expect(find.byType(GuardianHomeScreen), findsOneWidget);
     expect(find.text('No individuals registered yet'), findsOneWidget);
     expect(repo.records, isEmpty);
+  });
+  testWidgets('Registration rejects a mismatched password confirmation', (
+    t,
+  ) async {
+    await start(t);
+    await route(t, AppRoutes.createAccount);
+    final fields = find.byType(TextFormField);
+    await t.enterText(fields.at(0), 'Test Guardian');
+    await t.enterText(fields.at(1), 'test@example.test');
+    await t.enterText(fields.at(2), '+966500000001');
+    await t.enterText(fields.at(3), 'ValidPass1!');
+    await t.enterText(fields.at(4), 'ValidPass2!');
+    await tapText(t, 'I confirm that I am 18 years of age or older.');
+    await tapText(t, "I have read and agree to Radd's Privacy Notice.");
+    await tapText(t, 'Create Account');
+    await scrollToText(t, 'Passwords do not match.', delta: -200);
+    expect(find.text('Passwords do not match.'), findsOneWidget);
+    expect(auth.registrations, 0);
+    // Changing the password re-checks the confirmation on the next submit.
+    final password = find.descendant(
+      of: find.byType(PasswordInput).first,
+      matching: find.byType(TextFormField),
+    );
+    await t.ensureVisible(password);
+    await t.pumpAndSettle();
+    await t.enterText(password, 'ValidPass2!');
+    await tapText(t, 'Create Account');
+    expect(find.text('Passwords do not match.'), findsNothing);
+    expect(auth.registrations, 1);
   });
   testWidgets('Protected route refuses an unauthenticated session', (t) async {
     await start(t);
