@@ -13,6 +13,8 @@ Run them from the repository folder, with the datasets in `ai/data`.
 | `radd_utkface_false_match.py` | False matches by age band (UTKFace has no identity labels, so it measures false matches only) |
 | `radd_utkface_diagnose.py` | Finer age groups and probable duplicates behind the false matches |
 | `radd_margin_test.py` | The "clear winner" rule for ages 0–5 (minimum score plus a gap to the next person) |
+| `radd_utkface_holdout.py` | Held-out check of the age rules: thresholds chosen on one half of UTKFace with a fixed rule, results reported on the other half only |
+| `agedb_sensitivity.py` | AgeDB results recomputed without the names flagged by the identity check (numbers only; names are never written) |
 
 Models are read from `~/RaddModels/` (`w600k_r50.onnx`; `glintr100.onnx` only for `arcface100`).
 They are never committed. InsightFace models are licensed for non-commercial research only.

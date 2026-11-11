@@ -1,0 +1,59 @@
+UTKFace held-out check of the age rules (arcface) -- 2026-11-11 22:54
+Duplicates >= 0.8 removed within each age group before splitting. Threshold chosen on the calibration half: lowest value (0.01 steps) with wrong person shown <= 2.0% at N=100. All results below are on the TEST half only. 5 random splits x 2 directions = 10 runs: mean [min-max]; first run with Wilson 95% CI.
+
+[child 0-2] photos used 1296 (duplicates removed: 113); each half about 648
+  app rule (0.65, or >= 0.45 and 0.25 ahead): wrong person shown, test halves
+    N=10   0.8% [0.3-1.4]   first run 0.5% [CI 0.2-1.4]
+    N=50   1.6% [0.6-2.3]   first run 0.8% [CI 0.3-1.8]
+    N=100  2.6% [1.5-3.7]   first run 2.9% [CI 1.9-4.5]
+  threshold chosen on the calibration half: mean 0.67 [0.64-0.72]  (app: 0.65)
+  same rule with the chosen threshold: wrong person shown, test halves: N=10  0.8% [0.3-1.4]; N=50  1.6% [0.6-2.3]; N=100  2.5% [1.2-4.2]
+
+[child 3-5] photos used 720 (duplicates removed: 24); each half about 360
+  app rule (0.60, or >= 0.45 and 0.15 ahead): wrong person shown, test halves
+    N=10   0.8% [0.0-1.9]   first run 0.6% [CI 0.2-2.0]
+    N=50   1.5% [0.8-2.5]   first run 0.8% [CI 0.3-2.4]
+    N=100  3.0% [1.4-5.0]   first run 3.3% [CI 1.9-5.7]
+  threshold chosen on the calibration half: mean 0.53 [0.48-0.60]  (app: 0.60)
+  same rule with the chosen threshold: wrong person shown, test halves: N=10  0.8% [0.0-1.9]; N=50  1.6% [0.8-2.8]; N=100  3.2% [1.4-5.0]
+
+[child 6-12] photos used 980 (duplicates removed: 62); each half about 490
+  app rule (0.38): wrong person shown, test halves
+    N=10   0.5% [0.2-1.2]   first run 0.2% [CI 0.0-1.1]
+    N=50   1.8% [0.8-2.4]   first run 2.4% [CI 1.4-4.2]
+    N=100  3.7% [1.8-6.5]   first run 4.1% [CI 2.7-6.2]
+  threshold chosen on the calibration half: mean 0.61 [0.53-0.70]  (app: 0.38)
+  same rule with the chosen threshold: wrong person shown, test halves: N=10  0.3% [0.0-1.0]; N=50  0.8% [0.0-2.0]; N=100  2.1% [0.6-4.7]
+
+[teen 13-17] photos used 792 (duplicates removed: 27); each half about 396
+  app rule (0.38): wrong person shown, test halves
+    N=10   0.3% [0.0-0.8]   first run 0.8% [CI 0.3-2.2]
+    N=50   1.0% [0.3-1.8]   first run 1.3% [CI 0.5-2.9]
+    N=100  2.2% [1.0-3.3]   first run 2.5% [CI 1.4-4.6]
+  threshold chosen on the calibration half: mean 0.50 [0.34-0.64]  (app: 0.38)
+  same rule with the chosen threshold: wrong person shown, test halves: N=10  0.2% [0.0-0.8]; N=50  0.7% [0.0-1.8]; N=100  1.7% [0.0-3.3]
+
+[adult 18-59] photos used 1484 (duplicates removed: 8); each half about 742
+  app rule (0.30): wrong person shown, test halves
+    N=10   0.2% [0.0-0.4]   first run 0.1% [CI 0.0-0.8]
+    N=50   1.0% [0.5-1.5]   first run 1.2% [CI 0.6-2.3]
+    N=100  1.8% [1.5-2.6]   first run 1.5% [CI 0.8-2.6]
+  threshold chosen on the calibration half: mean 0.30 [0.28-0.33]  (app: 0.30)
+  same rule with the chosen threshold: wrong person shown, test halves: N=10  0.2% [0.0-0.4]; N=50  0.9% [0.4-1.3]; N=100  1.9% [1.3-2.6]
+
+[senior 60+] photos used 1425 (duplicates removed: 55); each half about 712
+  app rule (0.38): wrong person shown, test halves
+    N=10   0.3% [0.0-0.6]   first run 0.4% [CI 0.1-1.2]
+    N=50   1.3% [0.8-2.0]   first run 1.0% [CI 0.5-2.0]
+    N=100  2.4% [1.5-4.1]   first run 2.2% [CI 1.4-3.6]
+  threshold chosen on the calibration half: mean 0.44 [0.34-0.60]  (app: 0.38)
+  same rule with the chosen threshold: wrong person shown, test halves: N=10  0.2% [0.0-0.6]; N=50  1.1% [0.4-2.1]; N=100  2.2% [0.8-3.4]
+
+SUMMARY (test halves, N=100):
+  age group    | app threshold | chosen on calibration half | app rule wrong shown | chosen rule wrong shown
+  child 0-2    |          0.65 | 0.67 [0.64-0.72]        |                 2.6% |                    2.5%
+  child 3-5    |          0.60 | 0.53 [0.48-0.60]        |                 3.0% |                    3.2%
+  child 6-12   |          0.38 | 0.61 [0.53-0.70]        |                 3.7% |                    2.1%
+  teen 13-17   |          0.38 | 0.50 [0.34-0.64]        |                 2.2% |                    1.7%
+  adult 18-59  |          0.30 | 0.30 [0.28-0.33]        |                 1.8% |                    1.9%
+  senior 60+   |          0.38 | 0.44 [0.34-0.60]        |                 2.4% |                    2.2%
