@@ -1,0 +1,496 @@
+{
+  "script_version": "v2.1",
+  "dataset": "AgeDB photo release, team-generated pairs (seed 0); not the official AgeDB-30 protocol",
+  "protocol_notes": [
+    "Team-generated pairs (seed 0); the official AgeDB-30 pair list is not used.",
+    "Identity = name in the file name; the release documents 568 subjects.",
+    "Same-person pairs: age gap of 30+ years (official AgeDB-30 uses pairs at a gap of about 30 years).",
+    "Different-person pairs: age gap of 30+ years, two different names, same identity fold.",
+    "10 identity folds; threshold chosen on 9 folds, tested on the 10th.",
+    "1:1 verification only; not 1:N search and not Radd's search threshold."
+  ],
+  "model": "ArcFaceR50",
+  "detector": "mtcnn",
+  "normalization": "base",
+  "config": "ArcFaceR50_mtcnn_base",
+  "date_utc": "2026-11-09T18:30:31+00:00",
+  "machine": {
+    "system": "Darwin",
+    "processor": "arm",
+    "python": "3.11.9"
+  },
+  "photos": {
+    "distinct_names": 567,
+    "photos": 16488,
+    "files_skipped_bad_name": 0,
+    "used": 16487,
+    "no_face_detected": 180
+  },
+  "identity_check": {
+    "distinct_names": 567,
+    "documented_subjects": 568,
+    "names_with_both_genders": 5,
+    "median_photos_per_name": 29.0,
+    "max_photos_per_name": 78,
+    "potentially_affected_pairs": {
+      "names_flagged": 5,
+      "same_person_pairs_involving_flagged_names": 6200,
+      "same_person_pairs_total": 210389,
+      "share_of_same_person_pairs": 0.02946922129959266,
+      "main_protocol_same_person_pairs_involving_flagged_names": 134,
+      "main_protocol_different_person_pairs_involving_flagged_names": 75
+    }
+  },
+  "embedding_minutes": 20.37,
+  "agedb30_style_protocol": {
+    "all_photos": {
+      "same_person_pairs": 3000,
+      "different_person_pairs": 3000,
+      "tenfold_accuracy_mean": 0.9679571075519912,
+      "tenfold_accuracy_std": 0.011413626906695881,
+      "auc": 0.987206888888889,
+      "auc_ci95_identity_bootstrap": [
+        0.9835522687569336,
+        0.990582573276896
+      ],
+      "tar_at_far_1pct": 0.941,
+      "at_lfw_threshold": {
+        "threshold": 0.30177921056747437,
+        "accuracy": 0.9005,
+        "accuracy_ci95_identity_bootstrap": [
+          0.8856758468438353,
+          0.9138370852811752
+        ],
+        "same_person_accepted": 0.801,
+        "same_person_accepted_ci95": [
+          0.7747601376720901,
+          0.8261260922564182
+        ],
+        "different_person_wrongly_accepted": 0.0,
+        "different_person_wrongly_accepted_ci95": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "face_detected_only": {
+      "same_person_pairs": 2953,
+      "different_person_pairs": 2915,
+      "tenfold_accuracy_mean": 0.9705982621705106,
+      "tenfold_accuracy_std": 0.012371875370566856,
+      "auc": 0.988634867933822,
+      "auc_ci95_identity_bootstrap": [
+        0.9849835578377732,
+        0.9920246680505047
+      ],
+      "tar_at_far_1pct": 0.9478496444293938,
+      "at_lfw_threshold": {
+        "threshold": 0.30177921056747437,
+        "accuracy": 0.9045671438309475,
+        "accuracy_ci95_identity_bootstrap": [
+          0.8900664305318167,
+          0.9177930030749146
+        ],
+        "same_person_accepted": 0.810362343379614,
+        "same_person_accepted_ci95": [
+          0.7849040056058256,
+          0.8359195260727603
+        ],
+        "different_person_wrongly_accepted": 0.0,
+        "different_person_wrongly_accepted_ci95": [
+          0.0,
+          0.0
+        ]
+      }
+    }
+  },
+  "variant_random_negatives": {
+    "all_photos": {
+      "same_person_pairs": 3000,
+      "different_person_pairs": 3000,
+      "tenfold_accuracy_mean": 0.9634719157883413,
+      "tenfold_accuracy_std": 0.009744136253077755,
+      "auc": 0.9866094444444445,
+      "auc_ci95_identity_bootstrap": [
+        0.9826445530700113,
+        0.9901024694155087
+      ],
+      "tar_at_far_1pct": 0.9383333333333334,
+      "at_lfw_threshold": {
+        "threshold": 0.30177921056747437,
+        "accuracy": 0.9005,
+        "accuracy_ci95_identity_bootstrap": [
+          0.8857133470996809,
+          0.9146125496917342
+        ],
+        "same_person_accepted": 0.801,
+        "same_person_accepted_ci95": [
+          0.7747601376720901,
+          0.8261260922564182
+        ],
+        "different_person_wrongly_accepted": 0.0,
+        "different_person_wrongly_accepted_ci95": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "face_detected_only": {
+      "same_person_pairs": 2953,
+      "different_person_pairs": 2926,
+      "tenfold_accuracy_mean": 0.9668234758370712,
+      "tenfold_accuracy_std": 0.011846300493299287,
+      "auc": 0.9880717247355992,
+      "auc_ci95_identity_bootstrap": [
+        0.9843361093196089,
+        0.9914840327159319
+      ],
+      "tar_at_far_1pct": 0.9451405350491026,
+      "at_lfw_threshold": {
+        "threshold": 0.30177921056747437,
+        "accuracy": 0.9047457050518796,
+        "accuracy_ci95_identity_bootstrap": [
+          0.889769290667868,
+          0.919063933619413
+        ],
+        "same_person_accepted": 0.810362343379614,
+        "same_person_accepted_ci95": [
+          0.7849040056058256,
+          0.8359195260727603
+        ],
+        "different_person_wrongly_accepted": 0.0,
+        "different_person_wrongly_accepted_ci95": [
+          0.0,
+          0.0
+        ]
+      }
+    }
+  },
+  "same_person_accepted_at_lfw_threshold_by_group": {
+    "all_photos": {
+      "gap_5_9_years": {
+        "pairs": 46021,
+        "same_person_accepted": 0.9578018730579518,
+        "ci95_identity_bootstrap": [
+          0.9523202014728914,
+          0.9632607085845984
+        ]
+      },
+      "gap_10_19_years": {
+        "pairs": 67803,
+        "same_person_accepted": 0.9437193044555551,
+        "ci95_identity_bootstrap": [
+          0.9376355413247212,
+          0.9492934553609426
+        ]
+      },
+      "gap_20_29_years": {
+        "pairs": 45237,
+        "same_person_accepted": 0.9127484139089683,
+        "ci95_identity_bootstrap": [
+          0.9039906294763648,
+          0.9207990898619304
+        ]
+      },
+      "gap_30_plus_years": {
+        "pairs": 51328,
+        "same_person_accepted": 0.7998947942643392,
+        "ci95_identity_bootstrap": [
+          0.7776872344413506,
+          0.8200575056874144
+        ]
+      },
+      "younger_photo_child_under_13": {
+        "pairs": 2603,
+        "same_person_accepted": 0.28620822128313483,
+        "ci95_identity_bootstrap": [
+          0.2165918947355871,
+          0.3488323800624967
+        ]
+      },
+      "younger_photo_child_under_13_by_gap": {
+        "gap_5_9_years": {
+          "pairs": 176,
+          "same_person_accepted": 0.7556818181818182,
+          "ci95_identity_bootstrap": [
+            0.6414132706374086,
+            0.8365587349397591
+          ]
+        },
+        "gap_10_19_years": {
+          "pairs": 506,
+          "same_person_accepted": 0.5098814229249012,
+          "ci95_identity_bootstrap": [
+            0.40186507797748094,
+            0.6041394790248414
+          ]
+        },
+        "gap_20_29_years": {
+          "pairs": 513,
+          "same_person_accepted": 0.2826510721247563,
+          "ci95_identity_bootstrap": [
+            0.18760832932113627,
+            0.3742201529763884
+          ]
+        },
+        "gap_30_plus_years": {
+          "pairs": 1408,
+          "same_person_accepted": 0.1484375,
+          "ci95_identity_bootstrap": [
+            0.09144053304078473,
+            0.21012141845268015
+          ]
+        }
+      },
+      "younger_photo_teen_13_17": {
+        "pairs": 5783,
+        "same_person_accepted": 0.6899533114300536,
+        "ci95_identity_bootstrap": [
+          0.6376787461490658,
+          0.7381175693368203
+        ]
+      },
+      "younger_photo_teen_13_17_by_gap": {
+        "gap_5_9_years": {
+          "pairs": 703,
+          "same_person_accepted": 0.8677098150782361,
+          "ci95_identity_bootstrap": [
+            0.8114087525377848,
+            0.9130461005926469
+          ]
+        },
+        "gap_10_19_years": {
+          "pairs": 1454,
+          "same_person_accepted": 0.8239339752407153,
+          "ci95_identity_bootstrap": [
+            0.7665905583709993,
+            0.8757364943311883
+          ]
+        },
+        "gap_20_29_years": {
+          "pairs": 1181,
+          "same_person_accepted": 0.7502116850127011,
+          "ci95_identity_bootstrap": [
+            0.6966651696606786,
+            0.8013011761665966
+          ]
+        },
+        "gap_30_plus_years": {
+          "pairs": 2445,
+          "same_person_accepted": 0.5300613496932516,
+          "ci95_identity_bootstrap": [
+            0.47070372727941784,
+            0.5837202681741825
+          ]
+        }
+      },
+      "younger_photo_adult_18_plus": {
+        "pairs": 202003,
+        "same_person_accepted": 0.919184368548982,
+        "ci95_identity_bootstrap": [
+          0.911314555090709,
+          0.9270353596200748
+        ]
+      },
+      "younger_photo_adult_18_plus_by_gap": {
+        "gap_5_9_years": {
+          "pairs": 45142,
+          "same_person_accepted": 0.9599929112578087,
+          "ci95_identity_bootstrap": [
+            0.9545975878902995,
+            0.9654822002362389
+          ]
+        },
+        "gap_10_19_years": {
+          "pairs": 65843,
+          "same_person_accepted": 0.9496985252798323,
+          "ci95_identity_bootstrap": [
+            0.9438622867819947,
+            0.955428115435015
+          ]
+        },
+        "gap_20_29_years": {
+          "pairs": 43543,
+          "same_person_accepted": 0.9245802999333992,
+          "ci95_identity_bootstrap": [
+            0.9168057488860228,
+            0.9323702853668876
+          ]
+        },
+        "gap_30_plus_years": {
+          "pairs": 47475,
+          "same_person_accepted": 0.8331121642969984,
+          "ci95_identity_bootstrap": [
+            0.8130397867130179,
+            0.8508883162061697
+          ]
+        }
+      }
+    },
+    "face_detected_only": {
+      "gap_5_9_years": {
+        "pairs": 45143,
+        "same_person_accepted": 0.9657089692754137,
+        "ci95_identity_bootstrap": [
+          0.9605307818396234,
+          0.9707287701591132
+        ]
+      },
+      "gap_10_19_years": {
+        "pairs": 66502,
+        "same_person_accepted": 0.9531141920543743,
+        "ci95_identity_bootstrap": [
+          0.9471329808252115,
+          0.9586380686647197
+        ]
+      },
+      "gap_20_29_years": {
+        "pairs": 44408,
+        "same_person_accepted": 0.9228967753557917,
+        "ci95_identity_bootstrap": [
+          0.9144792465429658,
+          0.930978968869929
+        ]
+      },
+      "gap_30_plus_years": {
+        "pairs": 50365,
+        "same_person_accepted": 0.8112776729871934,
+        "ci95_identity_bootstrap": [
+          0.7889815967460085,
+          0.8313693001734894
+        ]
+      },
+      "younger_photo_child_under_13": {
+        "pairs": 2529,
+        "same_person_accepted": 0.2945828390668248,
+        "ci95_identity_bootstrap": [
+          0.22386873414600622,
+          0.35420270938700354
+        ]
+      },
+      "younger_photo_child_under_13_by_gap": {
+        "gap_5_9_years": {
+          "pairs": 176,
+          "same_person_accepted": 0.7556818181818182,
+          "ci95_identity_bootstrap": [
+            0.6414132706374086,
+            0.8365587349397591
+          ]
+        },
+        "gap_10_19_years": {
+          "pairs": 496,
+          "same_person_accepted": 0.5201612903225806,
+          "ci95_identity_bootstrap": [
+            0.4136801276768311,
+            0.6121748947841301
+          ]
+        },
+        "gap_20_29_years": {
+          "pairs": 500,
+          "same_person_accepted": 0.29,
+          "ci95_identity_bootstrap": [
+            0.19102369721473497,
+            0.3848686276919715
+          ]
+        },
+        "gap_30_plus_years": {
+          "pairs": 1357,
+          "same_person_accepted": 0.15401621223286663,
+          "ci95_identity_bootstrap": [
+            0.0953118200294903,
+            0.21676764844271182
+          ]
+        }
+      },
+      "younger_photo_teen_13_17": {
+        "pairs": 5600,
+        "same_person_accepted": 0.7105357142857143,
+        "ci95_identity_bootstrap": [
+          0.6604526876710821,
+          0.7572310849109288
+        ]
+      },
+      "younger_photo_teen_13_17_by_gap": {
+        "gap_5_9_years": {
+          "pairs": 691,
+          "same_person_accepted": 0.8798842257597684,
+          "ci95_identity_bootstrap": [
+            0.8236376430417128,
+            0.9234832100581052
+          ]
+        },
+        "gap_10_19_years": {
+          "pairs": 1417,
+          "same_person_accepted": 0.8419195483415667,
+          "ci95_identity_bootstrap": [
+            0.7897575889932299,
+            0.8897817568360029
+          ]
+        },
+        "gap_20_29_years": {
+          "pairs": 1144,
+          "same_person_accepted": 0.7727272727272727,
+          "ci95_identity_bootstrap": [
+            0.7211994047619048,
+            0.8242197775851575
+          ]
+        },
+        "gap_30_plus_years": {
+          "pairs": 2348,
+          "same_person_accepted": 0.551107325383305,
+          "ci95_identity_bootstrap": [
+            0.48885554199429704,
+            0.6086857190934187
+          ]
+        }
+      },
+      "younger_photo_adult_18_plus": {
+        "pairs": 198289,
+        "same_person_accepted": 0.928437785252838,
+        "ci95_identity_bootstrap": [
+          0.9207289337617127,
+          0.9357199007494615
+        ]
+      },
+      "younger_photo_adult_18_plus_by_gap": {
+        "gap_5_9_years": {
+          "pairs": 44276,
+          "same_person_accepted": 0.9678832776221881,
+          "ci95_identity_bootstrap": [
+            0.9627642494076954,
+            0.9728112930304936
+          ]
+        },
+        "gap_10_19_years": {
+          "pairs": 64589,
+          "same_person_accepted": 0.9588784467943458,
+          "ci95_identity_bootstrap": [
+            0.9534123858629602,
+            0.9642115402383497
+          ]
+        },
+        "gap_20_29_years": {
+          "pairs": 42764,
+          "same_person_accepted": 0.9343139088953325,
+          "ci95_identity_bootstrap": [
+            0.926482543584328,
+            0.9418237376063716
+          ]
+        },
+        "gap_30_plus_years": {
+          "pairs": 46660,
+          "same_person_accepted": 0.8434847835405058,
+          "ci95_identity_bootstrap": [
+            0.823713485948324,
+            0.8611945451004872
+          ]
+        }
+      }
+    }
+  },
+  "interpretation_limits": [
+    "Dataset limitation: potential identity-label inconsistencies were identified in 5 names (both genders appear in their file names), including one that may combine two individuals. 2.9% of same-person pairs involve these names; this is a count of potentially affected pairs, not a verified number of mislabelled pairs. The impact on evaluation metrics and on the comparison between configurations has not been quantified.",
+    "Children: pairs compare a photo taken before age 13 with a photo of the same person at least 5 years later; this is not Radd's same-event identification accuracy for children.",
+    "1:1 verification only; it does not measure 1:N search or validate Radd's search threshold."
+  ]
+}

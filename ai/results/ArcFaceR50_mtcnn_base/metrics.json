@@ -1,0 +1,351 @@
+{
+  "model": "ArcFaceR50",
+  "detector": "mtcnn",
+  "normalization": "base",
+  "config": "ArcFaceR50_mtcnn_base",
+  "similarity": "cosine",
+  "quick_run": false,
+  "date_utc": "2026-11-09T18:00:46+00:00",
+  "machine": {
+    "system": "Darwin",
+    "processor": "arm",
+    "python": "3.11.9"
+  },
+  "images": {
+    "total": 9056,
+    "no_face_detected": 0
+  },
+  "embedding_minutes_total": 2.32,
+  "verification": {
+    "threshold_from_view1_train": 0.30177921056747437,
+    "view1_train_accuracy": 0.9986363636363637,
+    "view1_test_accuracy_at_threshold": 0.995,
+    "view2_10fold_accuracy_mean": 0.9984999999999999,
+    "view2_10fold_accuracy_std": 0.002034425935955616,
+    "view2_folds_used": 10,
+    "view2_at_view1_threshold": {
+      "accuracy_at_threshold": 0.9976666666666667,
+      "accuracy_ci95": [
+        0.9963333333333333,
+        0.9988333333333334
+      ],
+      "auc": 0.9992672222222223,
+      "tar_at_far_1pct": 0.9983333333333333,
+      "tar_at_far_0_1pct": 0.9973333333333333
+    },
+    "view2_face_detected_pairs_only": {
+      "pairs": 6000,
+      "accuracy_at_threshold": 0.9976666666666667,
+      "accuracy_ci95": [
+        0.9965,
+        0.9988333333333334
+      ],
+      "auc": 0.9992672222222223,
+      "tar_at_far_1pct": 0.9983333333333333,
+      "tar_at_far_0_1pct": 0.9973333333333333
+    }
+  },
+  "identification": {
+    "note": "face_detected_only excludes images where no face was detected (evaluation assumption, not a Radd requirement)",
+    "face_detected_only": {
+      "images_used": 9056,
+      "gallery_people": 1650,
+      "known_probes": 3603,
+      "unknown_probes": 3261,
+      "rank1": 0.9963918956425202,
+      "rank1_ci95": [
+        0.9944421315570359,
+        0.9983347210657785
+      ],
+      "top5": 0.9977796280877047,
+      "top5_ci95": [
+        0.9961143491534832,
+        0.9991673605328892
+      ],
+      "with_verification_threshold": {
+        "threshold": 0.30177921056747437,
+        "unknown_correctly_rejected": 0.9770009199632015
+      },
+      "open_set": {
+        "target_false_alarm_1pct": {
+          "search_threshold": 0.3196328282356262,
+          "unknown_wrongly_matched_on_test_half": 0.0134886572654813,
+          "known_found_first_and_above_threshold": 0.9950041631973355,
+          "known_in_top5_and_above_threshold": 0.9958368026644463
+        },
+        "target_false_alarm_5pct": {
+          "search_threshold": 0.28326863050460815,
+          "unknown_wrongly_matched_on_test_half": 0.05702023298589822,
+          "known_found_first_and_above_threshold": 0.9955592561754094,
+          "known_in_top5_and_above_threshold": 0.9963918956425202
+        }
+      },
+      "event_sized_galleries": {
+        "50_people": {
+          "repeats": 20,
+          "rank1_mean": 0.9986880244088482,
+          "top5_mean": 0.9986880244088482,
+          "open_set_mean": {
+            "target_false_alarm_1pct": {
+              "search_threshold": 0.23865044564008714,
+              "unknown_wrongly_matched_on_test_half": 0.010331085223789086,
+              "known_found_first_and_above_threshold": 0.9982569899260895,
+              "known_in_top5_and_above_threshold": 0.9982569899260895
+            },
+            "target_false_alarm_5pct": {
+              "search_threshold": 0.19982236474752427,
+              "unknown_wrongly_matched_on_test_half": 0.04809932556713673,
+              "known_found_first_and_above_threshold": 0.9982569899260895,
+              "known_in_top5_and_above_threshold": 0.9982569899260895
+            }
+          }
+        },
+        "100_people": {
+          "repeats": 20,
+          "rank1_mean": 0.999102900610028,
+          "top5_mean": 0.9993365454698413,
+          "open_set_mean": {
+            "target_false_alarm_1pct": {
+              "search_threshold": 0.25425664335489273,
+              "unknown_wrongly_matched_on_test_half": 0.011373390557939914,
+              "known_found_first_and_above_threshold": 0.9974950074920514,
+              "known_in_top5_and_above_threshold": 0.9974950074920514
+            },
+            "target_false_alarm_5pct": {
+              "search_threshold": 0.217300633341074,
+              "unknown_wrongly_matched_on_test_half": 0.050337216431637036,
+              "known_found_first_and_above_threshold": 0.9979451025683147,
+              "known_in_top5_and_above_threshold": 0.9979451025683147
+            }
+          }
+        },
+        "300_people": {
+          "repeats": 20,
+          "rank1_mean": 0.9965739694055242,
+          "top5_mean": 0.9974191410974077,
+          "open_set_mean": {
+            "target_false_alarm_1pct": {
+              "search_threshold": 0.28129835426807404,
+              "unknown_wrongly_matched_on_test_half": 0.011465358675659105,
+              "known_found_first_and_above_threshold": 0.9951371645383038,
+              "known_in_top5_and_above_threshold": 0.9955227541063183
+            },
+            "target_false_alarm_5pct": {
+              "search_threshold": 0.24439969882369042,
+              "unknown_wrongly_matched_on_test_half": 0.04708767627222563,
+              "known_found_first_and_above_threshold": 0.996046317347508,
+              "known_in_top5_and_above_threshold": 0.9965102768214786
+            }
+          }
+        },
+        "1000_people": {
+          "repeats": 20,
+          "rank1_mean": 0.9965152104537379,
+          "top5_mean": 0.9980979347182091,
+          "open_set_mean": {
+            "target_false_alarm_1pct": {
+              "search_threshold": 0.30459342449903487,
+              "unknown_wrongly_matched_on_test_half": 0.014929491109748621,
+              "known_found_first_and_above_threshold": 0.9954381586380092,
+              "known_in_top5_and_above_threshold": 0.9960575566169819
+            },
+            "target_false_alarm_5pct": {
+              "search_threshold": 0.2703606605529785,
+              "unknown_wrongly_matched_on_test_half": 0.057050889025137955,
+              "known_found_first_and_above_threshold": 0.9958502249919473,
+              "known_in_top5_and_above_threshold": 0.9964696229709201
+            }
+          }
+        }
+      },
+      "exploratory_multi_photo_gallery": {
+        "note": "exploratory experiment only; Radd requirements define one reference photo and one embedding",
+        "people": 540,
+        "probes": 1396,
+        "one_photo": {
+          "rank1": 1.0,
+          "top5": 1.0
+        },
+        "three_photos_averaged": {
+          "rank1": 1.0,
+          "rank1_ci95": [
+            1.0,
+            1.0
+          ],
+          "top5": 1.0
+        }
+      }
+    },
+    "all_images_incl_no_face_fallback": {
+      "images_used": 9056,
+      "gallery_people": 1650,
+      "known_probes": 3603,
+      "unknown_probes": 3261,
+      "rank1": 0.9963918956425202,
+      "rank1_ci95": [
+        0.9941715237302248,
+        0.9983347210657785
+      ],
+      "top5": 0.9977796280877047,
+      "top5_ci95": [
+        0.9961143491534832,
+        0.9991673605328892
+      ],
+      "with_verification_threshold": {
+        "threshold": 0.30177921056747437,
+        "unknown_correctly_rejected": 0.9770009199632015
+      },
+      "open_set": {
+        "target_false_alarm_1pct": {
+          "search_threshold": 0.3237784206867218,
+          "unknown_wrongly_matched_on_test_half": 0.009196811771919068,
+          "known_found_first_and_above_threshold": 0.9947266167082986,
+          "known_in_top5_and_above_threshold": 0.9955592561754094
+        },
+        "target_false_alarm_5pct": {
+          "search_threshold": 0.28626447916030884,
+          "unknown_wrongly_matched_on_test_half": 0.04598405885959534,
+          "known_found_first_and_above_threshold": 0.9955592561754094,
+          "known_in_top5_and_above_threshold": 0.9963918956425202
+        }
+      }
+    }
+  },
+  "confidence_calibration": {
+    "method": "logistic regression on cosine similarity, fitted on View 1 train",
+    "coef": 12.624822711061595,
+    "intercept": -3.9340127456967715,
+    "view2_brier_score": 0.0033078993070142977,
+    "view2_expected_calibration_error": 0.024268338272640924,
+    "similarity_for_probability": {
+      "0.50": 0.3116093457890601,
+      "0.80": 0.42141638172511714,
+      "0.90": 0.48564938006305103,
+      "0.95": 0.5448355103502928,
+      "0.99": 0.6755843460960699
+    }
+  },
+  "robustness_view2_folds_1to3": {
+    "pairs": 1800,
+    "clean": {
+      "img2_no_face_rate": 0.0,
+      "all_pairs": {
+        "accuracy_at_threshold": 0.9977777777777778,
+        "accuracy_ci95": [
+          0.9955416666666667,
+          0.9994444444444445
+        ],
+        "auc": 0.9999938271604939,
+        "tar_at_far_1pct": 1.0,
+        "tar_at_far_0_1pct": 0.9977777777777778
+      },
+      "face_detected_pairs_only": {
+        "pairs": 1800,
+        "accuracy_at_threshold": 0.9977777777777778,
+        "accuracy_ci95": [
+          0.995,
+          1.0
+        ],
+        "auc": 0.9999938271604939,
+        "tar_at_far_1pct": 1.0,
+        "tar_at_far_0_1pct": 0.9977777777777778
+      }
+    },
+    "blur": {
+      "img2_no_face_rate": 0.0,
+      "all_pairs": {
+        "accuracy_at_threshold": 0.9933333333333333,
+        "accuracy_ci95": [
+          0.9894444444444445,
+          0.9966666666666667
+        ],
+        "auc": 0.9999172839506173,
+        "tar_at_far_1pct": 0.9988888888888889,
+        "tar_at_far_0_1pct": 0.9955555555555555
+      },
+      "face_detected_pairs_only": {
+        "pairs": 1800,
+        "accuracy_at_threshold": 0.9933333333333333,
+        "accuracy_ci95": [
+          0.9888888888888889,
+          0.9966666666666667
+        ],
+        "auc": 0.9999172839506173,
+        "tar_at_far_1pct": 0.9988888888888889,
+        "tar_at_far_0_1pct": 0.9955555555555555
+      }
+    },
+    "low_resolution": {
+      "img2_no_face_rate": 0.0011111111111110628,
+      "all_pairs": {
+        "accuracy_at_threshold": 0.9722222222222222,
+        "accuracy_ci95": [
+          0.9644444444444444,
+          0.9794444444444445
+        ],
+        "auc": 0.9996172839506173,
+        "tar_at_far_1pct": 0.9944444444444445,
+        "tar_at_far_0_1pct": 0.9933333333333333
+      },
+      "face_detected_pairs_only": {
+        "pairs": 1798,
+        "accuracy_at_threshold": 0.9727474972191323,
+        "accuracy_ci95": [
+          0.966059510567297,
+          0.9799777530589544
+        ],
+        "auc": 0.9998440981884457,
+        "tar_at_far_1pct": 0.9955506117908788,
+        "tar_at_far_0_1pct": 0.9944382647385984
+      }
+    },
+    "dark": {
+      "img2_no_face_rate": 0.0005555555555555314,
+      "all_pairs": {
+        "accuracy_at_threshold": 0.9972222222222222,
+        "accuracy_ci95": [
+          0.9944444444444445,
+          0.9994444444444445
+        ],
+        "auc": 0.999358024691358,
+        "tar_at_far_1pct": 0.9988888888888889,
+        "tar_at_far_0_1pct": 0.9966666666666667
+      },
+      "face_detected_pairs_only": {
+        "pairs": 1799,
+        "accuracy_at_threshold": 0.9972206781545303,
+        "accuracy_ci95": [
+          0.9944413563090606,
+          0.9994441356309061
+        ],
+        "auc": 0.9993573105920159,
+        "tar_at_far_1pct": 0.9988888888888889,
+        "tar_at_far_0_1pct": 0.9966666666666667
+      }
+    },
+    "jpeg": {
+      "img2_no_face_rate": 0.0,
+      "all_pairs": {
+        "accuracy_at_threshold": 0.9955555555555555,
+        "accuracy_ci95": [
+          0.9922222222222222,
+          0.9983333333333333
+        ],
+        "auc": 0.9999888888888888,
+        "tar_at_far_1pct": 1.0,
+        "tar_at_far_0_1pct": 0.9966666666666667
+      },
+      "face_detected_pairs_only": {
+        "pairs": 1800,
+        "accuracy_at_threshold": 0.9955555555555555,
+        "accuracy_ci95": [
+          0.9922222222222222,
+          0.9983333333333333
+        ],
+        "auc": 0.9999888888888888,
+        "tar_at_far_1pct": 1.0,
+        "tar_at_far_0_1pct": 0.9966666666666667
+      }
+    }
+  }
+}

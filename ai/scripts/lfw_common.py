@@ -16,7 +16,10 @@ IMG = DATA / "lfw-deepfunneled" / "lfw-deepfunneled"
 EMB_DIR = AI_DIR / "embeddings"
 RESULTS = AI_DIR / "results"
 
-MODELS = ["ArcFace", "Facenet512", "SFace"]
+MODELS = ["ArcFace", "Facenet512", "SFace", "ArcFaceR50", "ArcFaceR100"]
+# InsightFace's own ONNX models (C7+), run outside DeepFace: see insightface_onnx.py.
+# Not the same network as DeepFace's "ArcFace" (a Keras ResNet-34 port).
+ONNX_MODELS = {"ArcFaceR50", "ArcFaceR100"}
 DETECTORS = ["yunet", "mtcnn"]
 NORMALIZATIONS = ["base", "raw", "Facenet", "Facenet2018", "ArcFace", "VGGFace", "VGGFace2"]
 DEFAULT_DETECTOR, DEFAULT_NORMALIZATION = "yunet", "base"
@@ -88,6 +91,10 @@ def embed_one(source, model, detector, normalization):
     """source: image path or BGR array. Returns (L2-normalised embedding, face_found).
     If the detector finds no face, fall back to the whole image (LFW images are
     already centred on the face)."""
+    if model in ONNX_MODELS:
+        import insightface_onnx
+        v, found = insightface_onnx.embed(source, model, detector)
+        return v / (np.linalg.norm(v) + 1e-12), found
     from deepface import DeepFace
     src = str(source) if not isinstance(source, np.ndarray) else source
     if isinstance(src, str) and not src.isascii():
