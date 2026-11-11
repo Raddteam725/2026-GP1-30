@@ -66,6 +66,12 @@ photograph. Transaction failures retain the existing photo-cleanup behavior.
 Photo and embedding changes commit together; ownership, edit locks and retention
 rules still apply. Embeddings never appear in API responses or logs.
 
+Code layout: `app/face_config.py` holds everything that changes with the model or
+the rules (engine name, embedding field, model file, age rules, top-k);
+`app/face_engines.py` holds the model (photo -> embedding); `app/face_matching.py`
+decides which registered people are shown. To change thresholds, edit `AGE_RULES`;
+to change the model, follow the steps at the top of `face_config.py`.
+
 The engine (configuration C7) uses InsightFace ArcFace ResNet-50 (WebFace600K,
 `w600k_r50.onnx`, non-commercial research licence) with MTCNN detection,
 largest-face selection, 5-point alignment and L2-normalized embeddings. Whether a

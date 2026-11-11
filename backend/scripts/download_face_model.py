@@ -1,4 +1,4 @@
-"""Download the face-recognition model used by app/face_matching.py (configuration C7).
+"""Download the face-recognition model set in app/face_config.py (configuration C7).
 
 Source: InsightFace's official GitHub release v0.7, model pack "buffalo_l" (275 MB zip).
 Only the recognition model w600k_r50.onnx (166 MB) is kept, in backend/models/
@@ -18,10 +18,12 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-URL = "https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip"
-MEMBER = "w600k_r50.onnx"
-# SHA-256 of w600k_r50.onnx as used in the 9 Nov 2026 evaluation; None = print only.
-EXPECTED_SHA256 = None
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
+from app import face_config  # noqa: E402  (no AI packages needed)
+
+URL = face_config.MODEL_URL
+MEMBER = face_config.MODEL_FILE
+EXPECTED_SHA256 = face_config.MODEL_SHA256  # None = print only
 
 
 def sha256(path):
