@@ -79,12 +79,12 @@ def test_standalone_notifies_owner_at_confirmation_and_handover(db, monkeypatch,
     assert len(writes) == 2 and writes[0] < writes[1]
     assert len(CaseService(guardian).list_notifications()) == 2
     assert CaseService(other).list_notifications() == []
-    app.dependency_overrides[identity] = lambda: {'uid': 'other-guardian'}
+    app.dependency_overrides[identity] = lambda: {'uid': 'other-guardian', 'email': 'other-guardian@example.test', 'email_verified': True}
     client = TestClient(app)
     assert client.get('/v1/notifications').json() == []
     note_id = report['id'] + '-identity_confirmed'
     assert client.put('/v1/notifications/' + note_id + '/read').status_code == 404
-    app.dependency_overrides[identity] = lambda: {'uid': 'guardian'}
+    app.dependency_overrides[identity] = lambda: {'uid': 'guardian', 'email': 'guardian@example.test', 'email_verified': True}
     assert len(client.get('/v1/notifications').json()) == 2
 
 def test_found_upload_is_real_private_idempotent_and_ai_explicitly_unavailable(db):

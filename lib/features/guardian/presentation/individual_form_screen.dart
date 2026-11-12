@@ -281,6 +281,8 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
                     key: const ValueKey('individual-age'),
                     initialValue: _age,
                     isExpanded: true,
+                    menuMaxHeight: 280,
+                    borderRadius: BorderRadius.circular(16),
                     hint: Text(s.enterAge),
                     autovalidateMode: AutovalidateMode.onUserInteraction,
                     decoration: const InputDecoration(errorMaxLines: 3),

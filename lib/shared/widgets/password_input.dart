@@ -7,6 +7,9 @@ class PasswordInput extends StatefulWidget {
   const PasswordInput({
     super.key,
     required this.label,
+    this.helperText,
+    this.helperStyle,
+    this.errorMaxLines = 3,
     this.controller,
     this.validator,
     this.onChanged,
@@ -17,6 +20,9 @@ class PasswordInput extends StatefulWidget {
     this.enabled = true,
   });
   final String label;
+  final String? helperText;
+  final TextStyle? helperStyle;
+  final int errorMaxLines;
   final TextEditingController? controller;
   final FormFieldValidator<String>? validator;
   final ValueChanged<String>? onChanged;
@@ -36,6 +42,9 @@ class _PasswordInputState extends State<PasswordInput> {
     final strings = AppLocalizations.of(context)!;
     return AppTextInput(
       label: widget.label,
+      helperText: widget.helperText,
+      helperStyle: widget.helperStyle,
+      errorMaxLines: widget.errorMaxLines,
       controller: widget.controller,
       validator: widget.validator,
       onChanged: widget.onChanged,

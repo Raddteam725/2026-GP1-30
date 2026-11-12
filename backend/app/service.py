@@ -9,7 +9,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from fastapi import HTTPException
 from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
-from .firebase import database, bucket
+from .firebase import database, bucket, require_verified_email
 from .events import active_event
 
 Image.MAX_IMAGE_PIXELS = 20_000_000
@@ -79,6 +79,12 @@ class GuardianService:
         self.uid = token["uid"]
         self.db = database()
         self.user = self.db.collection("users").document(self.uid)
+        self._email_checked = False
+
+    def verified_email(self):
+        if not self._email_checked:
+            require_verified_email(self.token)
+            self._email_checked = True  # This service is scoped to one request.
 
     def account_role(self):
         # Volunteer role/status now come from the admin-owned users document.
@@ -99,7 +105,8 @@ class GuardianService:
         Volunteer): the same authoritative record Admin manages. Fails closed
         (503 event_unavailable) when no event is Active -- never a placeholder."""
         from .events import event_summary
-        self.account_role()
+        if self.account_role()['role'] == 'guardian':
+            self.verified_email()
         return event_summary(active_event(self.db))
 
     def profile(self):
@@ -108,6 +115,7 @@ class GuardianService:
             raise HTTPException(404, detail="profile_missing")
         data = doc.to_dict()
         assert_guardian_role(self.token, data)
+        self.verified_email()
         if not data.get("full_name") or not data.get("phone"):
             raise HTTPException(404, detail="profile_incomplete")
         return {"full_name": data["full_name"], "phone": data["phone"], "email": self.token.get("email", ""), "role": "guardian"}
@@ -190,10 +198,11 @@ class GuardianService:
             doc = self.user.get(transaction=tx)
             if doc.exists:
                 assert_guardian_role(self.token, doc.to_dict())
-                if create and doc.to_dict().get("full_name") and doc.to_dict().get("phone"):
-                    return  # Idempotent recovery after a lost creation response.
             elif not create:
                 raise HTTPException(404, detail="profile_missing")
+            self.verified_email()
+            if create and doc.exists and doc.to_dict().get("full_name") and doc.to_dict().get("phone"):
+                return  # Idempotent recovery after a lost creation response.
             data = {"full_name": value.full_name, "phone": value.phone, "role": "guardian", "updated_at": firestore.SERVER_TIMESTAMP}
             if not doc.exists:
                 data.update(created_at=firestore.SERVER_TIMESTAMP, age_confirmed_at=firestore.SERVER_TIMESTAMP, privacy_acknowledged_at=firestore.SERVER_TIMESTAMP, privacy_notice_version="sprint0-interim-1")

@@ -33,7 +33,7 @@ def storage(monkeypatch):
     monkeypatch.setattr(service.firestore, "transactional", lambda f: f)
     monkeypatch.setattr(push, "database", lambda: db)
     monkeypatch.setattr(push, "firebase_app", lambda: None)
-    monkeypatch.setattr(push.auth, "get_user", lambda *a, **k: SimpleNamespace(disabled=False, tokens_valid_after_timestamp=0))
+    monkeypatch.setattr(push.auth, "get_user", lambda uid, **k: SimpleNamespace(email=uid + '@example.test', email_verified=True, disabled=False, tokens_valid_after_timestamp=0))
     return db, bucket
 
 def registrations_path(uid):

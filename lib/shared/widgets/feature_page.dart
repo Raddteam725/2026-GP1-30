@@ -77,6 +77,8 @@ String failureMessage(Object error, AppLocalizations s) =>
     switch (error is AppFailure ? error.code : 'service') {
       'eventUnavailable' => s.eventUnavailable,
       'profilePending' => s.sessionUnavailable,
+      'emailVerification' => s.emailNotVerified,
+      'reauthenticate' => s.verificationReauthenticate,
       'credentials' => s.invalidCredentials,
       'emailExists' => s.emailExists,
       'network' => s.networkError,

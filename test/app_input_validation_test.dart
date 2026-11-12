@@ -352,6 +352,61 @@ void main() {
     );
   }
 
+  for (final language in ['en', 'ar']) {
+    testWidgets(
+      'Age menu stays compact and scrolls to both integer boundaries in $language',
+      (t) async {
+        final person = Individual(
+          id: 'compact-age',
+          fullName: 'Person',
+          age: 7,
+          gender: 'female',
+          relationship: 'child',
+        );
+        repo.records.add(person);
+        await mount(t, IndividualFormScreen(individual: person), language);
+        t.view.physicalSize = const Size(400, 800);
+        await t.pumpAndSettle();
+        final age = find.byKey(const ValueKey('individual-age'));
+        await t.ensureVisible(age);
+        await t.pumpAndSettle();
+        await t.tap(age);
+        await t.pumpAndSettle();
+        final scroll = find.byType(Scrollable).last;
+        expect(t.getSize(scroll).height, lessThanOrEqualTo(280));
+        expect(
+          Directionality.of(t.element(scroll)),
+          language == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+        );
+        await t.scrollUntilVisible(
+          find.text('130'),
+          200,
+          scrollable: scroll,
+          maxScrolls: 40,
+        );
+        await t.pumpAndSettle();
+        await t.tap(find.text('130').last);
+        await t.pumpAndSettle();
+        expect(t.state<FormFieldState<int>>(age).value, 130);
+        expect(t.state<FormFieldState<int>>(age).errorText, isNull);
+        await t.tap(age);
+        await t.pumpAndSettle();
+        await t.scrollUntilVisible(
+          find.text('0'),
+          -200,
+          scrollable: find.byType(Scrollable).last,
+          maxScrolls: 40,
+        );
+        await t.pumpAndSettle();
+        await t.tap(find.text('0').last);
+        await t.pumpAndSettle();
+        expect(t.state<FormFieldState<int>>(age).value, 0);
+        expect(t.state<FormFieldState<int>>(age).errorText, isNull);
+        expect(t.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets(
     'Photo capture preserves original cancellation and clears submission errors',
     (t) async {
