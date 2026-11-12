@@ -470,7 +470,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get enterFullName => 'أدخل الاسم الكامل';
 
   @override
-  String get enterAge => 'أدخل العمر';
+  String get enterAge => 'اختر العمر';
 
   @override
   String get selectRelationship => 'اختر صلة القرابة';
@@ -1751,7 +1751,109 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get verifyEmailTitle => 'تحقّق من بريدك الإلكتروني';
+
+  @override
+  String get verifyEmailInstructions =>
+      'افتح رسالة راد واضغط على رابط التحقق من Firebase قبل المتابعة. حسابك مسجّل الدخول، لكن الوصول إلى خدمات ولي الأمر يتطلب التحقق من البريد الإلكتروني.';
+
+  @override
+  String get verifyEmailLinkHelp =>
+      'تحقّق من مجلد الرسائل غير المرغوب فيها. إذا انتهت صلاحية الرابط أو سبق استخدامه، اطلب رابطًا جديدًا. بعد تصحيح البريد، استخدم العنوان الجديد الذي تحققت منه وكلمة مرورك الحالية إذا طلب Firebase تسجيل الدخول مجددًا.';
+
+  @override
+  String get verifyEmailSent =>
+      'تم طلب رابط التحقق. تحقّق من صندوق الوارد ومجلد الرسائل غير المرغوب فيها.';
+
+  @override
+  String get checkEmailVerification => 'تحققت من بريدي الإلكتروني';
+
+  @override
+  String get resendVerification => 'إعادة إرسال رسالة التحقق';
+
+  @override
+  String verificationCooldown(int seconds) {
+    return 'يمكن إعادة الإرسال بعد $seconds ثانية';
+  }
+
+  @override
+  String get emailNotVerified =>
+      'لم يتم التحقق من بريدك الإلكتروني بعد. افتح أحدث رابط ثم تحقّق مجددًا. إذا انتهت صلاحيته، اطلب رابطًا جديدًا.';
+
+  @override
+  String get correctEmail => 'تصحيح عنوان بريدي الإلكتروني';
+
+  @override
+  String get correctEmailHint =>
+      'أدخل البريد الصحيح وكلمة مرورك الحالية. سيرسل Firebase رابطًا إلى العنوان الجديد. لن يتغير بريد الحساب إلا بعد قبول الرابط، وستبقى كلمة المرور كما هي.';
+
+  @override
+  String get verifyCorrectedEmail => 'إرسال رابط إلى البريد الصحيح';
+
+  @override
+  String verifyNewEmailPending(String email) {
+    return 'تم طلب تصحيح البريد إلى $email. يبقى بريد الحساب الحالي الظاهر أعلاه دون تغيير حتى يتحقق Firebase من العنوان الجديد.';
+  }
+
+  @override
+  String get verificationReauthenticate =>
+      'أدخل كلمة مرورك الحالية مجددًا لتأكيد تصحيح البريد الإلكتروني.';
+
+  @override
+  String get verificationSessionExpired =>
+      'سجّل الدخول مجددًا. إذا قبلت رابط تصحيح البريد، استخدم البريد الجديد وكلمة مرورك الحالية. ستُستعاد مسودة بياناتك المحفوظة للحساب نفسه.';
+
+  @override
+  String get verificationSignOut => 'تسجيل الخروج والعودة إلى الدخول';
+
+  @override
   String foundReportReunitedNotification(String name) {
     return 'اكتمل تسليم $name.';
   }
+
+  @override
+  String get verificationLinkInstructions =>
+      'افتح رابط التحقق في بريدك الإلكتروني، ثم تحقق من حالة التحقق.';
+
+  @override
+  String get verificationChecking => 'جارٍ التحقق من البريد الإلكتروني...';
+
+  @override
+  String get verificationCompleting => 'جارٍ إكمال تسجيلك...';
+
+  @override
+  String get registrationVerifyEmailTitle => 'تحقق من بريدك الإلكتروني';
+
+  @override
+  String get registrationLinkSent => 'أرسلنا رابط تحقق إلى';
+
+  @override
+  String get registrationResendLink => 'إعادة إرسال رابط التحقق';
+
+  @override
+  String get registrationEditInformation => 'تعديل المعلومات';
+
+  @override
+  String get registrationPendingAccount =>
+      'حسابك موجود بالفعل. احفظ التعديلات لمتابعة التحقق.';
+
+  @override
+  String get registrationChangePassword => 'تغيير كلمة المرور';
+
+  @override
+  String get registrationCurrentPassword => 'كلمة المرور الحالية';
+
+  @override
+  String get registrationConfirmIdentity => 'تأكيد هويتك';
+
+  @override
+  String get registrationEditTitle => 'تعديل معلومات التسجيل';
+
+  @override
+  String get registrationSessionSignIn =>
+      'انتهت صلاحية جلسة Firebase. أدخل كلمة مرورك مرة واحدة لاستئناف التسجيل بأمان.';
+
+  @override
+  String get registrationPendingEmailHint =>
+      'تصحيح البريد بانتظار التأكيد. احتفظ بذلك العنوان أو اطلب تصحيحًا آخر.';
 }

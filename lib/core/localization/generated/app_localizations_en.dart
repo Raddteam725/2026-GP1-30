@@ -480,7 +480,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get enterFullName => 'Enter full name';
 
   @override
-  String get enterAge => 'Enter age';
+  String get enterAge => 'Select age';
 
   @override
   String get selectRelationship => 'Select relationship';
@@ -1777,7 +1777,109 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get verifyEmailTitle => 'Verify your email';
+
+  @override
+  String get verifyEmailInstructions =>
+      'Open the email from Radd and click the Firebase verification link before continuing. Your account is signed in, but Guardian access is locked until your email is verified.';
+
+  @override
+  String get verifyEmailLinkHelp =>
+      'Check your spam folder. If the link has expired or was already used, request another link. After correcting an email, sign in with the verified new address and your existing password if Firebase asks you to sign in again.';
+
+  @override
+  String get verifyEmailSent =>
+      'A verification link was requested. Check your inbox and spam folder.';
+
+  @override
+  String get checkEmailVerification => 'I\'ve Verified My Email';
+
+  @override
+  String get resendVerification => 'Resend verification email';
+
+  @override
+  String verificationCooldown(int seconds) {
+    return 'Resend available in $seconds seconds';
+  }
+
+  @override
+  String get emailNotVerified =>
+      'Your email is not verified yet. Open the latest link, then check again. If it has expired, request another link.';
+
+  @override
+  String get correctEmail => 'Correct my email address';
+
+  @override
+  String get correctEmailHint =>
+      'Enter the correct email and your current password. Firebase will send a link to the new address. Your account email changes only after that link is accepted; your password stays the same.';
+
+  @override
+  String get verifyCorrectedEmail => 'Send link to corrected email';
+
+  @override
+  String verifyNewEmailPending(String email) {
+    return 'Email correction requested for $email. Your current account email above stays unchanged until Firebase verifies the new address.';
+  }
+
+  @override
+  String get verificationReauthenticate =>
+      'Please enter your current password again to confirm this email correction.';
+
+  @override
+  String get verificationSessionExpired =>
+      'Please sign in again. If you accepted an email correction link, use the new email and your existing password. Your saved profile draft will be restored for the same account.';
+
+  @override
+  String get verificationSignOut => 'Sign out and return to login';
+
+  @override
   String foundReportReunitedNotification(String name) {
     return 'Handover of $name is complete.';
   }
+
+  @override
+  String get verificationLinkInstructions =>
+      'Open the verification link in your email, then check verification.';
+
+  @override
+  String get verificationChecking => 'Checking email verification...';
+
+  @override
+  String get verificationCompleting => 'Completing your registration...';
+
+  @override
+  String get registrationVerifyEmailTitle => 'Verify Your Email';
+
+  @override
+  String get registrationLinkSent => 'We sent a verification link to';
+
+  @override
+  String get registrationResendLink => 'Resend Verification Email';
+
+  @override
+  String get registrationEditInformation => 'Edit Information';
+
+  @override
+  String get registrationPendingAccount =>
+      'Your account already exists. Save changes to resume verification.';
+
+  @override
+  String get registrationChangePassword => 'Change Password';
+
+  @override
+  String get registrationCurrentPassword => 'Current Password';
+
+  @override
+  String get registrationConfirmIdentity => 'Confirm Your Identity';
+
+  @override
+  String get registrationEditTitle => 'Edit Registration Information';
+
+  @override
+  String get registrationSessionSignIn =>
+      'Your Firebase session expired. Enter your password once to resume this registration securely.';
+
+  @override
+  String get registrationPendingEmailHint =>
+      'An email correction is awaiting confirmation. Keep that destination or request another correction.';
 }

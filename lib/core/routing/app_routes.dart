@@ -5,6 +5,7 @@ abstract final class AppRoutes {
   static const roleSelection = '/onboarding/role';
   static const onboarding = '/onboarding';
   static const session = '/session';
+  static const verifyEmail = '/auth/verify-email';
   static const volunteerLogin = '/auth/volunteer';
   static const completeProfile = '/auth/complete-profile';
   static const auth = '/auth';

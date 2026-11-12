@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:radd/app/app_services.dart';
 import 'package:radd/app/radd_app.dart';
 import 'package:radd/core/routing/app_routes.dart';
@@ -20,6 +21,7 @@ void main() {
   late TestRepository repo;
   final channel = GuardianPushRefresh.instance;
   setUp(() {
+    SharedPreferences.setMockInitialValues({});
     auth = TestAuth();
     repo = TestRepository();
     GuardianPushService.resetForTesting();

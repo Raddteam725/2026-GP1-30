@@ -47,6 +47,13 @@ class _GuardianGateState extends State<GuardianGate> {
   Future<GuardianProfile>? _profile;
   bool _pushInitStarted = false;
   bool _hadAuthenticatedSession = false;
+  Future<GuardianProfile> _verifiedProfile() async {
+    final services = AppServices.of(context);
+    final identity = await services.auth.refreshIdentity();
+    if (!identity.emailVerified) throw const AppFailure('emailVerification');
+    return services.guardian.profile();
+  }
+
   @override
   Widget build(BuildContext context) {
     final services = AppServices.of(context);
@@ -64,9 +71,7 @@ class _GuardianGateState extends State<GuardianGate> {
               : const SessionScreen();
         }
         _hadAuthenticatedSession = true;
-        _profile ??= services.guardian.profile().timeout(
-          const Duration(seconds: 30),
-        );
+        _profile ??= _verifiedProfile().timeout(const Duration(seconds: 30));
         return FutureBuilder<GuardianProfile>(
           future: _profile,
           builder: (context, profile) {

@@ -141,7 +141,7 @@ def test_code_read_through_guardian_http_api_verifies_through_volunteer_http_api
     vol().begin_verification(report['id'])
     _, other_person = guardian_with_individual('guardian')
     other = CaseService(guardian).create(CaseCreate(individual_id=other_person))
-    guardian_token = {'uid': 'guardian', 'email': 'guardian@example.test', 'exp': 9999999999, 'auth_time': 1}
+    guardian_token = {'uid': 'guardian', 'email': 'guardian@example.test', 'email_verified': True, 'exp': 9999999999, 'auth_time': 1}
     volunteer_token = {'uid': 'one', 'exp': 9999999999, 'auth_time': 1}
     try:
         with TestClient(app) as client:

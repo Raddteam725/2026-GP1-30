@@ -959,7 +959,7 @@ abstract class AppLocalizations {
   /// No description provided for @enterAge.
   ///
   /// In en, this message translates to:
-  /// **'Enter age'**
+  /// **'Select age'**
   String get enterAge;
 
   /// No description provided for @selectRelationship.
@@ -3272,11 +3272,185 @@ abstract class AppLocalizations {
   /// **'{name} has been found by a volunteer. Open Radd to verify and collect them.'**
   String foundReportIdentifiedNotification(String name);
 
+  /// No description provided for @verifyEmailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify your email'**
+  String get verifyEmailTitle;
+
+  /// No description provided for @verifyEmailInstructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the email from Radd and click the Firebase verification link before continuing. Your account is signed in, but Guardian access is locked until your email is verified.'**
+  String get verifyEmailInstructions;
+
+  /// No description provided for @verifyEmailLinkHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your spam folder. If the link has expired or was already used, request another link. After correcting an email, sign in with the verified new address and your existing password if Firebase asks you to sign in again.'**
+  String get verifyEmailLinkHelp;
+
+  /// No description provided for @verifyEmailSent.
+  ///
+  /// In en, this message translates to:
+  /// **'A verification link was requested. Check your inbox and spam folder.'**
+  String get verifyEmailSent;
+
+  /// No description provided for @checkEmailVerification.
+  ///
+  /// In en, this message translates to:
+  /// **'I\'ve Verified My Email'**
+  String get checkEmailVerification;
+
+  /// No description provided for @resendVerification.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend verification email'**
+  String get resendVerification;
+
+  /// No description provided for @verificationCooldown.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend available in {seconds} seconds'**
+  String verificationCooldown(int seconds);
+
+  /// No description provided for @emailNotVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Your email is not verified yet. Open the latest link, then check again. If it has expired, request another link.'**
+  String get emailNotVerified;
+
+  /// No description provided for @correctEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Correct my email address'**
+  String get correctEmail;
+
+  /// No description provided for @correctEmailHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the correct email and your current password. Firebase will send a link to the new address. Your account email changes only after that link is accepted; your password stays the same.'**
+  String get correctEmailHint;
+
+  /// No description provided for @verifyCorrectedEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Send link to corrected email'**
+  String get verifyCorrectedEmail;
+
+  /// No description provided for @verifyNewEmailPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Email correction requested for {email}. Your current account email above stays unchanged until Firebase verifies the new address.'**
+  String verifyNewEmailPending(String email);
+
+  /// No description provided for @verificationReauthenticate.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter your current password again to confirm this email correction.'**
+  String get verificationReauthenticate;
+
+  /// No description provided for @verificationSessionExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please sign in again. If you accepted an email correction link, use the new email and your existing password. Your saved profile draft will be restored for the same account.'**
+  String get verificationSessionExpired;
+
+  /// No description provided for @verificationSignOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out and return to login'**
+  String get verificationSignOut;
+
   /// No description provided for @foundReportReunitedNotification.
   ///
   /// In en, this message translates to:
   /// **'Handover of {name} is complete.'**
   String foundReportReunitedNotification(String name);
+
+  /// No description provided for @verificationLinkInstructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the verification link in your email, then check verification.'**
+  String get verificationLinkInstructions;
+
+  /// No description provided for @verificationChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking email verification...'**
+  String get verificationChecking;
+
+  /// No description provided for @verificationCompleting.
+  ///
+  /// In en, this message translates to:
+  /// **'Completing your registration...'**
+  String get verificationCompleting;
+
+  /// No description provided for @registrationVerifyEmailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify Your Email'**
+  String get registrationVerifyEmailTitle;
+
+  /// No description provided for @registrationLinkSent.
+  ///
+  /// In en, this message translates to:
+  /// **'We sent a verification link to'**
+  String get registrationLinkSent;
+
+  /// No description provided for @registrationResendLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend Verification Email'**
+  String get registrationResendLink;
+
+  /// No description provided for @registrationEditInformation.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Information'**
+  String get registrationEditInformation;
+
+  /// No description provided for @registrationPendingAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account already exists. Save changes to resume verification.'**
+  String get registrationPendingAccount;
+
+  /// No description provided for @registrationChangePassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Change Password'**
+  String get registrationChangePassword;
+
+  /// No description provided for @registrationCurrentPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Current Password'**
+  String get registrationCurrentPassword;
+
+  /// No description provided for @registrationConfirmIdentity.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm Your Identity'**
+  String get registrationConfirmIdentity;
+
+  /// No description provided for @registrationEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Registration Information'**
+  String get registrationEditTitle;
+
+  /// No description provided for @registrationSessionSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Your Firebase session expired. Enter your password once to resume this registration securely.'**
+  String get registrationSessionSignIn;
+
+  /// No description provided for @registrationPendingEmailHint.
+  ///
+  /// In en, this message translates to:
+  /// **'An email correction is awaiting confirmation. Keep that destination or request another correction.'**
+  String get registrationPendingEmailHint;
 }
 
 class _AppLocalizationsDelegate

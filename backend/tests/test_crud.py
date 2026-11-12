@@ -20,7 +20,7 @@ def storage(monkeypatch):
     return db, bucket
 
 def guardian(uid):
-    s = service.GuardianService({"uid": uid, "email": uid + "@example.test"})
+    s = service.GuardianService({"uid": uid, "email": uid + "@example.test", "email_verified": True})
     s.save_profile(ProfileCreate(full_name="Test Guardian", phone="+966500000001", age_confirmed=True, privacy_accepted=True), create=True)
     return s
 
@@ -83,7 +83,7 @@ def test_profile_email_comes_from_verified_identity(storage):
 
 def test_session_role_is_server_owned_and_missing_profile_is_recoverable(storage):
     db, _ = storage
-    s = service.GuardianService({"uid": "partial", "email": "partial@example.test"})
+    s = service.GuardianService({"uid": "partial", "email": "partial@example.test", "email_verified": True})
     with pytest.raises(HTTPException) as missing:
         s.account_role()
     assert missing.value.status_code == 404

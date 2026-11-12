@@ -183,7 +183,22 @@ void main() {
         await press(tester, s.vProceedVerification);
         await tester.scrollUntilVisible(find.text(s.vUseIdentifier), 250);
         await press(tester, s.vUseIdentifier);
+        final codeField = find.byType(TextFormField);
+        String? codeError() =>
+            tester.state<FormFieldState<String>>(codeField).errorText;
+        expect(codeError(), isNull);
+        await tester.enterText(codeField, '12x');
+        await tester.pumpAndSettle();
+        expect(codeError(), s.vVerificationCodeFormat);
+        await tester.enterText(codeField, '٠٠٠٠٠٠');
+        await tester.pumpAndSettle();
+        expect(codeError(), isNull);
+        await tester.enterText(codeField, '');
+        await tester.pumpAndSettle();
+        expect(codeError(), s.vRequired);
         await tester.enterText(find.byType(TextFormField), '000000');
+        await tester.pumpAndSettle();
+        expect(codeError(), isNull);
         await Scrollable.ensureVisible(
           tester.element(find.byType(CheckboxListTile)),
           alignment: 0.5,
@@ -191,6 +206,14 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.byType(CheckboxListTile));
         await tester.pumpAndSettle();
+        await tester.tap(find.byType(CheckboxListTile));
+        await tester.pumpAndSettle();
+        expect(find.text(s.vRequired), findsOneWidget);
+        final verifyButton = find.widgetWithText(FilledButton, s.vVerify);
+        expect(tester.widget<FilledButton>(verifyButton).onPressed, isNull);
+        await tester.tap(find.byType(CheckboxListTile));
+        await tester.pumpAndSettle();
+        expect(find.text(s.vRequired), findsNothing);
         await press(tester, s.vVerify);
         expect(find.text(s.vVerificationFailed), findsWidgets);
         expect(

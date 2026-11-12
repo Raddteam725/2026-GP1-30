@@ -16,7 +16,7 @@ def sends(monkeypatch):
     send = Mock(return_value='message-id')
     monkeypatch.setattr(volunteer_alerts.messaging, 'send', send)
     monkeypatch.setattr(volunteer_alerts, 'firebase_app', lambda: None)
-    monkeypatch.setattr(volunteer_alerts.auth, 'get_user', lambda *args, **kwargs: SimpleNamespace(disabled=False, tokens_valid_after_timestamp=0))
+    monkeypatch.setattr(volunteer_alerts.auth, 'get_user', lambda uid, **kwargs: SimpleNamespace(email=uid + '@example.test', email_verified=True, disabled=False, tokens_valid_after_timestamp=0))
     return send
 
 def device(uid, **kwargs):
@@ -222,8 +222,10 @@ def test_approved_id_token_expiry_stops_push_but_preserves_real_history(db, send
 
 @pytest.mark.parametrize('disabled,valid_after', [(True, 0), (False, 2000000)])
 def test_revoked_or_disabled_auth_session_never_receives_push(db, sends, monkeypatch, disabled, valid_after):
-    monkeypatch.setattr(volunteer_alerts.auth, 'get_user', lambda *args, **kwargs:
-        SimpleNamespace(disabled=disabled, tokens_valid_after_timestamp=valid_after))
+    monkeypatch.setattr(volunteer_alerts.auth, 'get_user', lambda uid, **kwargs:
+        SimpleNamespace(email=uid + '@example.test', email_verified=True,
+                        disabled=disabled if uid == 'one' else False,
+                        tokens_valid_after_timestamp=valid_after if uid == 'one' else 0))
     vol('one', exp=9999999999, auth_time=1000).register_device(VolunteerDevice(token='session-device'))
     _, identifier = case()
     assert sends.call_count == 0
@@ -246,7 +248,12 @@ def test_normal_id_token_renewal_extends_same_device_without_duplicate_registrat
 
 def test_session_validation_failure_fails_closed_and_retries(db, sends, monkeypatch):
     device('one')
-    monkeypatch.setattr(volunteer_alerts.auth, 'get_user', Mock(side_effect=OSError('offline')))
+    def auth_lookup(uid, **kwargs):
+        if uid == 'one':
+            raise OSError('offline')
+        return SimpleNamespace(email=uid + '@example.test', email_verified=True,
+                               disabled=False, tokens_valid_after_timestamp=0)
+    monkeypatch.setattr(volunteer_alerts.auth, 'get_user', auth_lookup)
     _, identifier = case()
     assert sends.call_count==0
     monkeypatch.setattr(volunteer_alerts.auth, 'get_user', lambda *args, **kwargs:

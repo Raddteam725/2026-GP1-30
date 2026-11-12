@@ -6,7 +6,47 @@ import 'package:radd/features/guardian/data/guardian_repository.dart';
 
 class TestAuth implements AuthService {
   bool active = false;
+  // Existing regression fixtures represent established, verified accounts.
+  // Verification workflow tests explicitly start with an unverified account.
+  bool emailVerified = true;
+  String uid = 'test-auth-user', email = 'test@example.test';
+  int identityRefreshes = 0;
+  final List<String> verificationRequests = [];
+  final List<(String, String, String)> emailCorrections = [];
+  @override
+  AuthIdentity? get currentIdentity => active
+      ? AuthIdentity(uid: uid, email: email, emailVerified: emailVerified)
+      : null;
+  @override
+  Future<AuthIdentity> refreshIdentity() async {
+    identityRefreshes++;
+    return currentIdentity ?? (throw const AppFailure('unauthorized'));
+  }
+
+  @override
+  Future<void> sendVerification(String language) async {
+    verificationRequests.add(language);
+  }
+
+  @override
+  Future<void> verifyNewEmail(
+    String email,
+    String password,
+    String language,
+  ) async {
+    emailCorrections.add((email, password, language));
+  }
+
   int registrations = 0, logins = 0;
+  final passwordUpdates = <(String, String?)>[];
+  @override
+  Future<void> updatePassword(
+    String password, {
+    String? currentPassword,
+  }) async {
+    passwordUpdates.add((password, currentPassword));
+  }
+
   final events = StreamController<bool>.broadcast();
   @override
   bool get signedIn => active;
@@ -16,6 +56,7 @@ class TestAuth implements AuthService {
   Stream<bool> get changes => events.stream;
   @override
   Future<void> login(String email, String password) async {
+    this.email = email.trim();
     logins++;
     active = true;
     events.add(true);
@@ -23,9 +64,20 @@ class TestAuth implements AuthService {
 
   @override
   Future<void> register(String email, String password) async {
+    this.email = email.trim();
     registrations++;
+    emailVerified = false;
     active = true;
     events.add(true);
+  }
+
+  @override
+  Future<bool> deleteUnverifiedRegistration(String uid) async {
+    final identity = await refreshIdentity();
+    if (identity.uid != uid) throw const AppFailure('unauthorized');
+    if (identity.emailVerified) return false;
+    await logout();
+    return true;
   }
 
   @override

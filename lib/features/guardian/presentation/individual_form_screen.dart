@@ -26,9 +26,7 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
   final _form = GlobalKey<FormState>();
   final _scroll = ScrollController();
   late final _name = TextEditingController(text: widget.individual?.fullName);
-  late final _age = TextEditingController(
-    text: widget.individual?.age.toString(),
-  );
+  late int? _age = widget.individual?.age;
   late String? _gender = widget.individual?.gender,
       _relationship = widget.individual?.relationship;
   late final _relationshipOther = TextEditingController(
@@ -109,7 +107,6 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
   void dispose() {
     _scroll.dispose();
     _name.dispose();
-    _age.dispose();
     _relationshipOther.dispose();
     super.dispose();
   }
@@ -152,7 +149,7 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
               ? _periodId
               : (_periodId != _currentPeriodId ? _periodId : null),
           fullName: _name.text,
-          age: int.parse(_age.text.trim()),
+          age: _age!,
           gender: _gender!,
           relationship: _relationship!,
           relationshipOther: _relationship == 'other'
@@ -280,21 +277,30 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
                   const SizedBox(height: 20),
                   RequiredLabel(s.age),
                   const SizedBox(height: 8),
-                  AppTextInput(
-                    label: s.age,
-                    showLabel: false,
-                    hint: s.enterAge,
-                    controller: _age,
-                    enabled: !_busy,
-                    validator: (v) => FormValidation.age(v, s),
-                    keyboardType: TextInputType.number,
-                    textInputAction: TextInputAction.next,
+                  DropdownButtonFormField<int>(
+                    key: const ValueKey('individual-age'),
+                    initialValue: _age,
+                    isExpanded: true,
+                    menuMaxHeight: 280,
+                    borderRadius: BorderRadius.circular(16),
+                    hint: Text(s.enterAge),
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    decoration: const InputDecoration(errorMaxLines: 3),
+                    items: [
+                      for (var age = 0; age <= 130; age++)
+                        DropdownMenuItem(value: age, child: Text('$age')),
+                    ],
+                    onChanged: _busy
+                        ? null
+                        : (value) => setState(() => _age = value),
+                    validator: (v) => FormValidation.age(v?.toString(), s),
                   ),
                   const SizedBox(height: 20),
                   RequiredLabel(s.gender),
                   const SizedBox(height: 8),
                   FormField<String>(
                     initialValue: _gender,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     validator: (v) => FormValidation.required(v, s),
                     builder: (field) => Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -382,6 +388,7 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     initialValue: _relationship,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     isExpanded: true,
                     hint: Text(s.selectRelationship),
                     decoration: const InputDecoration(),

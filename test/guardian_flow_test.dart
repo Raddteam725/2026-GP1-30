@@ -2,12 +2,14 @@ import 'support/guardian_fakes.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:radd/app/app_services.dart';
 import 'package:radd/app/radd_app.dart';
 import 'package:radd/core/localization/generated/app_localizations.dart';
 import 'package:radd/core/routing/app_routes.dart';
 import 'package:radd/features/auth/presentation/auth_screen.dart';
+import 'package:radd/features/auth/presentation/email_verification_screen.dart';
 import 'package:radd/features/auth/presentation/form_validation.dart';
 import 'package:radd/features/guardian/data/guardian_push_service.dart';
 import 'package:radd/features/guardian/data/guardian_repository.dart';
@@ -22,12 +24,27 @@ import 'package:radd/features/guardian/presentation/guided_report_screen.dart';
 import 'package:radd/features/onboarding/presentation/screens/language_selection_screen.dart';
 import 'package:radd/shared/widgets/password_input.dart';
 
+class _DeletionTrackingAuth extends TestAuth {
+  int deletions = 0;
+  @override
+  Future<bool> deleteUnverifiedRegistration(String uid) async {
+    deletions++;
+    return super.deleteUnverifiedRegistration(uid);
+  }
+}
+
+class _UnauthorizedSessionRepository extends TestRepository {
+  @override
+  Future<String> accountRole() async => throw const AppFailure('unauthorized');
+}
+
 void main() {
-  late TestAuth auth;
+  late _DeletionTrackingAuth auth;
   late TestRepository repo;
   setUp(() {
+    SharedPreferences.setMockInitialValues({});
     GuardianPushService.resetForTesting();
-    auth = TestAuth();
+    auth = _DeletionTrackingAuth();
     repo = TestRepository();
   });
   tearDown(() async {
@@ -134,7 +151,7 @@ void main() {
     await t.enterText(fields.at(3), 'ValidPass1!');
     await t.enterText(fields.at(4), 'ValidPass1!');
     await tapText(t, 'Create Account');
-    expect(find.text('Both confirmations are required.'), findsOneWidget);
+    expect(find.text('This field is required.'), findsNWidgets(2));
     expect(auth.registrations, 0);
     await t.ensureVisible(find.byType(CheckboxListTile).first);
     await t.tap(find.byType(CheckboxListTile).first);
@@ -157,6 +174,12 @@ void main() {
     await t.tap(find.byType(CheckboxListTile).last);
     await t.pumpAndSettle();
     await tapText(t, 'Create Account');
+    expect(auth.registrations, 1);
+    expect(auth.verificationRequests, ['en']);
+    expect(auth.emailVerified, isFalse);
+    auth.emailVerified = true;
+    await t.pump(const Duration(seconds: 3));
+    await t.pumpAndSettle();
     expect(auth.registrations, 1);
     expect(find.byType(GuardianHomeScreen), findsOneWidget);
     expect(find.text('No individuals registered yet'), findsOneWidget);
@@ -190,6 +213,47 @@ void main() {
     await tapText(t, 'Create Account');
     expect(find.text('Passwords do not match.'), findsNothing);
     expect(auth.registrations, 1);
+    expect(auth.verificationRequests, ['en']);
+    expect(auth.emailVerified, isFalse);
+    auth.emailVerified = true;
+    await t.pump(const Duration(seconds: 3));
+    await t.pumpAndSettle();
+    expect(auth.registrations, 1);
+  });
+  testWidgets('Existing unverified login Edit signs out without deleting', (t) async {
+    auth.emailVerified = false;
+    await start(t);
+    await route(t, AppRoutes.auth);
+    await t.enterText(find.byType(TextFormField).first, 'existing@example.test');
+    await t.enterText(find.byType(TextFormField).last, 'ExistingPass1!');
+    await tapText(t, 'Log In');
+    expect(find.byType(EmailVerificationScreen), findsOneWidget);
+    await tapText(t, 'Edit Information');
+    expect(auth.signedIn, isFalse);
+    expect(auth.deletions, 0);
+    expect(auth.registrations, 0);
+    expect(t.widget<AuthScreen>(find.byType(AuthScreen)).mode, AuthMode.register);
+    for (final field in t.widgetList<TextFormField>(find.byType(TextFormField))) {
+      expect(field.controller!.text, isEmpty);
+    }
+  });
+  testWidgets('Unauthorized Guardian login retains original session recovery', (t) async {
+    auth.emailVerified = false;
+    repo = _UnauthorizedSessionRepository();
+    await start(t);
+    await route(t, AppRoutes.auth);
+    await t.enterText(find.byType(TextFormField).first, 'existing@example.test');
+    await t.enterText(find.byType(TextFormField).last, 'ExistingPass1!');
+    await tapText(t, 'Log In');
+    final s = lookupAppLocalizations(const Locale('en'));
+    expect(find.byType(EmailVerificationScreen), findsNothing);
+    expect(find.text(s.sessionRecovery), findsOneWidget);
+    expect(find.text(s.expiredSessionRecovery), findsOneWidget);
+    expect(find.text(s.retry), findsOneWidget);
+    expect(find.text(s.returnToRoles), findsOneWidget);
+    expect(find.text(s.logout), findsOneWidget);
+    expect(auth.identityRefreshes, 0);
+    expect(auth.signedIn, isTrue);
   });
   testWidgets('Protected route refuses an unauthenticated session', (t) async {
     await start(t);
@@ -232,7 +296,17 @@ void main() {
       await route(t, AppRoutes.addIndividual);
       final fields = find.byType(TextFormField);
       await t.enterText(fields.at(0), 'Test Person');
-      await t.enterText(fields.at(1), '9');
+      await t.ensureVisible(find.byKey(const ValueKey('individual-age')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('individual-age')));
+      await t.pumpAndSettle();
+      await t.scrollUntilVisible(
+        find.text('9'),
+        120,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await t.tap(find.text('9').last);
+      await t.pumpAndSettle();
       await tapText(t, 'Female');
       expect(find.text('Specify relationship'), findsNothing);
       await t.tap(find.byType(DropdownButtonFormField<String>).first);
@@ -241,7 +315,7 @@ void main() {
       await t.pumpAndSettle();
       // Selecting Other immediately reveals the required custom-text field.
       expect(find.text('Specify relationship'), findsWidgets);
-      await t.enterText(find.byType(TextFormField).at(2), 'Family friend');
+      await t.enterText(find.byType(TextFormField).at(1), 'Family friend');
       await tapText(t, 'Save');
       // The relationship is now satisfied; only the still-missing photo blocks saving.
       expect(find.text('Photo required.'), findsOneWidget);
