@@ -9,12 +9,18 @@ import '../../../shared/widgets/feature_page.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../guardian/data/guardian_push_service.dart';
 import '../../guardian/data/guardian_repository.dart';
+import '../data/registration_draft.dart';
 
 /// Resolves identity, then the server-owned role, then the role's profile.
 /// Locale is deliberately not an input to authentication or authorization.
 class SessionScreen extends StatefulWidget {
-  const SessionScreen({super.key, this.expectedRole});
+  const SessionScreen({
+    super.key,
+    this.expectedRole,
+    this.guardianLogin = false,
+  });
   final String? expectedRole;
+  final bool guardianLogin;
   @override
   State<SessionScreen> createState() => _SessionScreenState();
 }
@@ -57,9 +63,32 @@ class _SessionScreenState extends State<SessionScreen> {
         .pushNamedAndRemoveUntil(AppRoutes.languageSelection, (_) => false);
   }
 
+  Future<bool> _guardianVerified() async {
+    final identity = await AppServices.of(context).auth.refreshIdentity();
+    Map<String, dynamic> draft = {};
+    try {
+      draft = await RegistrationDraft.read(identity.uid);
+    } catch (_) {}
+    if (!mounted || _leaving) return false;
+    if (AppServices.of(context).auth.currentIdentity?.uid != identity.uid) {
+      throw const AppFailure('unauthorized');
+    }
+    final pending = draft['pendingEmail'] as String?;
+    if (identity.emailVerified) {
+      if (pending != null &&
+          pending.toLowerCase() != identity.email.toLowerCase()) {
+        throw const AppFailure('emailVerification');
+      }
+      return true;
+    }
+    Navigator.of(context).pushReplacementNamed(AppRoutes.verifyEmail);
+    return false;
+  }
+
   Future<void> _resolve() async {
     final revision = ++_revision;
     final services = AppServices.of(context);
+    String? resolvedRole;
     setState(() {
       _loading = true;
       _failure = null;
@@ -77,11 +106,15 @@ class _SessionScreenState extends State<SessionScreen> {
       final role = await services.guardian.accountRole().timeout(
         const Duration(seconds: 30),
       );
+      resolvedRole = role;
       if (!mounted || revision != _revision) return;
       if (widget.expectedRole != null && widget.expectedRole != role) {
         throw const AppFailure('role');
       }
       if (role == 'guardian') {
+        if (!await _guardianVerified() || !mounted || revision != _revision) {
+          return;
+        }
         // Do not enter a protected destination until its real profile is valid.
         await services.guardian.profile().timeout(const Duration(seconds: 30));
         if (!mounted || revision != _revision) return;
@@ -98,7 +131,41 @@ class _SessionScreenState extends State<SessionScreen> {
       debugPrint(
         'Radd session resolution failed: code=$code type=${error.runtimeType}',
       );
-      if (code == 'notFound' && widget.expectedRole == 'guardian') {
+      var guardianContext =
+          resolvedRole == 'guardian' || widget.expectedRole == 'guardian';
+      if (code == 'notFound' && resolvedRole == null &&
+          widget.expectedRole != 'volunteer') {
+        final identity = services.auth.currentIdentity;
+        Map<String, dynamic> draft = {};
+        if (identity != null) {
+          try {
+            draft = await RegistrationDraft.read(identity.uid);
+          } catch (_) {}
+        }
+        if (!mounted || revision != _revision) return;
+        guardianContext =
+            guardianContext ||
+            widget.guardianLogin ||
+            draft['registrationPending'] == true;
+      }
+      if (code == 'notFound' && guardianContext) {
+        try {
+          if (!await _guardianVerified() || !mounted || revision != _revision) {
+            return;
+          }
+        } catch (refreshError) {
+          if (mounted) {
+            setState(() {
+              _failure = refreshError is AppFailure
+                  ? refreshError.code
+                  : 'service';
+              _loading = false;
+            });
+          }
+          return;
+        }
+      }
+      if (code == 'notFound' && guardianContext) {
         Navigator.of(context).pushReplacementNamed(AppRoutes.completeProfile);
         return;
       }

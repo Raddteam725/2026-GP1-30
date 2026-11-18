@@ -86,4 +86,30 @@ void main() {
       isNull,
     );
   });
+
+  for (final locale in ['en', 'ar']) {
+    final localized = lookupAppLocalizations(Locale(locale));
+    test('Existing name, email, required and age boundaries in $locale', () {
+      for (final empty in [null, '', '   ']) {
+        expect(FormValidation.name(empty, localized), localized.requiredField);
+        expect(FormValidation.email(empty, localized), localized.requiredField);
+        expect(
+          FormValidation.required(empty, localized),
+          localized.requiredField,
+        );
+        expect(FormValidation.age(empty, localized), localized.invalidAge);
+      }
+      expect(FormValidation.name('x' * 120, localized), isNull);
+      expect(FormValidation.name('x' * 121, localized), localized.invalidName);
+      expect(FormValidation.email('test@example.test', localized), isNull);
+      expect(FormValidation.email('test@', localized), localized.invalidEmail);
+      expect(FormValidation.required('Family friend', localized), isNull);
+      for (final age in ['0', '1', '130']) {
+        expect(FormValidation.age(age, localized), isNull);
+      }
+      for (final age in ['-1', '131', '1.5', 'abc']) {
+        expect(FormValidation.age(age, localized), localized.invalidAge);
+      }
+    });
+  }
 }

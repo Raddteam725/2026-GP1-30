@@ -85,6 +85,11 @@ class _EditGuardianProfileScreenState extends State<EditGuardianProfileScreen> {
                   const SizedBox(height: 20),
                   AppTextInput(
                     label: s.phone,
+                    helperText: s.phoneHelp,
+                    helperStyle: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF718096),
+                    ),
                     prefixIcon: const Icon(Icons.phone_outlined),
                     controller: _phone,
                     enabled: !_busy,
@@ -92,14 +97,6 @@ class _EditGuardianProfileScreenState extends State<EditGuardianProfileScreen> {
                     keyboardType: TextInputType.phone,
                     textDirection: TextDirection.ltr,
                     textInputAction: TextInputAction.done,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    s.phoneHelp,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF718096),
-                    ),
                   ),
                   const SizedBox(height: 24),
                   Text(

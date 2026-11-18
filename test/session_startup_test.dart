@@ -4,11 +4,14 @@ import 'package:radd/features/volunteer/presentation/volunteer_entry.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:radd/app/app_services.dart';
 import 'package:radd/app/radd_app.dart';
 import 'package:radd/core/routing/app_routes.dart';
 import 'package:radd/features/auth/presentation/auth_screen.dart';
 import 'package:radd/features/auth/presentation/session_screen.dart';
+import 'package:radd/features/auth/presentation/email_verification_screen.dart';
+import 'package:radd/core/localization/generated/app_localizations.dart';
 import 'package:radd/features/guardian/data/guardian_repository.dart';
 import 'package:radd/features/guardian/presentation/guardian_home_screen.dart';
 import 'package:radd/features/onboarding/presentation/screens/language_selection_screen.dart';
@@ -46,6 +49,7 @@ void main() {
   late TestAuth auth;
   late SessionRepository repo;
   setUp(() {
+    SharedPreferences.setMockInitialValues({});
     auth = TestAuth();
     repo = SessionRepository();
   });
@@ -65,6 +69,42 @@ void main() {
   }
 
   for (final language in ['en', 'ar']) {
+    for (final expectedRole in [null, 'volunteer']) {
+      for (final verified in [false, true]) {
+        testWidgets(
+          'Missing Volunteer role preserves recovery ($expectedRole, verified=$verified) in $language',
+          (t) async {
+            auth.active = true;
+            auth.emailVerified = verified;
+            repo.role = 'volunteer';
+            repo.failure = 'notFound';
+            await launch(t, language: language);
+            if (expectedRole != null) {
+              Navigator.of(t.element(find.byType(SessionScreen)))
+                  .pushReplacementNamed(
+                    AppRoutes.session,
+                    arguments: expectedRole,
+                  );
+              await t.pumpAndSettle();
+            }
+            final s = lookupAppLocalizations(Locale(language));
+            expect(find.byType(SessionScreen), findsOneWidget);
+            expect(find.byType(EmailVerificationScreen), findsNothing);
+            expect(find.text(s.missingProfileRecovery), findsOneWidget);
+            expect(auth.identityRefreshes, 0);
+            expect(repo.profileReads, 0);
+            repo.failure = null;
+            await t.tap(find.text(s.retry));
+            await t.pumpAndSettle();
+            expect(find.byType(VolunteerEntry), findsOneWidget);
+            expect(find.byType(EmailVerificationScreen), findsNothing);
+            expect(auth.identityRefreshes, 0);
+            expect(auth.registrations, 0);
+          },
+        );
+      }
+    }
+
     testWidgets(
       'Signed-out cold start preserves $language but never assumes role',
       (t) async {

@@ -4,6 +4,8 @@ import '../../features/volunteer/presentation/volunteer_entry.dart';
 
 import '../../app/app_services.dart';
 import '../../features/auth/presentation/session_screen.dart';
+import '../../features/auth/presentation/email_verification_screen.dart';
+import '../../features/auth/presentation/verified_email_gate.dart';
 import '../../features/auth/presentation/auth_screen.dart';
 import '../../features/guardian/data/guardian_repository.dart';
 import '../../features/guardian/presentation/guardian_gate.dart';
@@ -35,14 +37,18 @@ abstract final class AppRouter {
         ),
         AppRoutes.roleSelection => const RoleSelectionScreen(),
         AppRoutes.session => SessionScreen(
-          expectedRole: settings.arguments is String
+          expectedRole:
+              settings.arguments is String &&
+                  settings.arguments != 'guardian-login'
               ? settings.arguments as String
               : null,
+          guardianLogin: settings.arguments == 'guardian-login',
         ),
+        AppRoutes.verifyEmail => const EmailVerificationScreen(),
         AppRoutes.volunteerLogin ||
         AppRoutes.volunteer => const VolunteerEntry(),
-        AppRoutes.completeProfile => const AuthScreen(
-          mode: AuthMode.completeProfile,
+        AppRoutes.completeProfile => const VerifiedEmailGate(
+          child: AuthScreen(mode: AuthMode.completeProfile),
         ),
         AppRoutes.auth => AuthScreen(
           notice: settings.arguments is String

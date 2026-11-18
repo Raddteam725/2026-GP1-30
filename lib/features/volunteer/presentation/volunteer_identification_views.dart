@@ -1018,6 +1018,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
           children: [
             TextFormField(
               controller: _identifier,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
               textDirection: TextDirection.ltr,
               // Missing Case or standalone Found Report alike: the Guardian
               // reads a 6-digit verification code, never an RD-/FR- id. The
@@ -1025,6 +1026,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
               // decides which record the code is checked against.
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
+                errorMaxLines: 3,
                 labelText: s.vGuardianIdentifier,
                 prefixIcon: const Icon(Icons.pin_outlined),
               ),
@@ -1043,16 +1045,14 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
                   : s.vExactIdentifier,
             ),
             const SizedBox(height: 12),
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              title: Text(
+            RequiredCheckbox(
+              label: Text(
                 s.vAuthenticatedAccount,
                 style: const TextStyle(fontSize: 13),
               ),
               value: _authenticatedShown,
-              onChanged: (value) =>
-                  _update(() => _authenticatedShown = value ?? false),
+              errorText: s.vRequired,
+              onChanged: (value) => _update(() => _authenticatedShown = value),
             ),
           ],
         ),

@@ -14,6 +14,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../app/app_locale_scope.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/required_checkbox.dart';
 import '../../guardian/presentation/guardian_components.dart';
 import '../../../core/localization/generated/app_localizations.dart';
 import '../data/mock_volunteer_repository.dart';
