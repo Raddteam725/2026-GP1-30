@@ -296,16 +296,21 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _loadDraft() async {
-    final initialIdentity = AppServices.maybeOf(context)?.auth.currentIdentity;
-    _registrationIdentity = initialIdentity;
-    final uid = initialIdentity?.uid;
-    _registrationUid = uid;
-    if (_email.text.isEmpty) _email.text = initialIdentity?.email ?? '';
     try {
-      if (uid == null) return;
+      final initialIdentity = await AppServices.of(context).auth.refreshIdentity();
+      if (!mounted) return;
+      _registrationIdentity = initialIdentity;
+      final uid = initialIdentity.uid;
+      _registrationUid = uid;
+      if (_email.text.isEmpty) _email.text = initialIdentity.email;
       final draft = await RegistrationDraft.read(uid);
       if (!mounted) return;
       if (AppServices.of(context).auth.currentIdentity?.uid != uid) return;
+      final draftEmail = draft['email'] ?? draft['pendingEmail'];
+      if (draftEmail != null &&
+          draftEmail.toString().toLowerCase() != initialIdentity.email.toLowerCase()) {
+        return;
+      }
       _registrationUid = uid;
       // Restore this UID's non-credential input without overwriting current edits.
       if (_name.text.isEmpty) _name.text = draft['name'] as String? ?? '';
@@ -314,7 +319,7 @@ class _AuthScreenState extends State<AuthScreen> {
       _adult = draft['adult'] == true;
       _privacy = draft['privacy'] == true;
       _draftVersion++;
-      _email.text = _pendingEmail ?? initialIdentity!.email;
+      _email.text = _pendingEmail ?? initialIdentity.email;
       if (draft['registrationPending'] == true &&
           _adult &&
           _privacy &&

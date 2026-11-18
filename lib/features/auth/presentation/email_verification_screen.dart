@@ -5,10 +5,13 @@ import 'package:flutter/material.dart';
 import '../../../app/app_services.dart';
 import '../../../core/localization/generated/app_localizations.dart';
 import '../../../core/routing/app_routes.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/feature_page.dart';
+import '../../../shared/widgets/primary_button.dart';
 import '../../guardian/data/guardian_repository.dart';
 import '../data/auth_service.dart';
 import '../data/registration_draft.dart';
+import 'form_validation.dart';
 
 class EmailVerificationScreen extends StatefulWidget {
   const EmailVerificationScreen({
@@ -149,7 +152,43 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     setState(() => _completionStarted = true);
     _stopTimers();
     try {
-      await _save({'pendingEmail': null});
+      var completedDraft = false;
+      if (!widget.inDialog && widget.onVerified == null) {
+        final services = AppServices.of(context);
+        final refreshed = await services.auth.refreshIdentity();
+        if (!mounted) return;
+        if (refreshed.uid != identity.uid ||
+            services.auth.currentIdentity?.uid != identity.uid ||
+            refreshed.email.toLowerCase() != identity.email.toLowerCase() ||
+            !_canContinue(refreshed)) {
+          throw const AppFailure('unauthorized');
+        }
+        final draft = await RegistrationDraft.read(refreshed.uid);
+        if (!mounted) return;
+        if (services.auth.currentIdentity?.uid != refreshed.uid) {
+          throw const AppFailure('unauthorized');
+        }
+        final draftEmail = draft['email'] ?? draft['pendingEmail'];
+        final name = draft['name'] as String? ?? '';
+        final phone = draft['phone'] as String? ?? '';
+        final s = AppLocalizations.of(context)!;
+        if (draft['registrationPending'] == true &&
+            draft['adult'] == true &&
+            draft['privacy'] == true &&
+            (draftEmail == null ||
+                draftEmail.toString().toLowerCase() ==
+                    refreshed.email.toLowerCase()) &&
+            FormValidation.name(name, s) == null &&
+            FormValidation.phone(phone, s) == null) {
+          await services.guardian.createProfile(name, phone);
+          completedDraft = true;
+          try {
+            await RegistrationDraft.clear(refreshed.uid);
+          } catch (_) {}
+          if (!mounted) return;
+        }
+      }
+      if (!completedDraft) await _save({'pendingEmail': null});
       if (!mounted) return;
       if (widget.onVerified != null) {
         await widget.onVerified!(identity);
@@ -298,6 +337,80 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   @override
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
+    if (!widget.inDialog) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (!didPop) _editInformation();
+        },
+        child: Scaffold(
+          body: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        s.registrationVerifyEmailTitle,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      const Icon(
+                        Icons.mail_outline,
+                        size: 56,
+                        color: AppColors.primary,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        '${s.registrationLinkSent} ${widget.email ?? _identity?.email ?? ''}',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 32),
+                      if (_error != null) ...[
+                        Text(
+                          failureMessage(_error!, s),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      PrimaryButton(
+                        label: _remaining > 0
+                            ? '${s.registrationResendLink} (${s.verificationCooldown(_remaining)})'
+                            : s.registrationResendLink,
+                        onPressed: _busy || _completionStarted || _remaining > 0
+                            ? null
+                            : _send,
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: _busy || _checking || _completionStarted
+                            ? null
+                            : _editInformation,
+                        child: Text(s.registrationEditInformation),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     final dialog = AlertDialog(
       key: const ValueKey('registration-verification-dialog'),
       scrollable: true,
@@ -338,7 +451,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     );
     return PopScope(
       canPop: false,
-      child: widget.inDialog ? dialog : Scaffold(body: Center(child: dialog)),
+      child: dialog,
     );
   }
 }

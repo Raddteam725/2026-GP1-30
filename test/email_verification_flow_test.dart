@@ -16,6 +16,7 @@ import 'package:radd/features/auth/presentation/session_screen.dart';
 import 'package:radd/features/auth/presentation/verified_email_gate.dart';
 import 'package:radd/features/guardian/data/guardian_repository.dart';
 import 'package:radd/features/guardian/presentation/guardian_gate.dart';
+import 'package:radd/shared/widgets/primary_button.dart';
 
 import 'support/guardian_fakes.dart';
 
@@ -30,6 +31,7 @@ class _Auth extends TestAuth {
   int loginAttempts = 0;
   Completer<void>? refreshPending;
   bool createdBeforeTransportError = false;
+  AuthIdentity? refreshedIdentity;
   @override
   Future<void> login(String email, String password) async {
     loginAttempts++;
@@ -69,7 +71,7 @@ class _Auth extends TestAuth {
     if (refreshPending != null) await refreshPending!.future;
     if (refreshSignsOut && refreshFailure == 'unauthorized') active = false;
     if (refreshFailure != null) throw AppFailure(refreshFailure!);
-    return super.refreshIdentity();
+    return refreshedIdentity = await super.refreshIdentity();
   }
 }
 
@@ -79,8 +81,10 @@ class _Repository extends TestRepository {
   String? roleFailure;
   String role = 'guardian';
   int writes = 0, reads = 0;
+  VoidCallback? beforeRequest;
   @override
   Future<String> accountRole() async {
+    beforeRequest?.call();
     if (roleFailure != null) throw AppFailure(roleFailure!);
     if (!exists) throw const AppFailure('notFound');
     return role;
@@ -88,12 +92,14 @@ class _Repository extends TestRepository {
 
   @override
   Future<GuardianProfile> profile() async {
+    beforeRequest?.call();
     reads++;
     return super.profile();
   }
 
   @override
   Future<GuardianProfile> createProfile(String name, String phone) async {
+    beforeRequest?.call();
     writes++;
     if (rejectCode != null) throw AppFailure(rejectCode!);
     if (rejectProfile) throw const AppFailure('network');
@@ -386,12 +392,23 @@ void main() {
     });
 
     testWidgets(
-      'Wrong-email recovery opens an empty Create Account form without UI-only changes in $language',
+      'Full-screen verification shows auth styling and Edit opens an empty Create Account form in $language',
       (t) async {
         auth.active = true;
         auth.email = 'typo@custom.example';
         await mount(t, const EmailVerificationScreen(), language);
-        expect(find.byType(TextButton), findsNWidgets(2));
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(
+          find.text(s.registrationVerifyEmailTitle),
+          findsOneWidget,
+        );
+        expect(find.byIcon(Icons.mail_outline), findsOneWidget);
+        expect(
+          t.widget<Text>(find.text('${s.registrationLinkSent} ${auth.email}')).textAlign,
+          TextAlign.center,
+        );
+        expect(find.byType(PrimaryButton), findsOneWidget);
+        expect(find.byType(TextButton), findsOneWidget);
         expect(find.byType(TextFormField), findsNothing);
         await press(t, s.registrationEditInformation);
         expect(auth.signedIn, isFalse);
@@ -467,8 +484,8 @@ void main() {
         expect(find.text(s.rateLimit), findsOneWidget);
         expect(
           t
-              .widget<TextButton>(
-                find.widgetWithText(TextButton, s.registrationResendLink),
+              .widget<PrimaryButton>(
+                find.byType(PrimaryButton),
               )
               .onPressed,
           isNotNull,
@@ -481,15 +498,16 @@ void main() {
     );
 
     testWidgets(
-      'Existing expired session Edit signs out without deleting in $language',
+      'Existing expired session Android back signs out without deleting in $language',
       (t) async {
         auth.active = true;
         auth.refreshFailure = 'unauthorized';
         await mount(t, const EmailVerificationScreen(), language);
         expect(find.text(s.sessionExpired), findsOneWidget);
         expect(find.byType(TextFormField), findsNothing);
-        expect(find.byType(TextButton), findsNWidgets(2));
-        await press(t, s.registrationEditInformation);
+        expect(find.byType(TextButton), findsOneWidget);
+        await t.binding.handlePopRoute();
+        await t.pumpAndSettle();
         expect(find.byType(EmailVerificationScreen), findsNothing);
         expect(auth.signedIn, isFalse);
         expect(auth.registrations, 0);
@@ -854,6 +872,82 @@ void main() {
     }
   }
 
+  testWidgets('Login-later verification completes the same UID/email draft to Home', (t) async {
+    final s = lookupAppLocalizations(const Locale('en'));
+    final uid = auth.uid;
+    final email = auth.email;
+    await RegistrationDraft.update(uid, {
+      'registrationPending': true,
+      'email': email,
+      'name': 'Returning Guardian',
+      'phone': '0501234567',
+      'adult': true,
+      'privacy': true,
+    });
+    await mount(t, const AuthScreen(), 'en');
+    await t.enterText(find.byType(TextFormField).first, email);
+    await t.enterText(find.byType(TextFormField).last, 'ExistingPass1!');
+    await press(t, s.login);
+    expect(find.byType(EmailVerificationScreen), findsOneWidget);
+    expect(auth.refreshedIdentity!.emailVerified, isFalse);
+    repo.beforeRequest = () {
+      expect(auth.refreshedIdentity!.uid, uid);
+      expect(auth.refreshedIdentity!.email, email);
+      expect(auth.refreshedIdentity!.emailVerified, isTrue);
+    };
+    auth.emailVerified = true;
+    await t.pump(const Duration(seconds: 3));
+    await t.pumpAndSettle();
+    expect(find.text('Protected /guardian'), findsOneWidget);
+    expect(find.byType(AuthScreen), findsNothing);
+    expect(find.text(s.sessionExpired), findsNothing);
+    expect(find.text(s.sessionRecovery), findsNothing);
+    expect(repo.person.fullName, 'Returning Guardian');
+    expect(repo.writes, 1);
+    expect(auth.uid, uid);
+    expect(auth.registrations, 0);
+    expect(auth.signedIn, isTrue);
+    expect(await RegistrationDraft.read(uid), isEmpty);
+  });
+
+  testWidgets('Login-later verification without a draft saves Complete Profile to Home', (t) async {
+    final s = lookupAppLocalizations(const Locale('en'));
+    final uid = auth.uid;
+    await mount(t, const AuthScreen(), 'en');
+    await t.enterText(find.byType(TextFormField).first, auth.email);
+    await t.enterText(find.byType(TextFormField).last, 'ExistingPass1!');
+    await press(t, s.login);
+    expect(find.byType(EmailVerificationScreen), findsOneWidget);
+    expect(auth.refreshedIdentity!.emailVerified, isFalse);
+    repo.beforeRequest = () {
+      expect(auth.refreshedIdentity!.uid, uid);
+      expect(auth.refreshedIdentity!.emailVerified, isTrue);
+    };
+    auth.emailVerified = true;
+    await t.pump(const Duration(seconds: 3));
+    await t.pumpAndSettle();
+    expect(t.widget<AuthScreen>(find.byType(AuthScreen)).mode, AuthMode.completeProfile);
+    expect(find.text(s.sessionExpired), findsNothing);
+    expect(find.text(s.sessionRecovery), findsNothing);
+    expect(repo.writes, 0);
+    await t.enterText(find.byType(TextFormField).first, 'Returning Guardian');
+    await t.enterText(find.byType(TextFormField).last, '0501234567');
+    for (var i = 0; i < 2; i++) {
+      await t.ensureVisible(find.byType(CheckboxListTile).at(i));
+      await t.tap(find.byType(CheckboxListTile).at(i));
+      await t.pumpAndSettle();
+    }
+    await press(t, s.save);
+    expect(find.text('Protected /guardian'), findsOneWidget);
+    expect(find.text(s.sessionExpired), findsNothing);
+    expect(find.text(s.sessionRecovery), findsNothing);
+    expect(repo.writes, 1);
+    expect(auth.uid, uid);
+    expect(auth.registrations, 0);
+    expect(auth.signedIn, isTrue);
+    expect(await RegistrationDraft.read(uid), isEmpty);
+  });
+
   testWidgets(
     'Visible cooldown ticks and enables resend on resume at its deadline',
     (t) async {
@@ -865,12 +959,9 @@ void main() {
             .toIso8601String(),
       });
       await mount(t, const EmailVerificationScreen(), 'en');
-      final initial = t.widget<TextButton>(
-        find.widgetWithText(
-          TextButton,
-          '${s.registrationResendLink} (${s.verificationCooldown(3)})',
-        ),
-      );
+      final initial = t.widget<PrimaryButton>(find.byType(PrimaryButton));
+      expect(initial.label,
+        '${s.registrationResendLink} (${s.verificationCooldown(3)})');
       expect(initial.onPressed, isNull);
       await t.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 1100)),
@@ -888,8 +979,8 @@ void main() {
       await t.pumpAndSettle();
       expect(
         t
-            .widget<TextButton>(
-              find.widgetWithText(TextButton, s.registrationResendLink),
+            .widget<PrimaryButton>(
+              find.byType(PrimaryButton),
             )
             .onPressed,
         isNotNull,
