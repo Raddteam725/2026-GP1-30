@@ -37,7 +37,6 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   final _form = GlobalKey<FormState>();
   DialogRoute<void>? _verificationDialog;
-  DialogRoute<String>? _credentialDialog;
   final _name = TextEditingController(),
       _email = TextEditingController(),
       _phone = TextEditingController(),
@@ -49,8 +48,6 @@ class _AuthScreenState extends State<AuthScreen> {
   String? _registrationUid;
   AuthIdentity? _registrationIdentity;
   String? _pendingEmail;
-  DateTime? _resendAt;
-  bool _editingAccount = false, _changePassword = false;
   bool _restoringDraft = false, _finalizing = false;
   int _draftVersion = 0;
   bool get _fieldsLocked => _busy || _inlinePending || _restoringDraft;
@@ -104,8 +101,6 @@ class _AuthScreenState extends State<AuthScreen> {
     setState(() {
       _inlinePending = false;
       _accountCreated = false;
-      _editingAccount = false;
-      _changePassword = false;
       _pendingEmail = null;
       _registrationUid = null;
       _registrationIdentity = null;
@@ -132,125 +127,14 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  Future<String?> _requestCurrentPassword() async {
-    final s = AppLocalizations.of(context)!;
-    final controller = TextEditingController();
-    final form = GlobalKey<FormState>();
-    final route = DialogRoute<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        key: const ValueKey('registration-reauthentication'),
-        scrollable: true,
-        title: Text(s.registrationConfirmIdentity),
-        content: Form(
-          key: form,
-          child: PasswordInput(
-            label: s.registrationCurrentPassword,
-            controller: controller,
-            validator: (value) => FormValidation.required(value, s),
-            onFieldSubmitted: (_) {
-              if (form.currentState!.validate()) {
-                Navigator.pop(dialogContext, controller.text);
-              }
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(s.cancel),
-          ),
-          TextButton(
-            onPressed: () {
-              if (form.currentState!.validate()) {
-                Navigator.pop(dialogContext, controller.text);
-              }
-            },
-            child: Text(s.save),
-          ),
-        ],
-      ),
-    );
-    _credentialDialog = route;
-    try {
-      final result = await Navigator.of(
-        context,
-        rootNavigator: true,
-      ).push(route);
-      await route.completed;
-      return result;
-    } finally {
-      if (identical(_credentialDialog, route)) _credentialDialog = null;
-      controller.clear();
-      controller.dispose();
-    }
-  }
-
-  Future<bool> _confirmEmailChange(String email) async {
-    _requireRegistrationUid();
-    final auth = AppServices.of(context).auth;
-    final language = Localizations.localeOf(context).languageCode;
-    final password = await _requestCurrentPassword();
-    if (!mounted || password == null) return false;
-    _requireRegistrationUid();
-    try {
-      await auth.verifyNewEmail(email, password, language);
-    } on AppFailure catch (error) {
-      if (error.code == 'rateLimit') await _rememberEmailRequest();
-      rethrow;
-    }
-    _requireRegistrationUid();
-    _pendingEmail = email;
-    await _rememberEmailRequest(email: email);
-    return true;
-  }
-
-  Future<void> _rememberEmailRequest({String? email}) async {
-    _resendAt = DateTime.now().add(const Duration(seconds: 60));
-    try {
-      await RegistrationDraft.update(_registrationUid!, {
-        'pendingEmail': ?email,
-        'resendAt': _resendAt!.toIso8601String(),
-      });
-    } catch (_) {}
-  }
-
   Future<bool> _saveAccountChanges(AuthIdentity identity) async {
     _requireRegistrationUid();
-    final auth = AppServices.of(context).auth;
     Map<String, dynamic> data = {};
     try {
       data = await RegistrationDraft.read(identity.uid);
     } catch (_) {}
     _requireRegistrationUid();
     _pendingEmail = data['pendingEmail'] as String? ?? _pendingEmail;
-    _resendAt =
-        DateTime.tryParse(data['resendAt'] as String? ?? '') ?? _resendAt;
-    final target = _email.text.trim();
-    if (_editingAccount &&
-        target.toLowerCase() != identity.email.toLowerCase() &&
-        target.toLowerCase() != _pendingEmail?.toLowerCase()) {
-      if (_resendAt != null && _resendAt!.isAfter(DateTime.now())) {
-        throw const AppFailure('registrationCooldown');
-      }
-      if (!await _confirmEmailChange(target)) return false;
-    }
-    if (_changePassword) {
-      _requireRegistrationUid();
-      try {
-        await auth.updatePassword(_password.text);
-      } on AppFailure catch (error) {
-        if (error.code != 'reauthenticate') rethrow;
-        final current = await _requestCurrentPassword();
-        if (!mounted || current == null) return false;
-        _requireRegistrationUid();
-        await auth.updatePassword(_password.text, currentPassword: current);
-      }
-      _requireRegistrationUid();
-      _password.clear();
-      _confirm.clear();
-      _changePassword = false;
-    }
     return true;
   }
 
@@ -348,15 +232,6 @@ class _AuthScreenState extends State<AuthScreen> {
   void dispose() {
     _accountCreated = false;
     final dialog = _verificationDialog;
-    final credentialDialog = _credentialDialog;
-    _credentialDialog = null;
-    if (credentialDialog != null && credentialDialog.isActive) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (credentialDialog.isActive) {
-          credentialDialog.navigator?.removeRoute(credentialDialog);
-        }
-      });
-    }
     _verificationDialog = null;
     if (dialog != null && dialog.isActive) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -485,7 +360,6 @@ class _AuthScreenState extends State<AuthScreen> {
         }
         if (!identity.emailVerified ||
             identity.email.toLowerCase() != _email.text.trim().toLowerCase()) {
-          _editingAccount = false;
           _showVerificationDialog();
           return;
         }
@@ -660,7 +534,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         controller: _email,
                         enabled:
                             !_fieldsLocked &&
-                            (!_accountCreated || _editingAccount),
+                            !_accountCreated,
                         validator: (v) => FormValidation.email(v, s),
                         keyboardType: TextInputType.emailAddress,
                         textDirection: TextDirection.ltr,
@@ -684,24 +558,9 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                       const SizedBox(height: 16),
                     ],
-                    if (signUp && _accountCreated && _editingAccount)
-                      TextButton(
-                        onPressed: _fieldsLocked
-                            ? null
-                            : () => setState(() {
-                                _changePassword = !_changePassword;
-                                _password.clear();
-                                _confirm.clear();
-                              }),
-                        child: Text(
-                          _changePassword
-                              ? s.cancel
-                              : s.registrationChangePassword,
-                        ),
-                      ),
                     if (!reset &&
                         !complete &&
-                        (!_accountCreated || _changePassword)) ...[
+                        !_accountCreated) ...[
                       PasswordInput(
                         label: s.password,
                         helperText: _register ? s.passwordHelp : null,
@@ -795,17 +654,6 @@ class _AuthScreenState extends State<AuthScreen> {
                                 (_error as AppFailure).code ==
                                     'registrationPendingEmail'
                             ? s.registrationPendingEmailHint
-                            : _error is AppFailure &&
-                                  (_error as AppFailure).code ==
-                                      'registrationCooldown'
-                            ? s.verificationCooldown(
-                                (_resendAt!
-                                            .difference(DateTime.now())
-                                            .inMilliseconds /
-                                        1000)
-                                    .ceil()
-                                    .clamp(0, 60),
-                              )
                             : failureMessage(_error!, s),
                       ),
                     PrimaryButton(

@@ -63,13 +63,28 @@ def test_delete_guard_allows_no_case_but_rejects_active_case():
         ensure_deletable({"active_case_id": "test-case"})
     assert error.value.status_code == 409
 
+def test_identity_allows_ten_seconds_clock_skew(monkeypatch):
+    firebase_app = object()
+    calls = []
+    def verify(token, **kwargs):
+        calls.append((token, kwargs))
+        return {"uid": "u1"}
+    monkeypatch.setattr(firebase_module, "firebase_app", lambda: firebase_app)
+    monkeypatch.setattr(firebase_module.auth, "verify_id_token", verify)
+    creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="token")
+    assert firebase_module.identity(creds) == {"uid": "u1"}
+    assert calls == [("token", {
+        "app": firebase_app, "check_revoked": True, "clock_skew_seconds": 10,
+    })]
+
+
 def test_identity_retries_a_transient_network_failure_then_succeeds(monkeypatch):
     # check_revoked=True makes a network round-trip on every request; a single
     # dropped connection there must not surface as "service unavailable" for
     # an otherwise-healthy token (this is the root cause behind Cancel/Resolve
     # intermittently failing with a generic error against real Firestore).
     calls = {"n": 0}
-    def flaky(token, app, check_revoked):
+    def flaky(token, app, check_revoked, clock_skew_seconds):
         calls["n"] += 1
         if calls["n"] < 3:
             raise ConnectionResetError("simulated transient network failure")
@@ -81,7 +96,7 @@ def test_identity_retries_a_transient_network_failure_then_succeeds(monkeypatch)
     assert calls["n"] == 3
 
 def test_identity_gives_up_after_repeated_transient_failures(monkeypatch):
-    def always_fails(token, app, check_revoked):
+    def always_fails(token, app, check_revoked, clock_skew_seconds):
         raise ConnectionResetError("simulated transient network failure")
     monkeypatch.setattr(firebase_module.auth, "verify_id_token", always_fails)
     monkeypatch.setattr(firebase_module.time, "sleep", lambda seconds: None)
@@ -92,7 +107,7 @@ def test_identity_gives_up_after_repeated_transient_failures(monkeypatch):
 
 def test_identity_does_not_retry_a_genuinely_invalid_token(monkeypatch):
     calls = {"n": 0}
-    def invalid(token, app, check_revoked):
+    def invalid(token, app, check_revoked, clock_skew_seconds):
         calls["n"] += 1
         raise firebase_module.auth.InvalidIdTokenError("bad token")
     monkeypatch.setattr(firebase_module.auth, "verify_id_token", invalid)

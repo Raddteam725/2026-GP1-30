@@ -3338,12 +3338,6 @@ abstract class AppLocalizations {
   /// **'Send link to corrected email'**
   String get verifyCorrectedEmail;
 
-  /// No description provided for @verifyNewEmailPending.
-  ///
-  /// In en, this message translates to:
-  /// **'Email correction requested for {email}. Your current account email above stays unchanged until Firebase verifies the new address.'**
-  String verifyNewEmailPending(String email);
-
   /// No description provided for @verificationReauthenticate.
   ///
   /// In en, this message translates to:
@@ -3409,42 +3403,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Edit Information'**
   String get registrationEditInformation;
-
-  /// No description provided for @registrationPendingAccount.
-  ///
-  /// In en, this message translates to:
-  /// **'Your account already exists. Save changes to resume verification.'**
-  String get registrationPendingAccount;
-
-  /// No description provided for @registrationChangePassword.
-  ///
-  /// In en, this message translates to:
-  /// **'Change Password'**
-  String get registrationChangePassword;
-
-  /// No description provided for @registrationCurrentPassword.
-  ///
-  /// In en, this message translates to:
-  /// **'Current Password'**
-  String get registrationCurrentPassword;
-
-  /// No description provided for @registrationConfirmIdentity.
-  ///
-  /// In en, this message translates to:
-  /// **'Confirm Your Identity'**
-  String get registrationConfirmIdentity;
-
-  /// No description provided for @registrationEditTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Edit Registration Information'**
-  String get registrationEditTitle;
-
-  /// No description provided for @registrationSessionSignIn.
-  ///
-  /// In en, this message translates to:
-  /// **'Your Firebase session expired. Enter your password once to resume this registration securely.'**
-  String get registrationSessionSignIn;
 
   /// No description provided for @registrationPendingEmailHint.
   ///

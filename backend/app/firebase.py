@@ -55,7 +55,7 @@ def identity(credentials: HTTPAuthorizationCredentials | None = Depends(bearer))
     started = time.monotonic()
     for attempt in range(attempts):
         try:
-            return auth.verify_id_token(credentials.credentials, app=firebase_app(), check_revoked=True)
+            return auth.verify_id_token(credentials.credentials, app=firebase_app(), check_revoked=True, clock_skew_seconds=10)
         except auth.UserDisabledError:
             raise HTTPException(401, detail="account_disabled") from None
         except (auth.InvalidIdTokenError, auth.ExpiredIdTokenError, auth.RevokedIdTokenError, ValueError):

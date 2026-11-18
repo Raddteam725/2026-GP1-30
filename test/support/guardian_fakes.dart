@@ -12,7 +12,6 @@ class TestAuth implements AuthService {
   String uid = 'test-auth-user', email = 'test@example.test';
   int identityRefreshes = 0;
   final List<String> verificationRequests = [];
-  final List<(String, String, String)> emailCorrections = [];
   @override
   AuthIdentity? get currentIdentity => active
       ? AuthIdentity(uid: uid, email: email, emailVerified: emailVerified)
@@ -28,25 +27,7 @@ class TestAuth implements AuthService {
     verificationRequests.add(language);
   }
 
-  @override
-  Future<void> verifyNewEmail(
-    String email,
-    String password,
-    String language,
-  ) async {
-    emailCorrections.add((email, password, language));
-  }
-
   int registrations = 0, logins = 0;
-  final passwordUpdates = <(String, String?)>[];
-  @override
-  Future<void> updatePassword(
-    String password, {
-    String? currentPassword,
-  }) async {
-    passwordUpdates.add((password, currentPassword));
-  }
-
   final events = StreamController<bool>.broadcast();
   @override
   bool get signedIn => active;

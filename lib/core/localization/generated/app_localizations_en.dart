@@ -1817,11 +1817,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get verifyCorrectedEmail => 'Send link to corrected email';
 
   @override
-  String verifyNewEmailPending(String email) {
-    return 'Email correction requested for $email. Your current account email above stays unchanged until Firebase verifies the new address.';
-  }
-
-  @override
   String get verificationReauthenticate =>
       'Please enter your current password again to confirm this email correction.';
 
@@ -1858,26 +1853,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get registrationEditInformation => 'Edit Information';
-
-  @override
-  String get registrationPendingAccount =>
-      'Your account already exists. Save changes to resume verification.';
-
-  @override
-  String get registrationChangePassword => 'Change Password';
-
-  @override
-  String get registrationCurrentPassword => 'Current Password';
-
-  @override
-  String get registrationConfirmIdentity => 'Confirm Your Identity';
-
-  @override
-  String get registrationEditTitle => 'Edit Registration Information';
-
-  @override
-  String get registrationSessionSignIn =>
-      'Your Firebase session expired. Enter your password once to resume this registration securely.';
 
   @override
   String get registrationPendingEmailHint =>

@@ -24,7 +24,7 @@ class _Auth extends TestAuth {
   _Auth() {
     emailVerified = false;
   }
-  String? sendFailure, correctionFailure, refreshFailure;
+  String? sendFailure, refreshFailure;
   String? loginFailure, loginUid;
   bool verifiedOnLogin = false;
   bool refreshSignsOut = false;
@@ -54,16 +54,6 @@ class _Auth extends TestAuth {
   Future<void> sendVerification(String language) async {
     await super.sendVerification(language);
     if (sendFailure != null) throw AppFailure(sendFailure!);
-  }
-
-  @override
-  Future<void> verifyNewEmail(
-    String email,
-    String password,
-    String language,
-  ) async {
-    await super.verifyNewEmail(email, password, language);
-    if (correctionFailure != null) throw AppFailure(correctionFailure!);
   }
 
   @override
@@ -423,7 +413,6 @@ void main() {
         )) {
           expect(field.controller!.text, isEmpty);
         }
-        expect(auth.emailCorrections, isEmpty);
         expect(auth.registrations, 0);
         expect(repo.writes, 0);
       },
@@ -529,8 +518,6 @@ void main() {
         await t.pumpAndSettle();
         expect(find.text(s.createTitle), findsOneWidget);
         expect(find.text(s.createHint), findsOneWidget);
-        expect(find.text(s.registrationEditTitle), findsNothing);
-        expect(find.text(s.registrationPendingAccount), findsNothing);
         expect(find.widgetWithText(FilledButton, s.createAccount), findsOneWidget);
         expect(find.widgetWithText(FilledButton, s.save), findsNothing);
         background(t);
@@ -557,7 +544,6 @@ void main() {
         resume(t);
         await t.pumpAndSettle();
         expect(find.text(s.emailNotVerified), findsNothing);
-        expect(find.text(s.registrationSessionSignIn), findsNothing);
         expect(auth.verificationRequests, [language]);
         expect(repo.writes, 0);
       },

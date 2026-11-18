@@ -628,7 +628,6 @@
   "correctEmail": "تصحيح عنوان بريدي الإلكتروني",
   "correctEmailHint": "أدخل البريد الصحيح وكلمة مرورك الحالية. سيرسل Firebase رابطًا إلى العنوان الجديد. لن يتغير بريد الحساب إلا بعد قبول الرابط، وستبقى كلمة المرور كما هي.",
   "verifyCorrectedEmail": "إرسال رابط إلى البريد الصحيح",
-  "verifyNewEmailPending": "تم طلب تصحيح البريد إلى {email}. يبقى بريد الحساب الحالي الظاهر أعلاه دون تغيير حتى يتحقق Firebase من العنوان الجديد.",
   "verificationReauthenticate": "أدخل كلمة مرورك الحالية مجددًا لتأكيد تصحيح البريد الإلكتروني.",
   "verificationSessionExpired": "سجّل الدخول مجددًا. إذا قبلت رابط تصحيح البريد، استخدم البريد الجديد وكلمة مرورك الحالية. ستُستعاد مسودة بياناتك المحفوظة للحساب نفسه.",
   "verificationSignOut": "تسجيل الخروج والعودة إلى الدخول",
@@ -640,11 +639,5 @@
   "registrationLinkSent": "أرسلنا رابط تحقق إلى",
   "registrationResendLink": "إعادة إرسال رابط التحقق",
   "registrationEditInformation": "تعديل المعلومات",
-  "registrationPendingAccount": "حسابك موجود بالفعل. احفظ التعديلات لمتابعة التحقق.",
-  "registrationChangePassword": "تغيير كلمة المرور",
-  "registrationCurrentPassword": "كلمة المرور الحالية",
-  "registrationConfirmIdentity": "تأكيد هويتك",
-  "registrationEditTitle": "تعديل معلومات التسجيل",
-  "registrationSessionSignIn": "انتهت صلاحية جلسة Firebase. أدخل كلمة مرورك مرة واحدة لاستئناف التسجيل بأمان.",
   "registrationPendingEmailHint": "تصحيح البريد بانتظار التأكيد. احتفظ بذلك العنوان أو اطلب تصحيحًا آخر."
 }

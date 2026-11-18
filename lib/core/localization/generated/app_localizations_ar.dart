@@ -1791,11 +1791,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get verifyCorrectedEmail => 'إرسال رابط إلى البريد الصحيح';
 
   @override
-  String verifyNewEmailPending(String email) {
-    return 'تم طلب تصحيح البريد إلى $email. يبقى بريد الحساب الحالي الظاهر أعلاه دون تغيير حتى يتحقق Firebase من العنوان الجديد.';
-  }
-
-  @override
   String get verificationReauthenticate =>
       'أدخل كلمة مرورك الحالية مجددًا لتأكيد تصحيح البريد الإلكتروني.';
 
@@ -1832,26 +1827,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get registrationEditInformation => 'تعديل المعلومات';
-
-  @override
-  String get registrationPendingAccount =>
-      'حسابك موجود بالفعل. احفظ التعديلات لمتابعة التحقق.';
-
-  @override
-  String get registrationChangePassword => 'تغيير كلمة المرور';
-
-  @override
-  String get registrationCurrentPassword => 'كلمة المرور الحالية';
-
-  @override
-  String get registrationConfirmIdentity => 'تأكيد هويتك';
-
-  @override
-  String get registrationEditTitle => 'تعديل معلومات التسجيل';
-
-  @override
-  String get registrationSessionSignIn =>
-      'انتهت صلاحية جلسة Firebase. أدخل كلمة مرورك مرة واحدة لاستئناف التسجيل بأمان.';
 
   @override
   String get registrationPendingEmailHint =>

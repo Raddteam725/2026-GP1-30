@@ -20,8 +20,6 @@ abstract class AuthService {
   AuthIdentity? get currentIdentity;
   Future<AuthIdentity> refreshIdentity();
   Future<void> sendVerification(String language);
-  Future<void> verifyNewEmail(String email, String password, String language);
-  Future<void> updatePassword(String password, {String? currentPassword});
   Future<bool> restoreSession();
   Stream<bool> get changes;
   Future<void> login(String email, String password);
@@ -75,51 +73,6 @@ class FirebaseAuthService implements AuthService {
     verification: true,
     emailDispatch: true,
   );
-
-  @override
-  Future<void> verifyNewEmail(
-    String email,
-    String password,
-    String language,
-  ) => _perform(
-    () async {
-      final user = _user;
-      final currentEmail = user.email;
-      if (currentEmail == null) throw const AppFailure('unauthorized');
-      // Reauthenticate against the ACTUAL current address, never the proposed
-      // replacement. Firebase keeps the UID and verifies before changing it.
-      await _firebaseStep('reauthenticate-email-correction', () async {
-        await user.reauthenticateWithCredential(
-          EmailAuthProvider.credential(email: currentEmail, password: password),
-        );
-      });
-      if (_user.uid != user.uid) throw const AppFailure('unauthorized');
-      await _firebaseStep(
-        'verify-before-update-email',
-        () => user.verifyBeforeUpdateEmail(email.trim()),
-      );
-    },
-    verification: true,
-    emailDispatch: true,
-  );
-  @override
-  Future<void> updatePassword(String password, {String? currentPassword}) =>
-      _perform(() async {
-        final user = _user;
-        if (currentPassword != null) {
-          final email = user.email;
-          if (email == null) throw const AppFailure('unauthorized');
-          await user.reauthenticateWithCredential(
-            EmailAuthProvider.credential(
-              email: email,
-              password: currentPassword,
-            ),
-          );
-          if (_user.uid != user.uid) throw const AppFailure('unauthorized');
-        }
-        await user.updatePassword(password);
-        if (_user.uid != user.uid) throw const AppFailure('unauthorized');
-      }, verification: true);
 
   @override
   Future<bool> restoreSession() async =>

@@ -28,30 +28,6 @@ class _RegistrationAuth extends TestAuth {
   int checks = 0;
   bool rejectLogout = false;
   bool collisionSession = false;
-  String? correctionFailure, passwordFailure;
-
-  @override
-  Future<void> verifyNewEmail(
-    String email,
-    String password,
-    String language,
-  ) async {
-    await super.verifyNewEmail(email, password, language);
-    if (correctionFailure != null) throw AppFailure(correctionFailure!);
-  }
-
-  @override
-  Future<void> updatePassword(
-    String password, {
-    String? currentPassword,
-  }) async {
-    await super.updatePassword(password, currentPassword: currentPassword);
-    if (passwordFailure != null &&
-        !(passwordFailure == 'reauthenticate' && currentPassword != null)) {
-      throw AppFailure(passwordFailure!);
-    }
-  }
-
   @override
   Future<void> logout() async {
     if (rejectLogout) throw const AppFailure('network');
@@ -584,7 +560,6 @@ void main() {
         expect(find.text(s.networkError), findsOneWidget);
         expect(find.text(s.createTitle), findsOneWidget);
         expect(find.text(s.createHint), findsOneWidget);
-        expect(find.text(s.registrationPendingAccount), findsNothing);
         final fields = find.byType(TextFormField);
         expect(t.widget<TextFormField>(fields.at(0)).enabled, isTrue);
         expect(t.widget<TextFormField>(fields.at(2)).enabled, isTrue);
@@ -750,7 +725,6 @@ void main() {
         await submit(t, s.createAccount);
         await t.pumpAndSettle();
         expect(auth.registrations, 2);
-        expect(auth.emailCorrections, isEmpty);
         auth.emailVerified = true;
         await t.pump(const Duration(seconds: 3));
         await t.pumpAndSettle();
@@ -779,7 +753,6 @@ void main() {
         );
         expect(auth.email, 'Corrected@independent.example');
         expect(auth.registrations, 2);
-        expect(auth.emailCorrections, isEmpty);
         expect(
           find.byKey(const ValueKey('registration-reauthentication')),
           findsNothing,
@@ -817,7 +790,6 @@ void main() {
           findsOneWidget,
         );
         expect(auth.verificationRequests, [language, language]);
-        expect(auth.emailCorrections, isEmpty);
       },
     );
 
@@ -847,7 +819,6 @@ void main() {
           expect(find.byType(AlertDialog), findsNothing);
           expectEnabled(t, true);
           expect(auth.registrations, 1);
-          expect(auth.emailCorrections, isEmpty);
           expect(repo.attempts, isEmpty);
           expect(
             t
@@ -885,7 +856,6 @@ void main() {
         await t.tap(resend);
         await t.pumpAndSettle();
         expect(auth.verificationRequests, [language, language, language]);
-        expect(auth.emailCorrections, isEmpty);
         expect(auth.registrations, 2);
         expect(
           find.text('${s.registrationLinkSent} corrected@example.test'),
@@ -916,7 +886,6 @@ void main() {
           expect(find.text(s.rateLimit), findsOneWidget);
           expect(auth.registrations, 1);
           expect(auth.verificationRequests, [language, language]);
-          expect(auth.emailCorrections, isEmpty);
           expect(repo.attempts, isEmpty);
           expect(
             t
@@ -950,7 +919,6 @@ void main() {
         await t.pumpAndSettle();
         expect(auth.registrations, 2);
         expect(auth.attempts.last.$2, 'NewValidPass2!');
-        expect(auth.passwordUpdates, isEmpty);
         final prefs = await SharedPreferences.getInstance();
         for (final key in prefs.getKeys()) {
           expect(prefs.get(key).toString(), isNot(contains('NewValidPass2!')));
@@ -969,7 +937,6 @@ void main() {
         await pressText(t, s.registrationEditInformation);
         expect(auth.signedIn, isTrue);
         expect(auth.registrations, 1);
-        expect(auth.passwordUpdates, isEmpty);
         expect(find.text('Session destination'), findsOneWidget);
         expect(repo.attempts.single, ('Test Guardian', '0501234567'));
       },
@@ -998,8 +965,6 @@ void main() {
         auth.sendFailure = null;
         await pressText(t, s.registrationResendLink);
         expect(auth.registrations, 2);
-        expect(auth.emailCorrections, isEmpty);
-        expect(auth.passwordUpdates, isEmpty);
         auth.emailVerified = true;
         await t.pump(const Duration(seconds: 3));
         await t.pumpAndSettle();

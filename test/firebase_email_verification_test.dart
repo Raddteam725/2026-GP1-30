@@ -13,11 +13,8 @@ class _User implements User {
   final calls = <String>[];
   String? failure;
   String? dispatchFailure;
-  String? passwordFailure;
   String? reloadFailure, tokenFailure, exceptionMessage;
-  bool reauthenticated = false;
   bool deleted = false;
-  void Function()? afterReauthentication;
   @override
   String uid = 'same-uid';
   @override
@@ -51,41 +48,6 @@ class _User implements User {
     final code = failure ?? dispatchFailure;
     if (code != null) {
       throw FirebaseAuthException(code: code, message: exceptionMessage);
-    }
-  }
-
-  @override
-  Future<UserCredential> reauthenticateWithCredential(
-    AuthCredential credential,
-  ) async {
-    final password = credential as EmailAuthCredential;
-    calls.add('reauth:${password.email}:${password.password}');
-    if (failure != null) throw FirebaseAuthException(code: failure!);
-    reauthenticated = true;
-    afterReauthentication?.call();
-    return _Credential();
-  }
-
-  @override
-  Future<void> updatePassword(String password) async {
-    calls.add('update-password');
-    if (passwordFailure != null &&
-        !(passwordFailure == 'requires-recent-login' && reauthenticated)) {
-      throw FirebaseAuthException(code: passwordFailure!);
-    }
-  }
-
-  @override
-  Future<void> verifyBeforeUpdateEmail(
-    String newEmail, [
-    ActionCodeSettings? settings,
-  ]) async {
-    calls.add('verify-new:$newEmail');
-    if (dispatchFailure != null) {
-      throw FirebaseAuthException(
-        code: dispatchFailure!,
-        message: exceptionMessage,
-      );
     }
   }
 
@@ -216,79 +178,6 @@ void main() {
     );
   }
 
-  test('Password update uses the existing UID without email verification or language mutation', () async {
-    await auth.updatePassword('NewValidPass2!');
-    expect(user.calls, ['update-password']);
-    expect(user.uid, 'same-uid');
-    expect(user.email, 'typo@independent.example');
-    expect(user.emailVerified, isFalse);
-    expect(firebase.languageChanges, isEmpty);
-    expect(firebase.creations, isEmpty);
-  });
-
-  test('Password update reauthenticates actual current email when recent login is required', () async {
-    user.passwordFailure = 'requires-recent-login';
-    await expectLater(
-      auth.updatePassword('NewValidPass2!'),
-      throwsA(
-        isA<AppFailure>().having((e) => e.code, 'code', 'reauthenticate'),
-      ),
-    );
-    await auth.updatePassword(
-      'NewValidPass2!',
-      currentPassword: 'ExistingPass1!',
-    );
-    expect(user.calls, [
-      'update-password',
-      'reauth:typo@independent.example:ExistingPass1!',
-      'update-password',
-    ]);
-    expect(user.uid, 'same-uid');
-    expect(firebase.languageChanges, isEmpty);
-  });
-
-  for (final (sdk, code) in [
-    ('weak-password', 'password'),
-    ('network-request-failed', 'network'),
-    ('too-many-requests', 'rateLimit'),
-    ('user-token-expired', 'unauthorized'),
-  ]) {
-    test(
-      'Password update failure $sdk preserves identity and existing error mapping',
-      () async {
-        user.passwordFailure = sdk;
-        await expectLater(
-          auth.updatePassword('NewValidPass2!'),
-          throwsA(isA<AppFailure>().having((e) => e.code, 'code', code)),
-        );
-        expect(user.uid, 'same-uid');
-        expect(user.email, 'typo@independent.example');
-        expect(user.emailVerified, isFalse);
-        expect(firebase.creations, isEmpty);
-      },
-    );
-  }
-
-  test('Wrong current password cannot reach password update', () async {
-    user.failure = 'wrong-password';
-    await expectLater(
-      auth.updatePassword('NewValidPass2!', currentPassword: 'WrongPass1!'),
-      throwsA(isA<AppFailure>().having((e) => e.code, 'code', 'credentials')),
-    );
-    expect(user.calls, ['reauth:typo@independent.example:WrongPass1!']);
-  });
-
-  test('Changed session UID during reauthentication cannot update another password', () async {
-    user.afterReauthentication = () =>
-        firebase.currentUser = _User()..uid = 'other-uid';
-    await expectLater(
-      auth.updatePassword('NewValidPass2!', currentPassword: 'ExistingPass1!'),
-      throwsA(isA<AppFailure>().having((e) => e.code, 'code', 'unauthorized')),
-    );
-    expect(user.calls, ['reauth:typo@independent.example:ExistingPass1!']);
-    expect(firebase.currentUser!.calls, isEmpty);
-  });
-
   test(
     'Reload precedes forced token refresh; a cached verified flag never wins',
     () async {
@@ -310,23 +199,7 @@ void main() {
       expect(user.emailVerified, isFalse);
     },
   );
-  test('Email correction reauthenticates actual identity then verifies before update', () async {
-    await auth.verifyNewEmail(
-      ' corrected@custom.example ',
-      'ExistingPass1!',
-      'en',
-    );
-    expect(user.calls, [
-      'reauth:typo@independent.example:ExistingPass1!',
-      'verify-new:corrected@custom.example',
-    ]);
-    expect(user.email, 'typo@independent.example');
-    expect(user.uid, 'same-uid');
-    expect(user.emailVerified, isFalse);
-    expect(firebase.language, isNull);
-    expect(firebase.languageChanges, isEmpty);
-  });
-  for (final correction in [false, true]) {
+  for (final correction in [false]) {
     for (final language in ['en', 'ar']) {
       for (final originalLanguage in <String?>[null, 'fr']) {
         for (final fails in [false, true]) {
@@ -335,13 +208,7 @@ void main() {
               'original=$originalLanguage, fails=$fails)', () async {
             firebase.language = originalLanguage;
             if (fails) user.dispatchFailure = 'network-request-failed';
-            final request = correction
-                ? auth.verifyNewEmail(
-                    ' new@custom.example ',
-                    'secret',
-                    language,
-                  )
-                : auth.sendVerification(language);
+            final request = auth.sendVerification(language);
             if (fails) {
               await expectLater(
                 request,
@@ -354,12 +221,7 @@ void main() {
             }
             expect(
               user.calls,
-              correction
-                  ? [
-                      'reauth:typo@independent.example:secret',
-                      'verify-new:new@custom.example',
-                    ]
-                  : ['send'],
+              ['send'],
             );
             expect(firebase.languageChanges, isEmpty);
             expect(firebase.language, originalLanguage);
@@ -375,29 +237,6 @@ void main() {
         }
       }
     }
-  }
-  for (final entry in {
-    'wrong-password': 'credentials',
-    'requires-recent-login': 'reauthenticate',
-    'too-many-requests': 'rateLimit',
-    'network-request-failed': 'network',
-    'email-already-in-use': 'emailExists',
-    'user-token-expired': 'unauthorized',
-    'user-not-found': 'unauthorized',
-  }.entries) {
-    test(
-      'Correction failure ${entry.key} never changes or duplicates the account',
-      () async {
-        user.failure = entry.key;
-        await expectLater(
-          auth.verifyNewEmail('new@custom.example', 'secret', 'en'),
-          throwsA(isA<AppFailure>().having((e) => e.code, 'code', entry.value)),
-        );
-        expect(user.calls, ['reauth:typo@independent.example:secret']);
-        expect(user.email, 'typo@independent.example');
-        expect(user.uid, 'same-uid');
-      },
-    );
   }
   test(
     'No current Firebase account cannot refresh or send verification',
@@ -432,24 +271,16 @@ void main() {
     });
     tearDown(() => debugPrint = originalPrint);
 
-    for (final correction in [false, true]) {
+    for (final correction in [false]) {
       test('Rejected dispatch retains exact safe code (correction=$correction)', () async {
         user.dispatchFailure = 'internal-error';
         user.exceptionMessage =
             'private-payload password token https://private.invalid/action';
         await expectLater(
-          correction
-              ? auth.verifyNewEmail(
-                  'new@custom.example',
-                  'ExistingPass1!',
-                  'ar',
-                )
-              : auth.sendVerification('ar'),
+          auth.sendVerification('ar'),
           throwsA(isA<AppFailure>().having((e) => e.code, 'code', 'service')),
         );
-        final operation = correction
-            ? 'verify-before-update-email'
-            : 'send-email-verification';
+        const operation = 'send-email-verification';
         expect(
           messages,
           contains(
@@ -487,27 +318,6 @@ void main() {
       expect(user.calls, ['send']);
       expect(user.emailVerified, isFalse);
     });
-
-    test(
-      'Rejected correction reauthentication cannot dispatch to the new address',
-      () async {
-        user.failure = 'wrong-password';
-        await expectLater(
-          auth.verifyNewEmail('new@custom.example', 'WrongPass1!', 'en'),
-          throwsA(
-            isA<AppFailure>().having((e) => e.code, 'code', 'credentials'),
-          ),
-        );
-        expect(
-          messages,
-          contains(
-            'RaddAuth operation=reauthenticate-email-correction status=rejected code=wrong-password',
-          ),
-        );
-        expect(messages.join(), isNot(contains('verify-before-update-email')));
-        expect(messages.join(), isNot(contains('WrongPass1!')));
-      },
-    );
 
     for (final reload in [true, false]) {
       test('Refresh failure identifies the pre-send step (reload=$reload)', () async {

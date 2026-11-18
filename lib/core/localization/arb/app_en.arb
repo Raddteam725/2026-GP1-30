@@ -671,8 +671,6 @@
   "correctEmail": "Correct my email address",
   "correctEmailHint": "Enter the correct email and your current password. Firebase will send a link to the new address. Your account email changes only after that link is accepted; your password stays the same.",
   "verifyCorrectedEmail": "Send link to corrected email",
-  "verifyNewEmailPending": "Email correction requested for {email}. Your current account email above stays unchanged until Firebase verifies the new address.",
-  "@verifyNewEmailPending": {"placeholders": {"email": {"type": "String"}}},
   "verificationReauthenticate": "Please enter your current password again to confirm this email correction.",
   "verificationSessionExpired": "Please sign in again. If you accepted an email correction link, use the new email and your existing password. Your saved profile draft will be restored for the same account.",
   "verificationSignOut": "Sign out and return to login",
@@ -685,11 +683,5 @@
   "registrationLinkSent": "We sent a verification link to",
   "registrationResendLink": "Resend Verification Email",
   "registrationEditInformation": "Edit Information",
-  "registrationPendingAccount": "Your account already exists. Save changes to resume verification.",
-  "registrationChangePassword": "Change Password",
-  "registrationCurrentPassword": "Current Password",
-  "registrationConfirmIdentity": "Confirm Your Identity",
-  "registrationEditTitle": "Edit Registration Information",
-  "registrationSessionSignIn": "Your Firebase session expired. Enter your password once to resume this registration securely.",
   "registrationPendingEmailHint": "An email correction is awaiting confirmation. Keep that destination or request another correction."
 }
