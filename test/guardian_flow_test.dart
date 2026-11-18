@@ -303,13 +303,16 @@ void main() {
       await t.scrollUntilVisible(
         find.text('9'),
         120,
-        scrollable: find.byType(Scrollable).last,
+        scrollable: find.descendant(
+          of: find.byKey(const ValueKey('individual-age-menu')),
+          matching: find.byType(Scrollable),
+        ),
       );
       await t.tap(find.text('9').last);
       await t.pumpAndSettle();
       await tapText(t, 'Female');
       expect(find.text('Specify relationship'), findsNothing);
-      await t.tap(find.byType(DropdownButtonFormField<String>).first);
+      await t.tap(find.byKey(const ValueKey('individual-relationship')));
       await t.pumpAndSettle();
       await t.tap(find.text('Other').last);
       await t.pumpAndSettle();

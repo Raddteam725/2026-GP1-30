@@ -255,7 +255,22 @@ void main() {
       (t) async {
         await mount(t, const IndividualFormScreen(), language);
         final age = find.byKey(const ValueKey('individual-age'));
-        final ageWidget = t.widget<DropdownButtonFormField<int>>(age);
+        await exercise(
+          t,
+          find.byType(TextFormField).first,
+          invalid: 'x' * 121,
+          valid: 'Test Person',
+          invalidMessage: s.invalidName,
+          requiredMessage: s.requiredField,
+        );
+        expect(find.text(s.photoRequired), findsNothing);
+        expect(
+          t.state<FormFieldState<String>>(
+            find.byKey(const ValueKey('individual-gender')),
+          ).errorText,
+          isNull,
+        );
+        final ageWidget = t.widget<FormField<int>>(age);
         expect(ageWidget.initialValue, isNull);
         expect(
           find.descendant(
@@ -264,18 +279,7 @@ void main() {
           ),
           findsOneWidget,
         );
-        expect(
-          t
-              .widget<DropdownButton<int>>(
-                find.descendant(
-                  of: age,
-                  matching: find.byType(DropdownButton<int>),
-                ),
-              )
-              .items!
-              .map((item) => item.value),
-          List.generate(131, (i) => i),
-        );
+        expect(ageWidget.autovalidateMode, AutovalidateMode.onUserInteraction);
         expect(t.state<FormFieldState<int>>(age).errorText, isNull);
         final form = t.state<FormState>(find.byType(Form));
         expect(form.validate(), isFalse);
@@ -283,6 +287,14 @@ void main() {
         expect(t.state<FormFieldState<int>>(age).errorText, s.invalidAge);
         await t.tap(age);
         await t.pumpAndSettle();
+        final ageMenu = find.byKey(const ValueKey('individual-age-menu'));
+        expect(t.getTopLeft(ageMenu).dy, greaterThanOrEqualTo(t.getBottomLeft(age).dy));
+        expect(t.getSize(ageMenu).width, t.getSize(age).width);
+        expect(
+          t.widget<ListView>(find.descendant(of: ageMenu, matching: find.byType(ListView)))
+              .childrenDelegate.estimatedChildCount,
+          131,
+        );
         await t.tap(find.text('0').last);
         await t.pumpAndSettle();
         expect(t.state<FormFieldState<int>>(age).value, 0);
@@ -291,9 +303,16 @@ void main() {
         await edit(t, find.byType(TextFormField).first, 'Test Person');
         await t.tap(find.text(s.female));
         await t.pumpAndSettle();
-        final relationship = find.byType(DropdownButtonFormField<String>).first;
+        final relationship = find.byKey(const ValueKey('individual-relationship'));
         await t.tap(relationship);
         await t.pumpAndSettle();
+        final relationshipMenu = find.byKey(const ValueKey('individual-relationship-menu'));
+        expect(t.getTopLeft(relationshipMenu).dy,
+          greaterThanOrEqualTo(t.getBottomLeft(relationship).dy));
+        expect(t.getSize(relationshipMenu).width, t.getSize(relationship).width);
+        expect(t.getSize(relationshipMenu).height, 3 * 48);
+        expect(find.text(s.child), findsOneWidget);
+        expect(find.text(s.parent), findsOneWidget);
         await t.tap(find.text(s.other).last);
         await t.pumpAndSettle();
         final other = find.byType(TextFormField).last;
@@ -314,6 +333,110 @@ void main() {
         expect(repo.records, isEmpty);
       },
     );
+
+    testWidgets('Individual dropdown dismissal and text blur validate only touched fields in $language', (t) async {
+      await mount(t, const IndividualFormScreen(), language);
+      final name = find.byType(TextFormField).first;
+      final age = find.byKey(const ValueKey('individual-age'));
+      final relationship = find.byKey(const ValueKey('individual-relationship'));
+      final nameFocus = t.widget<EditableText>(find.descendant(
+        of: name, matching: find.byType(EditableText))).focusNode;
+      await t.tap(name);
+      await t.pumpAndSettle();
+      expect(nameFocus.hasFocus, isTrue);
+      await t.tap(age);
+      await t.pumpAndSettle();
+      expect(nameFocus.hasFocus, isFalse);
+      expect(error(t, name), s.requiredField);
+      expect(t.state<FormFieldState<int>>(age).errorText, isNull);
+      expect(find.text(s.invalidAge), findsNothing);
+      expect(t.testTextInput.isVisible, isFalse);
+      await t.tapAt(const Offset(5, 200));
+      await t.pumpAndSettle();
+      expect(t.state<FormFieldState<int>>(age).errorText, s.invalidAge);
+      await t.tap(age);
+      await t.pumpAndSettle();
+      expect(find.descendant(of: age, matching: find.text(s.invalidAge)), findsNothing);
+      await t.tap(find.text('0').last);
+      await t.pumpAndSettle();
+      expect(t.state<FormFieldState<int>>(age).errorText, isNull);
+      await t.tap(relationship);
+      await t.pumpAndSettle();
+      expect(t.state<FormFieldState<String>>(relationship).errorText, isNull);
+      expect(t.getSize(find.byKey(const ValueKey('individual-relationship-menu'))).height, 144);
+      await t.tapAt(const Offset(5, 200));
+      await t.pumpAndSettle();
+      expect(t.state<FormFieldState<String>>(relationship).errorText, s.requiredField);
+      await t.tap(relationship);
+      await t.pumpAndSettle();
+      expect(find.descendant(of: relationship, matching: find.text(s.requiredField)), findsNothing);
+      await t.tap(find.text(s.other).last);
+      await t.pumpAndSettle();
+      expect(t.state<FormFieldState<String>>(relationship).errorText, isNull);
+      final other = find.byType(TextFormField).last;
+      expect(error(t, other), isNull);
+      await t.tap(other);
+      await t.pumpAndSettle();
+      final otherFocus = t.widget<EditableText>(find.descendant(
+        of: other, matching: find.byType(EditableText))).focusNode;
+      expect(otherFocus.hasFocus, isTrue);
+      await t.tap(find.text(s.female));
+      await t.pumpAndSettle();
+      expect(otherFocus.hasFocus, isFalse);
+      expect(error(t, other), s.requiredField);
+      await edit(t, other, 'Family friend');
+      expect(error(t, other), isNull);
+      await t.tap(name);
+      await t.pumpAndSettle();
+      expect(otherFocus.hasFocus, isFalse);
+      await edit(t, name, 'Updated Person');
+      expect(error(t, name), isNull);
+      await t.tapAt(const Offset(5, 200));
+      await t.pumpAndSettle();
+      expect(nameFocus.hasFocus, isFalse);
+      expect(find.text(s.photoRequired), findsNothing);
+      expect(repo.records, isEmpty);
+    });
+
+    testWidgets('Individual Save scrolls to the first error and corrections clear live in $language', (t) async {
+      final person = Individual(
+        id: 'invalid-individual',
+        fullName: 'Person',
+        age: 7,
+        gender: '',
+        relationship: '',
+      );
+      repo.records.add(person);
+      await mount(t, IndividualFormScreen(individual: person), language);
+      final name = find.byType(TextFormField).first;
+      final gender = find.byKey(const ValueKey('individual-gender'));
+      final relationship = find.byKey(const ValueKey('individual-relationship'));
+      expect(error(t, name), isNull);
+      expect(t.state<FormFieldState<String>>(gender).errorText, isNull);
+      expect(t.state<FormFieldState<String>>(relationship).errorText, isNull);
+      await edit(t, name, '');
+      expect(error(t, name), s.requiredField);
+      await t.ensureVisible(find.text(s.saveChanges));
+      await t.tap(find.text(s.saveChanges));
+      await t.pumpAndSettle();
+      expect(t.getTopLeft(name).dy, greaterThanOrEqualTo(0));
+      expect(t.getBottomLeft(name).dy, lessThan(t.view.physicalSize.height));
+      expect(t.state<FormFieldState<String>>(gender).errorText, s.requiredField);
+      expect(t.state<FormFieldState<String>>(relationship).errorText, s.requiredField);
+      await edit(t, name, 'Updated Person');
+      expect(error(t, name), isNull);
+      await t.ensureVisible(gender);
+      await t.tap(find.text(s.female));
+      await t.pumpAndSettle();
+      expect(t.state<FormFieldState<String>>(gender).errorText, isNull);
+      await t.ensureVisible(relationship);
+      await t.tap(relationship);
+      await t.pumpAndSettle();
+      await t.tap(find.text(s.child).last);
+      await t.pumpAndSettle();
+      expect(t.state<FormFieldState<String>>(relationship).errorText, isNull);
+      expect(repo.records.single.fullName, 'Person');
+    });
   }
 
   for (final ageValue in [0, 7, 130]) {
@@ -338,7 +461,10 @@ void main() {
         await t.scrollUntilVisible(
           target,
           ageValue == 130 ? -500 : 500,
-          scrollable: find.byType(Scrollable).last,
+          scrollable: find.descendant(
+            of: find.byKey(const ValueKey('individual-age-menu')),
+            matching: find.byType(Scrollable),
+          ),
           maxScrolls: 40,
         );
         await t.pumpAndSettle();
@@ -370,9 +496,25 @@ void main() {
         final age = find.byKey(const ValueKey('individual-age'));
         await t.ensureVisible(age);
         await t.pumpAndSettle();
+        final page = t.state<ScrollableState>(find.ancestor(
+          of: age, matching: find.byType(Scrollable)).first);
+        final offset = page.position.pixels;
         await t.tap(age);
         await t.pumpAndSettle();
-        final scroll = find.byType(Scrollable).last;
+        expect(page.position.pixels, offset);
+        expect(t.testTextInput.isVisible, isFalse);
+        expect(find.descendant(of: age, matching: find.byType(TextField)), findsNothing);
+        final scroll = find.descendant(
+          of: find.byKey(const ValueKey('individual-age-menu')),
+          matching: find.byType(Scrollable),
+        );
+        final menu = find.byKey(const ValueKey('individual-age-menu'));
+        expect(
+          t.getTopLeft(menu).dy >= t.getBottomLeft(age).dy ||
+              t.getBottomLeft(menu).dy <= t.getTopLeft(age).dy,
+          isTrue,
+        );
+        expect(t.getSize(menu).width, t.getSize(age).width);
         expect(t.getSize(scroll).height, lessThanOrEqualTo(280));
         expect(
           Directionality.of(t.element(scroll)),
@@ -394,7 +536,10 @@ void main() {
         await t.scrollUntilVisible(
           find.text('0'),
           -200,
-          scrollable: find.byType(Scrollable).last,
+          scrollable: find.descendant(
+            of: find.byKey(const ValueKey('individual-age-menu')),
+            matching: find.byType(Scrollable),
+          ),
           maxScrolls: 40,
         );
         await t.pumpAndSettle();
@@ -402,6 +547,16 @@ void main() {
         await t.pumpAndSettle();
         expect(t.state<FormFieldState<int>>(age).value, 0);
         expect(t.state<FormFieldState<int>>(age).errorText, isNull);
+        await Scrollable.ensureVisible(t.element(age), alignment: 1);
+        await t.pumpAndSettle();
+        final bottomOffset = page.position.pixels;
+        await t.tap(age);
+        await t.pumpAndSettle();
+        expect(page.position.pixels, bottomOffset);
+        expect(t.getBottomLeft(menu).dy, lessThanOrEqualTo(t.getTopLeft(age).dy));
+        expect(t.testTextInput.isVisible, isFalse);
+        await t.binding.handlePopRoute();
+        await t.pumpAndSettle();
         expect(t.takeException(), isNull);
       },
     );
