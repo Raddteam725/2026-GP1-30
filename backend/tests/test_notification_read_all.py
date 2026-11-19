@@ -27,7 +27,7 @@ def test_read_all_scopes_owner_role_and_event_and_is_idempotent(db, role, count)
     other = db.collection('users').document(other_uid).collection(collection).document('other-owner')
     other.set({'read_at': None, 'event_id': 'test-event'})
     before = {path: dict(value) for path, value in db.data.items()}
-    app.dependency_overrides[identity] = lambda: {'uid': uid}
+    app.dependency_overrides[identity] = lambda: {'uid': uid, 'email': uid + '@example.test', 'email_verified': True}
     client = TestClient(app)
     path = '/v1/notifications/read-all' if role == 'guardian' else '/v1/volunteer/notifications/read-all'
     assert client.put(path).status_code == 204

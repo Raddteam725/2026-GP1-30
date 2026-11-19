@@ -11,6 +11,7 @@ import 'guardian_repository.dart';
 /// UI should render. Anything not listed here falls back to the generic
 /// HTTP-status-based mapping in `_request`.
 const _detailFailures = {
+  'email_verification_required': 'emailVerification',
   'event_unavailable': 'eventUnavailable',
   'multiple_active_events': 'eventUnavailable',
   'active_case': 'activeCase',

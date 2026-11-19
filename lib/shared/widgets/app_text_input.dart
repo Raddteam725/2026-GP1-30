@@ -6,6 +6,9 @@ class AppTextInput extends StatelessWidget {
     required this.label,
     this.controller,
     this.hint,
+    this.helperText,
+    this.helperStyle,
+    this.errorMaxLines = 3,
     this.validator,
     this.onChanged,
     this.onFieldSubmitted,
@@ -25,6 +28,9 @@ class AppTextInput extends StatelessWidget {
   });
   final String label;
   final String? hint;
+  final String? helperText;
+  final TextStyle? helperStyle;
+  final int errorMaxLines;
   final TextEditingController? controller;
   final FormFieldValidator<String>? validator;
   final ValueChanged<String>? onChanged;
@@ -47,6 +53,7 @@ class AppTextInput extends StatelessWidget {
     controller: controller,
     focusNode: focusNode,
     validator: validator,
+    autovalidateMode: AutovalidateMode.onUserInteraction,
     onChanged: onChanged,
     onFieldSubmitted: onFieldSubmitted,
     keyboardType: keyboardType,
@@ -61,7 +68,10 @@ class AppTextInput extends StatelessWidget {
     decoration: InputDecoration(
       labelText: showLabel ? label : null,
       hintText: hint,
-      errorMaxLines: 3,
+      helperText: helperText,
+      helperStyle: helperStyle,
+      helperMaxLines: 8,
+      errorMaxLines: errorMaxLines,
       suffixIcon: suffixIcon,
       prefixIcon: prefixIcon,
     ),

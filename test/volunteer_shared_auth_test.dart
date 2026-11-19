@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:radd/app/app_services.dart';
 import 'package:radd/app/radd_app.dart';
 import 'package:radd/core/localization/generated/app_localizations.dart';
@@ -11,6 +12,7 @@ import 'package:radd/features/onboarding/presentation/screens/language_selection
 import 'support/guardian_fakes.dart';
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   for (final language in ['ar', 'en']) {
     testWidgets(
       'Volunteer uses shared login, validation and password reset in $language',
