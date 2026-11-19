@@ -139,7 +139,7 @@ def test_unavailable_ai_blocks_startup_or_returns_503_without_side_effects(
         monkeypatch.setattr(face_matching, '_engine', None)
         monkeypatch.setattr(face_matching, 'get_engine', REAL_GET_ENGINE)
         monkeypatch.setitem(sys.modules, 'onnxruntime', None)
-    app.dependency_overrides[identity] = lambda: {'uid': 'owner'}
+    app.dependency_overrides[identity] = lambda: {'uid': 'owner', 'email': 'owner@example.test', 'email_verified': True}
     try:
         if failure == 'missing_dependency':
             # Enabled AI must fail startup before serving registration requests.
@@ -184,7 +184,7 @@ def test_concurrent_case_creation_still_blocks_replace_and_cleans_uploaded_photo
 def test_guardian_api_never_exposes_embeddings(storage, monkeypatch):
     guardian('owner')
     use_engine(monkeypatch, unit(1))
-    app.dependency_overrides[identity] = lambda: {'uid': 'owner'}
+    app.dependency_overrides[identity] = lambda: {'uid': 'owner', 'email': 'owner@example.test', 'email_verified': True}
     try:
         with TestClient(app) as client:
             created = client.post('/v1/individuals', json=value().model_dump())
