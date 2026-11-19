@@ -29,7 +29,14 @@ def validate_credential_project(credential, project_id):
         return
     raise RuntimeError('Use credentials for a service account in the configured Radd project.')
 
-def main():
+def configure_local_jobs(enabled):
+    # Overrides any shell value: --local-jobs is the only way to turn them on.
+    os.environ["RADD_LOCAL_JOBS"] = "1" if enabled else "0"
+    print("Local maintenance jobs: " + ("ON" if enabled else "OFF (pass --local-jobs to enable)"))
+    if enabled:
+        print("WARNING: cleanup deletes data in the shared Firebase project. Use --local-jobs only deliberately.")
+
+def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--credentials-dir")
     parser.add_argument("--adc", action="store_true", help="Use manually configured keyless service-account ADC; do not discover JSON keys.")
@@ -39,7 +46,11 @@ def main():
     # http://<this PC's LAN address>:8000 -- no address is ever hardcoded here.
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--bootstrap-event", action="store_true")
-    args = parser.parse_args()
+    parser.add_argument("--local-jobs", action="store_true", help="Run retention cleanup and push retries in this process (deletes shared data).")
+    return parser
+
+def main():
+    args = build_parser().parse_args()
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     try:
         if args.adc:
@@ -59,10 +70,11 @@ def main():
         from app.events import bootstrap_development_event
         bootstrap_development_event(database())
         print("Current development event is ready.")
-    # Approved LOCAL maintenance thread: retention and push reconciliation
-    # every minute. Development only -- the deployed service leaves this
-    # unset and uses a managed scheduler (see app/local_jobs.py).
-    os.environ["RADD_LOCAL_JOBS"] = "1"
+    # Optional LOCAL maintenance thread: retention cleanup and push retries
+    # every minute, OFF unless --local-jobs is passed, because cleanup deletes
+    # data in the shared Firebase project. The deployed service never runs it;
+    # maintenance runs as separate Cloud Run Jobs (see app/jobs.py).
+    configure_local_jobs(args.local_jobs)
     import uvicorn
     uvicorn.run("app.main:app", host=args.host, port=args.port, access_log=False)
 

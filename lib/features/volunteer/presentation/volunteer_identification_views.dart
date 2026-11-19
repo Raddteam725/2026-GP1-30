@@ -414,7 +414,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
       _ => s.vCandidateHint,
     }, title: s.vPotentialMatches),
     if (_identificationState == IdentificationState.noReliableCandidate)
-      VolunteerEmpty(s.vNoResults, s.vManualFallback),
+      VolunteerEmpty(s.vNoResults, s.vRetakeOrManual),
     for (final candidate in _candidates)
       VolunteerCard(
         child: Column(

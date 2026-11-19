@@ -1496,6 +1496,12 @@ abstract class AppLocalizations {
   /// **'No useful match? Continue with manual review.'**
   String get vManualFallback;
 
+  /// No description provided for @vRetakeOrManual.
+  ///
+  /// In en, this message translates to:
+  /// **'If the face was covered or unclear, end this attempt and take a new, clear front photo. Otherwise, continue with manual review.'**
+  String get vRetakeOrManual;
+
   /// No description provided for @vManualReview.
   ///
   /// In en, this message translates to:
