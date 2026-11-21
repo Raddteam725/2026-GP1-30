@@ -554,7 +554,8 @@ void main() {
         ),
         findsOneWidget,
       );
-      Navigator.pop(t.element(find.byType(GuardianQrScreen)));
+      // QR is a tab within the Guardian route; exercise Android Back.
+      await t.binding.handlePopRoute();
       await t.pumpAndSettle();
       await tapText(t, 'Cases');
       expect(find.byType(CasesScreen), findsOneWidget);

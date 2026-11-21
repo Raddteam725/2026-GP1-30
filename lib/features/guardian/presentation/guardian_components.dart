@@ -57,7 +57,7 @@ class GuardianNavigation extends StatelessWidget {
                             !enabled || (i == selected && this.labels == null)
                             ? null
                             : () {
-                                if (this.labels != null) {
+                                if (onSelected != null || this.labels != null) {
                                   onSelected?.call(i);
                                   return;
                                 }
@@ -77,15 +77,11 @@ class GuardianNavigation extends StatelessWidget {
                                   }
                                   return;
                                 }
-                                if (onSelected != null) {
-                                  onSelected!(i);
-                                } else {
-                                  Navigator.of(context).pushNamedAndRemoveUntil(
-                                    AppRoutes.guardian,
-                                    (_) => false,
-                                    arguments: i,
-                                  );
-                                }
+                                Navigator.of(context).pushNamedAndRemoveUntil(
+                                  AppRoutes.guardian,
+                                  (_) => false,
+                                  arguments: i,
+                                );
                               },
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
