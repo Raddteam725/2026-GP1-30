@@ -13,6 +13,8 @@ import '../data/coalesced_refresh.dart';
 import '../data/guardian_repository.dart';
 import 'individual_widgets.dart';
 import 'case_widgets.dart';
+import 'cases_screen.dart';
+import 'guardian_qr_screen.dart';
 
 typedef _HomeData = ({
   GuardianProfile profile,
@@ -71,6 +73,26 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
   }
 
   late int _tab = widget.initialTab;
+  // Keep the Home-area tab underneath Cases/QR, just as when they were
+  // routes. Only the active Cases/QR screen is mounted: entering fetches
+  // fresh data/credentials and leaving QR disposes its expiry timer.
+  int? _workspaceTab;
+
+  void _selectTab(int tab) {
+    final returningHome = _workspaceTab != null && tab != 2 && tab != 3;
+    setState(() {
+      if (tab == 2 || tab == 3) {
+        _workspaceTab = tab;
+      } else {
+        _workspaceTab = null;
+        _tab = tab;
+      }
+    });
+    // Preserve authoritative Home data after actions in Cases/QR, without
+    // discarding the visible snapshot or repeating the route's auth gate.
+    if (returningHome) _recover();
+  }
+
   int _revision = 0;
   Future<_HomeData>? _data;
   bool _loggingOut = false;
@@ -207,6 +229,32 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return PopScope(
+      canPop: _workspaceTab == null,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _workspaceTab != null) _selectTab(_tab);
+      },
+      child: Scaffold(
+        bottomNavigationBar: GuardianNavigation(
+          selected: _workspaceTab ?? _tab,
+          onSelected: _selectTab,
+          enabled: !_loggingOut,
+        ),
+        body: IndexedStack(
+          index: _workspaceTab == null ? 0 : 1,
+          children: [
+            _buildHome(context),
+            if (_workspaceTab == 2)
+              const GuardianQrScreen(embedded: true)
+            else if (_workspaceTab == 3)
+              const CasesScreen(embedded: true),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHome(BuildContext context) {
     final s = AppLocalizations.of(context)!;
     return FutureBuilder<_HomeData>(
       future: _data,
@@ -226,11 +274,6 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
               ? s.myIndividuals
               : s.profile,
           showAppBar: false,
-          bottomNavigationBar: GuardianNavigation(
-            selected: _tab,
-            onSelected: (i) => setState(() => _tab = i),
-            enabled: !_loggingOut,
-          ),
           children: [
             // A spinner only while there is nothing to show yet. An event-
             // driven or explicit refetch keeps the retained snapshot on
