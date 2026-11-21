@@ -543,7 +543,11 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
             children: [
               Row(
                 children: [
-                  PersonPhoto(person),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => _previewPersonPhoto(person),
+                    child: PersonPhoto(person),
+                  ),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
@@ -570,51 +574,53 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     ];
   }
 
-  Widget _personSummary(RegisteredPerson person, {CaseStatus? status}) =>
-      VolunteerCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _personSummary(
+    RegisteredPerson person, {
+    CaseStatus? status,
+    bool showPhoto = true,
+  }) => VolunteerCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (status != null) ...[
+          if (_report?.caseId == null &&
+              _report?.foundStatus == FoundStatus.identified)
+            VolunteerHeading(s.vIdentityConfirmed)
+          else
+            StatusChip(status),
+          const SizedBox(height: 16),
+        ],
+        Row(
           children: [
-            if (status != null) ...[
-              if (_report?.caseId == null &&
-                  _report?.foundStatus == FoundStatus.identified)
-                VolunteerHeading(s.vIdentityConfirmed)
-              else
-                StatusChip(status),
-              const SizedBox(height: 16),
-            ],
-            Row(
-              children: [
-                PersonPhoto(person),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      VolunteerHeading(dataText(context, person.name)),
-                      const SizedBox(height: 6),
-                      Text(s.vAgeValue(numberText(context, person.age))),
-                      const SizedBox(height: 6),
-                      Text(person.gender == Gender.male ? s.vMale : s.vFemale),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            if (_associatedCase != null ||
-                (!_independentReview && _report?.matchedPerson != null)) ...[
-              const Divider(height: 24),
-              Text(
-                _associatedCase?.id ?? _report!.id,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: volunteerNavy,
-                ),
+            if (showPhoto) ...[PersonPhoto(person), const SizedBox(width: 12)],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  VolunteerHeading(dataText(context, person.name)),
+                  const SizedBox(height: 6),
+                  Text(s.vAgeValue(numberText(context, person.age))),
+                  const SizedBox(height: 6),
+                  Text(person.gender == Gender.male ? s.vMale : s.vFemale),
+                ],
               ),
-            ],
+            ),
           ],
         ),
-      );
+        if (_associatedCase != null ||
+            (!_independentReview && _report?.matchedPerson != null)) ...[
+          const Divider(height: 24),
+          Text(
+            _associatedCase?.id ?? _report!.id,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: volunteerNavy,
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
   VolunteerCase? get _associatedCase {
     final person = _person ?? _report?.matchedPerson;
     if (person == null) return null;
@@ -635,6 +641,18 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     final info =
         person.information ?? repo.caseForPerson(person.id)?.information;
     return [
+      LayoutBuilder(
+        builder: (context, constraints) => InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _previewPersonPhoto(person),
+          child: PersonPhoto(
+            person,
+            size: constraints.maxWidth,
+            fit: BoxFit.contain,
+          ),
+        ),
+      ),
+      const SizedBox(height: 16),
       if (_similarity != null)
         VolunteerCard(
           color: const Color(0xFFC5F8FC),
@@ -717,7 +735,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
             ],
           ),
         ),
-      if (_independentReview) _personSummary(person),
+      if (_independentReview) _personSummary(person, showPhoto: false),
       if (!_independentReview) VolunteerInfo(s.vMatchNotice),
       VolunteerCard(
         child: Column(

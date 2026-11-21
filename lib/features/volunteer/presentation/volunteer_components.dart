@@ -184,9 +184,11 @@ class PersonPhoto extends StatelessWidget {
     this.size = 64,
     this.height,
     this.radius = 12,
+    this.fit = BoxFit.cover,
   });
   final RegisteredPerson person;
   final double size, radius;
+  final BoxFit fit;
   final double? height;
   @override
   Widget build(BuildContext context) => ClipRRect(
@@ -197,14 +199,14 @@ class PersonPhoto extends StatelessWidget {
       child: person.photoBytes != null
           ? Image.memory(
               person.photoBytes!,
-              fit: BoxFit.cover,
+              fit: fit,
               semanticLabel: dataText(context, person.name),
               errorBuilder: (_, _, _) => _fallback(),
             )
           : person.photo != null
           ? Image.asset(
               person.photo!,
-              fit: BoxFit.cover,
+              fit: fit,
               semanticLabel: dataText(context, person.name),
               errorBuilder: (_, _, _) => _fallback(),
             )

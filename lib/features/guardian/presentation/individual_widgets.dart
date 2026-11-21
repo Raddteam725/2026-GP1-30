@@ -15,10 +15,12 @@ class IndividualPhoto extends StatefulWidget {
     required this.id,
     this.size = 64,
     this.revision = 0,
+    this.square = false,
   });
   final String id;
   final double size;
   final int revision;
+  final bool square;
   @override
   State<IndividualPhoto> createState() => _IndividualPhotoState();
 }
@@ -40,7 +42,8 @@ class _IndividualPhotoState extends State<IndividualPhoto> {
   }
 
   @override
-  Widget build(BuildContext context) => ClipOval(
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(widget.square ? 16 : widget.size / 2),
     child: SizedBox(
       width: widget.size,
       height: widget.size,
@@ -50,7 +53,7 @@ class _IndividualPhotoState extends State<IndividualPhoto> {
           if (state.hasData) {
             return Image.memory(
               state.data!,
-              fit: BoxFit.cover,
+              fit: widget.square ? BoxFit.contain : BoxFit.cover,
               gaplessPlayback: false,
             );
           }

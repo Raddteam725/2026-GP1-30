@@ -217,7 +217,11 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
                 PhotoAvatar(
                   onTap: _busy ? null : _capture,
                   child: _photo != null
-                      ? Image.memory(_photo!, fit: BoxFit.cover)
+                      ? Image.memory(
+                          _photo!,
+                          fit: BoxFit.cover,
+                          alignment: Alignment.center,
+                        )
                       : editing
                       ? IndividualPhoto(id: widget.individual!.id, size: 128)
                       : null,

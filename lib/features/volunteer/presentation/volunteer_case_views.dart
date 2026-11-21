@@ -418,16 +418,56 @@ extension _VolunteerCaseViews on _VolunteerWorkspaceState {
     await repo.startSearch(account, item);
     if (mounted) _message(s.vJoined);
   });
+  Future<void> _previewPersonPhoto(RegisteredPerson person) => showDialog<void>(
+    context: context,
+    builder: (dialogContext) => Dialog.fullscreen(
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: IconButton(
+                tooltip: s.close,
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                icon: const Icon(Icons.close),
+              ),
+            ),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) => InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 5,
+                  child: PersonPhoto(
+                    person,
+                    size: constraints.maxWidth,
+                    height: constraints.maxHeight,
+                    radius: 0,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
   List<Widget> _caseDetails() {
     final item = _case!;
     final info = item.information;
     return [
       LayoutBuilder(
-        builder: (context, constraints) => PersonPhoto(
-          item.person,
-          size: constraints.maxWidth,
-          height: constraints.maxWidth * .78,
-          radius: 18,
+        builder: (context, constraints) => InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => _previewPersonPhoto(item.person),
+          child: PersonPhoto(
+            item.person,
+            size: constraints.maxWidth,
+            height: constraints.maxWidth * .78,
+            radius: 18,
+          ),
         ),
       ),
       const SizedBox(height: 16),

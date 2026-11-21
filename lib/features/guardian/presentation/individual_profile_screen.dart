@@ -145,7 +145,8 @@ class _IndividualProfileScreenState extends State<IndividualProfileScreen> {
                 Center(
                   child: IndividualPhoto(
                     id: p.id,
-                    size: 144,
+                    size: 280,
+                    square: true,
                     revision: _revision,
                   ),
                 ),
