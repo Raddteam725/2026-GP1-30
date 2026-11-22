@@ -144,15 +144,20 @@ void main() {
         expect(aiRequests, 0);
         final ai = find.ancestor(
           of: find.text(s.vFindWithAi),
-          matching: find.byType(VolunteerAction),
+          matching: find.byType(VolunteerOption),
         );
         final manual = find.ancestor(
           of: find.text(s.vManualReview),
-          matching: find.byType(VolunteerAction),
+          matching: find.byType(VolunteerOption),
         );
-        expect(tester.widget<VolunteerAction>(ai).secondary, isFalse);
-        expect(tester.widget<VolunteerAction>(manual).secondary, isTrue);
-        await press(tester, s.vManualReview);
+        expect(tester.widget<VolunteerOption>(ai).primary, isTrue);
+        expect(tester.widget<VolunteerOption>(manual).primary, isFalse);
+        await tester.tap(manual);
+        for (var i = 0; i < 5; i++) {
+          await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+          await tester.pump();
+        }
+        await tester.pumpAndSettle();
         expect(profiles, greaterThan(0));
         expect(aiRequests, 0);
         expect(find.byType(TextField), findsOneWidget);

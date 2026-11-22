@@ -109,20 +109,38 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
         ),
       ),
   ];
+  // ---------------------------------------------------------------------------
+  // AI identification attempt lifecycle
+  //
+  // Starts: "Use Photo" in the in-app camera. The photo is sent once, kept by
+  //   the server as a temporary Storage object and here in memory only.
+  // Concludes (photo deleted on the server, dropped here): identity confirmed,
+  //   End Identification Attempt, leaving the identification screens (back
+  //   past the options or another tab, after confirmation), Search Again with
+  //   a new photo, sign-out, loss of event access, handover, or the server's
+  //   abandoned-attempt cleanup for a device that never returns.
+  // Does not conclude: cancelling a running search, opening a result's
+  //   details, manual review within the attempt, or an app restart (the
+  //   report stays resumable until one of the above happens).
+  // ---------------------------------------------------------------------------
+
+  Future<Uint8List?> _captureFace() => Navigator.of(context).push<Uint8List>(
+    MaterialPageRoute(builder: (_) => const VolunteerCapture()),
+  );
+
+  String _newRequestId() => List.generate(
+    24,
+    (_) => math.Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
+  ).join();
+
   Future<void> _openCamera() async {
     if (repo is ApiVolunteerRepository) {
       if (!_canParticipate) return;
-      final bytes = await Navigator.of(context).push<Uint8List>(
-        MaterialPageRoute(builder: (_) => const VolunteerCapture()),
-      );
+      final bytes = await _captureFace();
       if (bytes == null || !mounted) return;
       if (!_canParticipate) return;
       _pendingCapture = bytes;
-      _captureRequestId = List.generate(
-        24,
-        (_) =>
-            math.Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
-      ).join();
+      _captureRequestId = _newRequestId();
       await _submitCapture();
       return;
     }
@@ -170,17 +188,12 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
       ),
     );
     if (capture != true || !mounted) return;
+    // Preview: same options-first flow; no AI service or photo upload occurs.
     await _run(() async {
       _report = await repo.submitFound(account);
       if (!mounted) return;
-      _candidates = [];
-      _person = null;
-      _similarity = null;
-      _open(VolunteerView.finding);
-      final generation = ++_searchGeneration;
-      final report = _report!;
-      // Deliberate mock loading state; no AI service or photo upload occurs.
-      unawaited(_loadCandidates(report, generation));
+      _resetIdentification();
+      _open(VolunteerView.matches);
     });
   }
 
@@ -193,12 +206,18 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     _pendingCapture = null;
     _captureRequestId = null;
     if (!mounted) return;
+    _resetIdentification();
+    _open(VolunteerView.matches);
+  });
+
+  void _resetIdentification() {
     _candidates = [];
     _person = null;
     _similarity = null;
+    _candidateRank = null;
     _identificationState = IdentificationState.ready;
-    _open(VolunteerView.matches);
-  });
+  }
+
   VolunteerView _reportDestination(FoundReport report) {
     // The persisted lifecycle, not a cached profile or an AI result, controls
     // continuation. Incomplete identified data must never restart identification.
@@ -227,6 +246,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     _person = report.matchedPerson;
     _independentReview = false;
     _similarity = null;
+    _candidateRank = null;
     _candidates = [];
     _identificationState = IdentificationState.ready;
     _update(() {
@@ -256,114 +276,102 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
       _open(VolunteerView.manual);
     }
   });
+
   Widget _foundImage({required double width, required double height}) {
-    final bytes = _report!.photoBytes;
+    final bytes = _report?.photoBytes;
     if (bytes != null) {
       return Image.memory(
         bytes,
         width: width,
         height: height,
         fit: BoxFit.cover,
+        gaplessPlayback: true,
+        excludeFromSemantics: true,
       );
     }
-    if (repo.isPreview) {
+    if (repo.isPreview && _report != null) {
       return Image.asset(
         _report!.photo,
         width: width,
         height: height,
         fit: BoxFit.cover,
+        excludeFromSemantics: true,
       );
     }
     return SizedBox(
       width: width,
       height: height,
-      child: const Icon(Icons.person_outline),
+      child: const ColoredBox(
+        color: Color(0xFFE8EDFF),
+        child: Icon(Icons.person_outline, color: volunteerNavy),
+      ),
     );
   }
 
+  bool get _canStartIdentification =>
+      !_busy && _report != null && _report!.ended != true;
+
+  void _startAi() {
+    final report = _report;
+    // One request at a time: the options are gone once the scan view opens.
+    if (report == null ||
+        report.ended ||
+        _busy ||
+        view == VolunteerView.finding) {
+      return;
+    }
+    _update(() {
+      _candidates = [];
+      _identificationState = IdentificationState.processing;
+    });
+    _open(VolunteerView.finding);
+    unawaited(_loadCandidates(report, ++_searchGeneration));
+  }
+
+  /// Stops waiting for the running search and returns to the options. The
+  /// late response is ignored; the attempt itself continues.
+  void _cancelSearch() {
+    ++_searchGeneration;
+    _update(() {
+      _identificationState = IdentificationState.ready;
+      if (_stack.last == VolunteerView.finding) _stack.removeLast();
+    });
+  }
+
   Future<void> _loadCandidates(FoundReport report, int generation) async {
+    bool current() =>
+        mounted &&
+        generation == _searchGeneration &&
+        view == VolunteerView.finding;
+    IdentificationState outcome;
+    var results = <MatchCandidate>[];
     try {
       if (repo.isPreview) {
         await Future<void>.delayed(const Duration(milliseconds: 900));
       }
-      final results = await repo.findMatches(report);
-      if (!mounted ||
-          generation != _searchGeneration ||
-          view != VolunteerView.finding) {
-        return;
-      }
-      _update(() {
-        _candidates = results;
-        _identificationState = results.isEmpty
-            ? IdentificationState.noReliableCandidate
-            : IdentificationState.candidates;
-      });
-      _replace(VolunteerView.matches);
+      results = await repo.findMatches(report);
+      outcome = results.isEmpty
+          ? IdentificationState.noReliableCandidate
+          : IdentificationState.candidates;
     } catch (error) {
       if (kDebugMode) {
         debugPrint('Radd identification failed: ${error.runtimeType}');
       }
-      if (mounted &&
-          generation == _searchGeneration &&
-          view == VolunteerView.finding) {
-        _replace(VolunteerView.matches);
-        _update(
-          () => _identificationState =
-              error is StateError && error.message == 'ai-unavailable'
-              ? IdentificationState.unavailable
-              : IdentificationState.error,
-        );
-      }
+      outcome = error is StateError && error.message == 'ai-unavailable'
+          ? IdentificationState.unavailable
+          : isNetworkFailure(error)
+          ? IdentificationState.network
+          : IdentificationState.error;
     }
+    if (!current()) return;
+    _update(() {
+      _candidates = results;
+      _identificationState = outcome;
+      _stack
+          .removeLast(); // the scan view; the attempt screen shows the outcome
+    });
   }
 
-  List<Widget> _finding() => [
-    const SizedBox(height: 36),
-    Center(
-      child: SizedBox.square(
-        dimension: 260,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Container(
-              width: 250,
-              height: 250,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFFB5D9DD)),
-              ),
-            ),
-            const SizedBox.square(
-              dimension: 220,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: volunteerTeal,
-              ),
-            ),
-            ClipOval(child: _foundImage(width: 174, height: 174)),
-          ],
-        ),
-      ),
-    ),
-    const SizedBox(height: 40),
-    Center(child: VolunteerHeading(s.vSearchingProfiles, large: true)),
-    const SizedBox(height: 12),
-    Text(s.vMatchingHint, textAlign: TextAlign.center),
-    const SizedBox(height: 24),
-    const LinearProgressIndicator(color: volunteerTeal),
-    const SizedBox(height: 32),
-    VolunteerAction(
-      s.vManualReview,
-      secondary: true,
-      onPressed: _busy ? null : _openManual,
-    ),
-    VolunteerAction(
-      s.vCancelSearch,
-      onPressed: () => _selectTab(2),
-      secondary: true,
-      icon: Icons.close,
-    ),
-  ];
   Future<void> _endIdentification() async {
     if (!await _confirm(
           s.vEndIdentification,
@@ -373,113 +381,419 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
         !mounted) {
       return;
     }
+    await _concludeAttempt(() => _selectTab(2));
+  }
+
+  /// Leaving the identification screens concludes the attempt, exactly like
+  /// End Identification Attempt; the Volunteer confirms first.
+  Future<void> _leaveAttempt(VoidCallback then) async {
+    if (!await _confirm(
+          s.vEndIdentification,
+          s.vLeaveAttemptHint,
+          s.vEndIdentification,
+        ) ||
+        !mounted) {
+      return;
+    }
+    await _concludeAttempt(then);
+  }
+
+  /// Ends the attempt on the server (which deletes the captured photo) and
+  /// drops every client copy. Navigation runs only after success, so a failed
+  /// request leaves the Volunteer where they can retry.
+  Future<bool> _concludeAttempt(VoidCallback then) async {
+    final report = _report;
+    if (report == null) return false;
+    var ended = false;
     await _run(() async {
-      await (repo as ApiVolunteerRepository).endIdentification(_report!);
-      _report = null;
-      _person = null;
-      _candidates = [];
-      if (mounted) _selectTab(2);
-    });
+      final photo = report.photoBytes;
+      await (repo as ApiVolunteerRepository).endIdentification(report);
+      forgetCapturedPhoto(photo);
+      ended = true;
+    }, requiresLocation: false);
+    if (!ended || !mounted) return false;
+    ++_searchGeneration;
+    _report = null;
+    _resetIdentification();
+    then();
+    return true;
   }
 
-  Future<void> _startAi() async {
-    if (_report == null || _report!.ended) return;
-    _identificationState = IdentificationState.processing;
-    _open(VolunteerView.finding);
-    unawaited(_loadCandidates(_report!, ++_searchGeneration));
+  /// No reliable match: take a new photo. The current attempt (and its photo)
+  /// ends only once a new photo was actually taken.
+  Future<void> _searchAgain() async {
+    if (repo is! ApiVolunteerRepository) {
+      _startAi(); // preview: no camera or stored photo
+      return;
+    }
+    if (!_canParticipate || _busy) return;
+    final bytes = await _captureFace();
+    if (bytes == null || !mounted || !_canParticipate) return;
+    final ended = await _concludeAttempt(
+      () => _update(
+        () => _stack.removeWhere(identificationAttemptViews.contains),
+      ),
+    );
+    if (!ended || !mounted) return;
+    _pendingCapture = bytes;
+    _captureRequestId = _newRequestId();
+    await _submitCapture();
   }
 
-  List<Widget> _matches() => [
-    VolunteerAction(
-      s.vFindWithAi,
-      icon: Icons.person_search_outlined,
-      onPressed: _busy || _report?.ended == true ? null : _startAi,
+  String _ageGender(RegisteredPerson person) => [
+    s.vAgeValue(numberText(context, person.age)),
+    if (person.gender != null)
+      person.gender == Gender.male ? s.vMale : s.vFemale,
+  ].join(' · ');
+
+  String _scoreText(double similarity) =>
+      numberText(context, (similarity * 100).round());
+
+  Widget _endAttemptButton() => Padding(
+    padding: const EdgeInsets.only(top: 4),
+    child: Center(
+      child: TextButton.icon(
+        onPressed: _busy ? null : _endIdentification,
+        icon: const Icon(Icons.delete_outline, size: 20),
+        label: Text(s.vEndIdentification),
+        style: TextButton.styleFrom(
+          foregroundColor: const Color(0xFF747783),
+          minimumSize: const Size(48, 48),
+        ),
+      ),
     ),
+  );
+
+  Widget _capturedPhotoRow() => VolunteerCard(
+    padding: const EdgeInsets.all(14),
+    child: Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: _foundImage(width: 56, height: 56),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                s.vCapturedPhoto,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: volunteerInk,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                s.vCapturedPhotoNote,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  height: 1.4,
+                  color: Color(0xFF747783),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        const Icon(Icons.lock_outline, size: 18, color: Color(0xFF747783)),
+      ],
+    ),
+  );
+
+  // Screen 2: processing. No results, manual review or end-attempt actions.
+  List<Widget> _finding() => [
+    const SizedBox(height: 16),
+    Center(child: FaceScanView(image: _foundImage(width: 220, height: 264))),
+    const SizedBox(height: 28),
+    Semantics(
+      liveRegion: true,
+      child: Text(
+        s.vAnalyzingFace,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          color: volunteerInk,
+        ),
+      ),
+    ),
+    const SizedBox(height: 8),
+    Text(
+      s.vMatchingHint,
+      textAlign: TextAlign.center,
+      style: const TextStyle(color: Color(0xFF434652), height: 1.5),
+    ),
+    const SizedBox(height: 24),
+    ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: const LinearProgressIndicator(
+        minHeight: 4,
+        color: volunteerTeal,
+        backgroundColor: volunteerTint,
+      ),
+    ),
+    const SizedBox(height: 20),
+    Center(
+      child: TextButton.icon(
+        onPressed: _cancelSearch,
+        icon: const Icon(Icons.close, size: 20),
+        label: Text(s.vCancelSearch),
+        style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+      ),
+    ),
+  ];
+
+  List<Widget> _matches() => switch (_identificationState) {
+    IdentificationState.candidates => _results(),
+    IdentificationState.noReliableCandidate => _noMatch(),
+    IdentificationState.unavailable ||
+    IdentificationState.error ||
+    IdentificationState.network => _searchFailed(),
+    IdentificationState.ready ||
+    IdentificationState.processing => _identificationOptions(),
+  };
+
+  // Screen 1: the two ways to identify the found individual.
+  List<Widget> _identificationOptions() => [
+    _capturedPhotoRow(),
+    const SizedBox(height: 4),
+    VolunteerOption(
+      title: s.vFindWithAi,
+      description: s.vAiOptionHint,
+      icon: Icons.person_search_outlined,
+      primary: true,
+      onTap: _canStartIdentification ? _startAi : null,
+    ),
+    VolunteerOption(
+      title: s.vManualReview,
+      description: s.vManualOptionHint,
+      icon: Icons.manage_search,
+      onTap: _canStartIdentification ? _openManual : null,
+    ),
+    if (_attemptOpen) _endAttemptButton(),
+  ];
+
+  // Screen 3: ranked candidates, in the order the backend prioritized them.
+  List<Widget> _results() => [
+    VolunteerHeading(s.vResultsCount(numberText(context, _candidates.length))),
+    const SizedBox(height: 8),
+    Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.info_outline, size: 18, color: volunteerTeal),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            s.vScoreNote,
+            style: const TextStyle(
+              fontSize: 13,
+              height: 1.45,
+              color: Color(0xFF434652),
+            ),
+          ),
+        ),
+      ],
+    ),
+    const SizedBox(height: 16),
+    for (var i = 0; i < _candidates.length; i++)
+      _candidateCard(_candidates[i], i + 1),
     VolunteerAction(
       s.vManualReview,
       icon: Icons.manage_search,
-      onPressed: _busy || _report?.ended == true ? null : _openManual,
       secondary: true,
+      onPressed: _canStartIdentification ? _openManual : null,
     ),
-    if (repo is ApiVolunteerRepository && _report?.matchedPerson == null)
-      VolunteerAction(
-        s.vEndIdentification,
-        secondary: true,
-        onPressed: _busy ? null : _endIdentification,
-      ),
-    VolunteerInfo(switch (_identificationState) {
-      IdentificationState.ready => s.vAiReady,
-      IdentificationState.unavailable => s.vAiUnavailable,
-      IdentificationState.error => s.vAiError,
-      _ => s.vCandidateHint,
-    }, title: s.vPotentialMatches),
-    if (_identificationState == IdentificationState.noReliableCandidate)
-      VolunteerEmpty(s.vNoResults, s.vRetakeOrManual),
-    for (final candidate in _candidates)
-      VolunteerCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: 10,
-              runSpacing: 8,
-              children: [
-                VolunteerChip(s.vPotentialMatch),
-                if (candidate.similarity != null)
-                  VolunteerChip(
-                    s.vSimilarityValue(
-                      numberText(context, candidate.similarity! * 100),
+    if (_attemptOpen) _endAttemptButton(),
+  ];
+
+  Widget _candidateCard(MatchCandidate candidate, int rank) {
+    final person = candidate.person, top = rank == 1;
+    void open() => _candidate(person, candidate.similarity, rank: rank);
+    return VolunteerCard(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
+      border: top ? volunteerTeal : const Color(0xB3E5E7EB),
+      onTap: _busy ? null : open,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Semantics(
+                label: s.vRankLabel(numberText(context, rank)),
+                excludeSemantics: true,
+                child: CircleAvatar(
+                  radius: 14,
+                  backgroundColor: top
+                      ? volunteerTeal
+                      : const Color(0xFFE8EDFF),
+                  child: Text(
+                    numberText(context, rank),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: top ? Colors.white : volunteerNavy,
                     ),
                   ),
-              ],
-            ),
-            const Divider(height: 28),
-            Row(
-              children: [
-                PersonPhoto(candidate.person),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      VolunteerHeading(
-                        dataText(context, candidate.person.name),
+                ),
+              ),
+              const SizedBox(width: 12),
+              PersonPhoto(person),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      dataText(context, person.name),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: volunteerInk,
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${s.vAgeValue(numberText(context, candidate.person.age))} · ${candidate.person.gender == Gender.male ? s.vMale : s.vFemale}',
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _ageGender(person),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF434652),
+                      ),
+                    ),
+                    if (candidate.similarity != null) ...[
+                      const SizedBox(height: 8),
+                      VolunteerChip(
+                        s.vSimilarityValue(_scoreText(candidate.similarity!)),
                       ),
                     ],
-                  ),
+                  ],
                 ),
-              ],
+              ),
+            ],
+          ),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: TextButton(
+              onPressed: _busy ? null : open,
+              style: TextButton.styleFrom(minimumSize: const Size(48, 44)),
+              child: Text(s.vViewDetails),
             ),
-            const SizedBox(height: 20),
-            VolunteerAction(
-              s.vViewDetails,
-              onPressed: () =>
-                  _candidate(candidate.person, candidate.similarity),
-              secondary: candidate != _candidates.first,
-            ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Screen 5: no sufficiently reliable candidate. Manual review leads.
+  List<Widget> _noMatch() => [
+    const SizedBox(height: 12),
+    const Center(
+      child: CircleAvatar(
+        radius: 40,
+        backgroundColor: Color(0xFFE8EDFF),
+        child: Icon(
+          Icons.person_search_outlined,
+          size: 40,
+          color: volunteerNavy,
         ),
       ),
-    VolunteerInfo(s.vManualFallback),
+    ),
+    const SizedBox(height: 20),
+    Text(
+      s.vNoMatchTitle,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        fontSize: 22,
+        fontWeight: FontWeight.w700,
+        color: volunteerInk,
+        height: 1.3,
+      ),
+    ),
+    const SizedBox(height: 10),
+    Text(
+      s.vNoMatchHint,
+      textAlign: TextAlign.center,
+      style: const TextStyle(color: Color(0xFF434652), height: 1.5),
+    ),
+    const SizedBox(height: 24),
+    VolunteerAction(
+      s.vManualReview,
+      icon: Icons.manage_search,
+      onPressed: _canStartIdentification ? _openManual : null,
+    ),
+    const SizedBox(height: 12),
+    VolunteerAction(
+      s.vSearchAgain,
+      icon: Icons.photo_camera_outlined,
+      secondary: true,
+      onPressed: _canStartIdentification ? _searchAgain : null,
+    ),
+    if (_attemptOpen) _endAttemptButton(),
   ];
-  Future<void> _candidate(RegisteredPerson person, double? similarity) =>
-      _run(() async {
-        if (similarity != null) _independentReview = false;
-        final selected = repo is ApiVolunteerRepository
-            ? await (repo as ApiVolunteerRepository).loadProfileDetails(
-                person,
-                foundReportId: _independentReview ? null : _report?.id,
-              )
-            : person;
-        if (!mounted) return;
-        _person = selected;
-        _similarity = similarity;
-        _open(VolunteerView.matchDetails);
-      });
+
+  // Service unavailable, server failure and no connection: distinct messages.
+  List<Widget> _searchFailed() {
+    final (title, message, icon) = switch (_identificationState) {
+      IdentificationState.unavailable => (
+        s.vAiUnavailableTitle,
+        s.vAiUnavailable,
+        Icons.cloud_off_outlined,
+      ),
+      IdentificationState.network => (
+        s.vNetworkErrorTitle,
+        s.vAiNetworkError,
+        Icons.wifi_off_rounded,
+      ),
+      _ => (s.vAiErrorTitle, s.vAiError, Icons.error_outline),
+    };
+    final retry = _identificationState != IdentificationState.unavailable;
+    return [
+      _capturedPhotoRow(),
+      VolunteerInfo(
+        message,
+        title: title,
+        icon: icon,
+        color: retry ? const Color(0xFF996A00) : volunteerTeal,
+      ),
+      if (retry) ...[
+        VolunteerAction(
+          s.vTryAgain,
+          icon: Icons.refresh,
+          onPressed: _canStartIdentification ? _startAi : null,
+        ),
+        const SizedBox(height: 12),
+      ],
+      VolunteerAction(
+        s.vManualReview,
+        icon: Icons.manage_search,
+        secondary: retry,
+        onPressed: _canStartIdentification ? _openManual : null,
+      ),
+      if (_attemptOpen) _endAttemptButton(),
+    ];
+  }
+
+  Future<void> _candidate(
+    RegisteredPerson person,
+    double? similarity, {
+    int? rank,
+  }) => _run(() async {
+    if (similarity != null) _independentReview = false;
+    final selected = repo is ApiVolunteerRepository
+        ? await (repo as ApiVolunteerRepository).loadProfileDetails(
+            person,
+            foundReportId: _independentReview ? null : _report?.id,
+          )
+        : person;
+    if (!mounted) return;
+    _person = selected;
+    _similarity = similarity;
+    _candidateRank = rank;
+    _open(VolunteerView.matchDetails);
+  });
 
   List<Widget> _manual() {
     final query = _search.text.trim().toLowerCase();
@@ -636,10 +950,31 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
   bool get _standaloneVerification =>
       _report?.caseId == null && _associatedCase == null;
 
+  Widget _photoColumn(String label, Widget photo) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          fontWeight: FontWeight.w600,
+          fontSize: 12.5,
+          color: Color(0xFF434652),
+        ),
+      ),
+      const SizedBox(height: 8),
+      photo,
+    ],
+  );
+
+  // Screen 4: one candidate. Comparison and authorized details only; the
+  // action continues into the existing confirm -> Guardian contact -> QR flow.
   List<Widget> _matchDetails() {
     final person = _person!;
     final info =
         person.information ?? repo.caseForPerson(person.id)?.information;
+    // Contact details are released by the server only after confirmation.
+    final guardianName = dataText(context, person.guardian.name);
+    final aiAttempt = !_independentReview;
     return [
       LayoutBuilder(
         builder: (context, constraints) => InkWell(
@@ -654,78 +989,53 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
       ),
       const SizedBox(height: 16),
       if (_similarity != null)
-        VolunteerCard(
-          color: const Color(0xFFC5F8FC),
-          child: Row(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              const Icon(Icons.auto_awesome, color: volunteerTeal),
-              const SizedBox(width: 12),
-              Expanded(
-                child: VolunteerHeading(
-                  s.vSimilarityValue(numberText(context, _similarity! * 100)),
-                  color: volunteerTeal,
+              if (_candidateRank != null)
+                VolunteerChip(
+                  s.vRankLabel(numberText(context, _candidateRank!)),
+                  color: volunteerNavy,
                 ),
-              ),
+              VolunteerChip(s.vSimilarityValue(_scoreText(_similarity!))),
             ],
           ),
         ),
-      if (!_independentReview)
+      if (aiAttempt)
         VolunteerCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              VolunteerHeading(s.vCompare),
+              VolunteerHeading(dataText(context, person.name)),
+              const SizedBox(height: 4),
+              Text(_ageGender(person)),
               const Divider(height: 26),
               LayoutBuilder(
                 builder: (context, constraints) {
                   final width = (constraints.maxWidth - 12) / 2;
+                  final height = width * 1.2;
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       SizedBox(
                         width: width,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              s.vFoundIndividual,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: _foundImage(width: width, height: 160),
-                            ),
-                          ],
+                        child: _photoColumn(
+                          s.vCapturedPhoto,
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: _foundImage(width: width, height: height),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
                       SizedBox(
                         width: width,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              s.vRegisteredProfile,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            PersonPhoto(person, size: width, height: 160),
-                            const SizedBox(height: 10),
-                            Text(
-                              dataText(context, person.name),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Text(s.vAgeValue(numberText(context, person.age))),
-                          ],
+                        child: _photoColumn(
+                          s.vRegisteredPhoto,
+                          PersonPhoto(person, size: width, height: height),
                         ),
                       ),
                     ],
@@ -736,7 +1046,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
           ),
         ),
       if (_independentReview) _personSummary(person, showPhoto: false),
-      if (!_independentReview) VolunteerInfo(s.vMatchNotice),
+      if (aiAttempt) VolunteerInfo(s.vMatchNotice),
       VolunteerCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -780,12 +1090,9 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
                 dataText(context, info!.additional!),
                 icon: Icons.info_outline,
               ),
-            if (!_independentReview) ...[
+            if (aiAttempt && guardianName.isNotEmpty) ...[
               const Divider(height: 24),
-              VolunteerDetail(
-                s.vGuardianName,
-                dataText(context, person.guardian.name),
-              ),
+              VolunteerDetail(s.vGuardianName, guardianName),
               VolunteerDetail(
                 s.vRelationship,
                 relationshipText(context, person.guardian.relationship),
@@ -800,12 +1107,12 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
           ],
         ),
       ),
-      if (!_independentReview && !person.confirmationAvailable)
+      if (aiAttempt && !person.confirmationAvailable)
         VolunteerInfo(s.vStandalonePending),
-      if (!_independentReview && person.confirmationAvailable)
+      if (aiAttempt && person.confirmationAvailable)
         VolunteerAction(
-          _associatedCase == null ? s.vConfirmIdentity : s.vConfirmMatch,
-          icon: Icons.check_circle_outline,
+          s.vSelectAndContact,
+          icon: Icons.how_to_reg_outlined,
           onPressed:
               _busy ||
                   _report == null ||
@@ -834,7 +1141,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     if (!await _confirm(
           s.vConfirmMatchQuestion,
           '${dataText(context, _person!.name)}\n\n${s.vConfirmMatchHint}',
-          s.vConfirmMatch,
+          _independentReview ? s.vConfirmMatch : s.vSelectAndContact,
         ) ||
         !mounted) {
       return;
@@ -842,20 +1149,18 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     await _run(() async {
       if (_independentReview) {
         if (repo is! ApiVolunteerRepository) return;
-        _manualRequestId ??= List.generate(
-          24,
-          (_) => math.Random.secure()
-              .nextInt(256)
-              .toRadixString(16)
-              .padLeft(2, '0'),
-        ).join();
+        _manualRequestId ??= _newRequestId();
         _report = await (repo as ApiVolunteerRepository).confirmManualIdentity(
           _person!.id,
           _manualRequestId!,
         );
         _independentReview = false;
       } else {
+        // Confirmation concludes the attempt: the server deletes the photo
+        // and the repository drops its bytes; drop the decoded copy too.
+        final photo = _report!.photoBytes;
         await repo.confirmMatch(account, _report!, _person!);
+        forgetCapturedPhoto(photo);
       }
       if (mounted) {
         if (repo is ApiVolunteerRepository) {

@@ -1624,7 +1624,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get vJoinSearch => 'Join Search';
 
   @override
-  String get vFindWithAi => 'Find Match with AI';
+  String get vFindWithAi => 'Search with AI';
 
   @override
   String get vStandalonePending =>
@@ -1861,4 +1861,69 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get registrationPendingEmailHint =>
       'An email correction is awaiting confirmation. Keep that destination or request another correction.';
+
+  @override
+  String get vAiOptionHint =>
+      'Compare the photo with registered profiles and list the closest matches.';
+
+  @override
+  String get vManualOptionHint =>
+      'Browse registered profiles and select the individual yourself.';
+
+  @override
+  String get vCapturedPhotoNote =>
+      'Used for this attempt only and deleted when it ends.';
+
+  @override
+  String get vCapturedPhoto => 'Captured Photo';
+
+  @override
+  String get vRegisteredPhoto => 'Registered Photo';
+
+  @override
+  String get vAnalyzingFace => 'Analyzing facial features…';
+
+  @override
+  String vResultsCount(String count) {
+    return 'Results: $count';
+  }
+
+  @override
+  String get vScoreNote =>
+      'Ranked by similarity score. The score supports comparison only; it is not a probability and does not confirm identity.';
+
+  @override
+  String vRankLabel(String rank) {
+    return 'Rank $rank';
+  }
+
+  @override
+  String get vNoMatchTitle => 'No potential match found';
+
+  @override
+  String get vNoMatchHint =>
+      'No registered profile was similar enough to this photo. Continue with manual review, or search again with a clearer, front-facing photo.';
+
+  @override
+  String get vSearchAgain => 'Search Again';
+
+  @override
+  String get vAiUnavailableTitle => 'AI search unavailable';
+
+  @override
+  String get vAiErrorTitle => 'Search could not be completed';
+
+  @override
+  String get vNetworkErrorTitle => 'No connection';
+
+  @override
+  String get vAiNetworkError =>
+      'Couldn\'t reach the server. Check your connection and try again.';
+
+  @override
+  String get vSelectAndContact => 'Select & Contact Guardian';
+
+  @override
+  String get vLeaveAttemptHint =>
+      'Leaving ends this identification attempt and deletes the captured photo.';
 }

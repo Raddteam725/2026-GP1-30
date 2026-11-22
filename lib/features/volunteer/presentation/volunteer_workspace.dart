@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'volunteer_capture.dart';
+import 'volunteer_face_scan.dart';
 import 'volunteer_policy_screen.dart';
 import 'volunteer_notification_banner.dart';
 import '../domain/volunteer_notification_event.dart';
@@ -34,9 +35,25 @@ enum IdentificationState {
   processing,
   candidates,
   noReliableCandidate,
+
+  /// AI matching is switched off or its model is not available.
   unavailable,
+
+  /// The server answered the matching request with a failure.
   error,
+
+  /// The server could not be reached (no connection or timeout).
+  network,
 }
+
+/// Views that belong to one AI identification attempt. Leaving them (back
+/// past the options screen, or another tab) concludes the attempt.
+const identificationAttemptViews = {
+  VolunteerView.finding,
+  VolunteerView.matches,
+  VolunteerView.manual,
+  VolunteerView.matchDetails,
+};
 
 enum VolunteerView {
   home,
@@ -105,6 +122,7 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
   FoundReport? _report;
   List<MatchCandidate> _candidates = [];
   double? _similarity;
+  int? _candidateRank;
   VolunteerLocation? _location;
   VolunteerRepository get repo => widget.repository;
   VolunteerAccount get account =>
@@ -197,6 +215,7 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
       _push?.setLocationAccess(false);
       _case = null;
       _person = null;
+      forgetCapturedPhoto(_report?.photoBytes);
       _report?.photoBytes = null;
       _report = null;
       _pendingCapture = null;
@@ -511,6 +530,9 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     _push?.close();
     WidgetsBinding.instance.removeObserver(this);
     ++_searchGeneration;
+    // Decoded copies only; an open attempt stays resumable from its report.
+    forgetCapturedPhoto(_report?.photoBytes);
+    _pendingCapture = null;
     repo.removeListener(_refresh);
     _location?.dispose();
     _search.dispose();
@@ -550,6 +572,24 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
 
   void _back() {
     if (_busy) return;
+    if (view == VolunteerView.finding) {
+      _cancelSearch();
+      return;
+    }
+    if (view == VolunteerView.matches) {
+      if (_identificationState != IdentificationState.ready) {
+        // Results/outcome screens step back to the two options.
+        _update(() {
+          _candidates = [];
+          _identificationState = IdentificationState.ready;
+        });
+        return;
+      }
+      if (_attemptOpen) {
+        unawaited(_leaveAttempt(() => _update(() => _stack.removeLast())));
+        return;
+      }
+    }
     ++_searchGeneration;
     if (_stack.length > 1) {
       _update(() => _stack.removeLast());
@@ -558,9 +598,35 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     }
   }
 
+  /// An AI identification attempt that has not concluded yet and therefore
+  /// still holds the temporary captured photo (on the server and here).
+  bool get _attemptOpen {
+    final report = _report;
+    return repo is ApiVolunteerRepository &&
+        report != null &&
+        !report.ended &&
+        report.matchedPerson == null &&
+        report.foundStatus == FoundStatus.identifying &&
+        _stack.any(identificationAttemptViews.contains);
+  }
+
+  /// Navigation bar: switching tabs away from an open attempt concludes it,
+  /// exactly like End Identification Attempt.
+  void _onTabSelected(int tab) {
+    if (_busy) return;
+    if (_attemptOpen) {
+      unawaited(_leaveAttempt(() => _selectTab(tab)));
+      return;
+    }
+    _selectTab(tab);
+  }
+
   void _selectTab(int tab) {
     if (_busy) return;
     ++_searchGeneration;
+    // A capture whose upload failed is only kept for an immediate retry.
+    _pendingCapture = null;
+    _captureRequestId = null;
     _update(() {
       _tab = tab;
       _stack
@@ -646,6 +712,17 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
   }
 
   Future<void> _logout() async {
+    // Signing out concludes an open attempt; failure falls back to the
+    // server's abandoned-attempt cleanup.
+    final report = _report;
+    if (_attemptOpen && report != null) {
+      try {
+        await (repo as ApiVolunteerRepository)
+            .endIdentification(report)
+            .timeout(const Duration(seconds: 10));
+      } catch (_) {}
+      forgetCapturedPhoto(report.photoBytes);
+    }
     await _location?.stop();
     await widget.onLogout();
   }
@@ -812,7 +889,7 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
               ),
         bottomNavigationBar: GuardianNavigation(
           selected: _tab,
-          onSelected: _selectTab,
+          onSelected: _onTabSelected,
           labels: roots,
           icons: icons,
         ),

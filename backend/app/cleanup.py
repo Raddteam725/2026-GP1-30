@@ -10,7 +10,7 @@ from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 from .firebase import database, bucket
 from .registration_retention import known_period, utc_now
-from .found_reports import identified_report, minimal_completed, REUNITED
+from .found_reports import identified_report, minimal_completed, found_status, REUNITED, IDENTIFYING
 from .case_models import TERMINAL_STATUSES, age_group
 
 CASE_RETENTION = timedelta(hours=24)
@@ -170,6 +170,44 @@ def delete_finished_found_photos():
         if path and (data.get('ended') or data.get('matched_profile_id')) and _delete_blob(path):
             report.reference.update({'photo_path': firestore.DELETE_FIELD})
 
+# Backstop only. A Volunteer leaving the identification flow ends the attempt
+# (and deletes its photo) at once, and the app ends any attempt left over from
+# an interrupted session on its next load. This catches the remainder: devices
+# that never come back. No real on-site attempt stays open this long.
+ABANDONED_ATTEMPT_AGE = timedelta(hours=2)
+
+def end_abandoned_found_attempts(now=None):
+    """End still-identifying Found attempts older than ABANDONED_ATTEMPT_AGE
+    and delete their photo, exactly as an explicit End Identification does.
+    Confirmed/verifying/reunited reports and manual (photo-less) reports are
+    never touched."""
+    db = database()
+    cutoff = (now or datetime.now(timezone.utc)) - ABANDONED_ATTEMPT_AGE
+
+    def abandoned(data):
+        created = data.get('created_at')
+        return (bool(data.get('photo_path')) and not data.get('ended')
+                and not data.get('matched_profile_id')
+                and found_status(data) == IDENTIFYING
+                and isinstance(created, datetime) and created <= cutoff)
+
+    for report in db.collection('found_reports').stream():
+        if not abandoned(report.to_dict() or {}):
+            continue
+
+        @firestore.transactional
+        def end(tx):
+            current = report.reference.get(transaction=tx).to_dict() or {}
+            if not abandoned(current):
+                return None  # Confirmed or ended meanwhile: leave it alone.
+            tx.update(report.reference, {'ended': True, 'ended_at': firestore.SERVER_TIMESTAMP})
+            return current['photo_path']
+        path = end(db.transaction())
+        # On a failed Storage delete the path stays; delete_finished_found_photos
+        # retries it on the next run (the report is now ended).
+        if path and _delete_blob(path):
+            report.reference.update({'photo_path': firestore.DELETE_FIELD})
+
 def run_all():
     """Convenience for manual/controlled invocation during development
     (`python -m app.cleanup`). The local server also invokes these jobs
@@ -178,6 +216,7 @@ def run_all():
     expire_photos()
     scrub_terminal_cases()
     delete_finished_found_photos()
+    end_abandoned_found_attempts()
 
 if __name__ == "__main__":
     run_all()

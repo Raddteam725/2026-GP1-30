@@ -165,18 +165,21 @@ void main() {
         await tester.pumpAndSettle();
         await press(tester, s.vOpenCamera);
         await press(tester, s.vPreviewCapture);
+        await tester.pumpAndSettle();
+        // Options first; the search starts only when the Volunteer picks AI.
+        await tester.tap(find.text(s.vFindWithAi));
         await tester.pump(const Duration(seconds: 2));
         await tester.pumpAndSettle();
         await tester.ensureVisible(find.text(s.vViewDetails).first);
         await tester.tap(find.text(s.vViewDetails).first);
         await tester.pumpAndSettle();
-        await tester.scrollUntilVisible(find.text(s.vConfirmMatch), 300);
-        await press(tester, s.vConfirmMatch);
+        await tester.scrollUntilVisible(find.text(s.vSelectAndContact), 300);
+        await press(tester, s.vSelectAndContact);
         expect(find.byType(AlertDialog), findsOneWidget);
         await press(tester, s.vCancel);
         expect(repo.cases.first.status, CaseStatus.reportReceived);
-        await press(tester, s.vConfirmMatch);
-        await press(tester, s.vConfirmMatch);
+        await press(tester, s.vSelectAndContact);
+        await press(tester, s.vSelectAndContact);
         expect(repo.cases.first.status, CaseStatus.matchConfirmed);
         expect(find.text(s.vGuardianContact), findsOneWidget);
         await tester.scrollUntilVisible(find.text(s.vProceedVerification), 300);

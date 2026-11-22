@@ -25,6 +25,12 @@ const knownWorkflowFailures = {
   'capture_required': 'capture-required',
 };
 
+/// True when [error] means the server could not be reached at all (no
+/// connection, DNS/socket failure or timeout), as opposed to the server
+/// answering with a failure. The two are shown as different states.
+bool isNetworkFailure(Object error) =>
+    error is http.ClientException || error is TimeoutException;
+
 /// Unsupported found/AI/verification operations retain fail-closed behavior.
 class ApiVolunteerRepository extends VolunteerRepository {
   ApiVolunteerRepository({
@@ -900,7 +906,7 @@ class ApiVolunteerRepository extends VolunteerRepository {
     if (data['state'] == 'unavailable') throw StateError('ai-unavailable');
     if (data['state'] == 'no_reliable_candidate') return [];
     if (data['state'] == 'candidates' && data['candidates'] is List) {
-      final results = <MatchCandidate>[];
+      final rows = <(Map<String, dynamic>, double)>[];
       for (final row in data['candidates'] as List) {
         final score = row['similarity'];
         if (score is! num ||
@@ -910,17 +916,48 @@ class ApiVolunteerRepository extends VolunteerRepository {
             row['person'] is! Map<String, dynamic>) {
           throw StateError('unsupported-model-contract');
         }
-        results.add(
-          MatchCandidate(
-            _person(row['person'] as Map<String, dynamic>),
-            similarity: score.toDouble(),
-          ),
-        );
+        rows.add((row['person'] as Map<String, dynamic>, score.toDouble()));
       }
-      results.sort((a, b) => b.similarity!.compareTo(a.similarity!));
+      // Registered reference photos (their own retention rules) through the
+      // same authorized endpoint as Manual Review. A missing photo never
+      // hides a candidate; the card falls back to a placeholder.
+      final photos = await Future.wait([
+        for (final (person, _) in rows) _registeredPhoto(person['id']),
+      ]);
+      final results = [
+        for (var i = 0; i < rows.length; i++)
+          MatchCandidate(
+            _person(rows[i].$1, photo: photos[i]),
+            similarity: rows[i].$2,
+          ),
+      ];
+      // The backend already returns its prioritized order, best first; a
+      // stable sort keeps that order and only guards against a reordered list.
+      mergeSort(
+        results,
+        compare: (a, b) => b.similarity!.compareTo(a.similarity!),
+      );
       return results;
     }
     throw StateError('unsupported-model-contract');
+  }
+
+  Future<Uint8List?> _registeredPhoto(Object? id) async {
+    if (id is! String || id.isEmpty) return null;
+    for (final person in _profiles) {
+      if (person.id == id && person.photoBytes != null) {
+        return person.photoBytes;
+      }
+    }
+    try {
+      final response = await _request(
+        'GET',
+        '/profiles/${Uri.encodeComponent(id)}/photo',
+      );
+      return response.bodyBytes.isEmpty ? null : response.bodyBytes;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _reportAction(
