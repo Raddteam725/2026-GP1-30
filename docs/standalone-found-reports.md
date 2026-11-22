@@ -97,6 +97,22 @@ or when an identification attempt ends; the existing durable deletion retry queu
 remains. Handover does not depend on that deleted image. Registered photographs
 remain independent.
 
+An attempt ends (and its photo is deleted) when the Volunteer: confirms a
+candidate; taps End Identification Attempt; leaves the identification screens
+(back past the AI/Manual options or switching tabs, after a confirmation
+dialog); chooses Search Again on a no-match result (only once the new photo has
+been taken); or signs out. Cancelling a running search, opening a candidate's
+details or using manual review within the attempt does not end it. After an
+app crash the attempt stays resumable from the Report tab. As a backstop for
+devices that never return, `cleanup.end_abandoned_found_attempts` ends any
+attempt still identifying `ABANDONED_ATTEMPT_AGE` (2 hours) after creation.
+
+On the device the photo exists only in memory. The camera plugin's temporary
+`CAP*.jpg` file is deleted right after reading, together with any earlier one an
+interrupted session left behind, and the decoded image is evicted from
+Flutter's image cache when the attempt ends. The face embedding is computed in
+memory per search and is never stored, returned or logged.
+
 The registration's original expiry is never changed. Cleanup now recognizes an
 identified active FR as a **deletion hold only**. An expired registration is not
 returned to general Manual Review or allowed to create new missing reports because

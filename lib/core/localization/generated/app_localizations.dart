@@ -3041,7 +3041,7 @@ abstract class AppLocalizations {
   /// No description provided for @vFindWithAi.
   ///
   /// In en, this message translates to:
-  /// **'Find Match with AI'**
+  /// **'Search with AI'**
   String get vFindWithAi;
 
   /// No description provided for @vStandalonePending.
@@ -3415,6 +3415,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'An email correction is awaiting confirmation. Keep that destination or request another correction.'**
   String get registrationPendingEmailHint;
+
+  /// No description provided for @vAiOptionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Compare the photo with registered profiles and list the closest matches.'**
+  String get vAiOptionHint;
+
+  /// No description provided for @vManualOptionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse registered profiles and select the individual yourself.'**
+  String get vManualOptionHint;
+
+  /// No description provided for @vCapturedPhotoNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Used for this attempt only and deleted when it ends.'**
+  String get vCapturedPhotoNote;
+
+  /// No description provided for @vCapturedPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Captured Photo'**
+  String get vCapturedPhoto;
+
+  /// No description provided for @vRegisteredPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Registered Photo'**
+  String get vRegisteredPhoto;
+
+  /// No description provided for @vAnalyzingFace.
+  ///
+  /// In en, this message translates to:
+  /// **'Analyzing facial features…'**
+  String get vAnalyzingFace;
+
+  /// No description provided for @vResultsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Results: {count}'**
+  String vResultsCount(String count);
+
+  /// No description provided for @vScoreNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Ranked by similarity score. The score supports comparison only; it is not a probability and does not confirm identity.'**
+  String get vScoreNote;
+
+  /// No description provided for @vRankLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Rank {rank}'**
+  String vRankLabel(String rank);
+
+  /// No description provided for @vNoMatchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No potential match found'**
+  String get vNoMatchTitle;
+
+  /// No description provided for @vNoMatchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'No registered profile was similar enough to this photo. Continue with manual review, or search again with a clearer, front-facing photo.'**
+  String get vNoMatchHint;
+
+  /// No description provided for @vSearchAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Search Again'**
+  String get vSearchAgain;
+
+  /// No description provided for @vAiUnavailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'AI search unavailable'**
+  String get vAiUnavailableTitle;
+
+  /// No description provided for @vAiErrorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Search could not be completed'**
+  String get vAiErrorTitle;
+
+  /// No description provided for @vNetworkErrorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection'**
+  String get vNetworkErrorTitle;
+
+  /// No description provided for @vAiNetworkError.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t reach the server. Check your connection and try again.'**
+  String get vAiNetworkError;
+
+  /// No description provided for @vSelectAndContact.
+  ///
+  /// In en, this message translates to:
+  /// **'Select & Contact Guardian'**
+  String get vSelectAndContact;
+
+  /// No description provided for @vLeaveAttemptHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Leaving ends this identification attempt and deletes the captured photo.'**
+  String get vLeaveAttemptHint;
 }
 
 class _AppLocalizationsDelegate

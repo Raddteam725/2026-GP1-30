@@ -12,7 +12,7 @@ real_retry_alerts = jobs.retry_alerts
 LEASE = 'configuration/cleanup_lock'
 
 RETRY = ['alerts', 'guardian']
-CLEANUP = ['queue', 'photos', 'cases', 'found']
+CLEANUP = ['queue', 'photos', 'cases', 'found', 'abandoned']
 
 @pytest.fixture
 def calls(monkeypatch, db):
@@ -26,6 +26,7 @@ def calls(monkeypatch, db):
     monkeypatch.setattr(cleanup, 'expire_photos', record('photos'))
     monkeypatch.setattr(cleanup, 'scrub_terminal_cases', record('cases'))
     monkeypatch.setattr(cleanup, 'delete_finished_found_photos', record('found'))
+    monkeypatch.setattr(cleanup, 'end_abandoned_found_attempts', record('abandoned'))
     return calls
 
 @pytest.fixture

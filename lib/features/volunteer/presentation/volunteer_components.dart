@@ -345,6 +345,88 @@ class VolunteerBell extends StatelessWidget {
   );
 }
 
+/// A tappable choice card: icon, title and one-line description. The primary
+/// option is emphasized with the brand tint; both keep a 48dp+ target.
+class VolunteerOption extends StatelessWidget {
+  const VolunteerOption({
+    super.key,
+    required this.title,
+    required this.description,
+    required this.icon,
+    this.onTap,
+    this.primary = false,
+  });
+  final String title, description;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool primary;
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: '$title. $description',
+      excludeSemantics: true,
+      child: Opacity(
+        opacity: enabled ? 1 : .55,
+        child: VolunteerCard(
+          onTap: onTap,
+          color: primary ? volunteerTint : Colors.white,
+          border: primary ? volunteerTeal : const Color(0xB3E5E7EB),
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 26,
+                backgroundColor: primary
+                    ? volunteerTeal
+                    : const Color(0xFFE8EDFF),
+                child: Icon(
+                  icon,
+                  size: 26,
+                  color: primary ? Colors.white : volunteerNavy,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: volunteerInk,
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF434652),
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right,
+                color: primary ? volunteerTeal : const Color(0xFF747783),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class VolunteerEmpty extends StatelessWidget {
   const VolunteerEmpty(this.title, this.message, {super.key});
   final String title, message;

@@ -1596,7 +1596,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get vJoinSearch => 'الانضمام للبحث';
 
   @override
-  String get vFindWithAi => 'البحث عن تطابق بالذكاء الاصطناعي';
+  String get vFindWithAi => 'البحث بالذكاء الاصطناعي';
 
   @override
   String get vStandalonePending =>
@@ -1835,4 +1835,68 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get registrationPendingEmailHint =>
       'تصحيح البريد بانتظار التأكيد. احتفظ بذلك العنوان أو اطلب تصحيحًا آخر.';
+
+  @override
+  String get vAiOptionHint =>
+      'مقارنة الصورة بالملفات المسجلة وعرض أقرب التطابقات.';
+
+  @override
+  String get vManualOptionHint => 'تصفّح الملفات المسجلة واختر الشخص بنفسك.';
+
+  @override
+  String get vCapturedPhotoNote =>
+      'تُستخدم لهذه المحاولة فقط وتُحذف عند انتهائها.';
+
+  @override
+  String get vCapturedPhoto => 'الصورة الملتقطة';
+
+  @override
+  String get vRegisteredPhoto => 'الصورة المسجلة';
+
+  @override
+  String get vAnalyzingFace => 'جاري تحليل ملامح الوجه…';
+
+  @override
+  String vResultsCount(String count) {
+    return 'عدد النتائج: $count';
+  }
+
+  @override
+  String get vScoreNote =>
+      'مرتبة حسب درجة التشابه. الدرجة للمقارنة فقط، وليست احتمالًا ولا تؤكد الهوية.';
+
+  @override
+  String vRankLabel(String rank) {
+    return 'الترتيب $rank';
+  }
+
+  @override
+  String get vNoMatchTitle => 'لم يتم العثور على تطابق محتمل';
+
+  @override
+  String get vNoMatchHint =>
+      'لا يوجد ملف مسجل مشابه بدرجة كافية لهذه الصورة. تابع بالمراجعة اليدوية، أو أعد البحث بصورة أوضح من الأمام.';
+
+  @override
+  String get vSearchAgain => 'إعادة البحث';
+
+  @override
+  String get vAiUnavailableTitle => 'البحث بالذكاء الاصطناعي غير متاح';
+
+  @override
+  String get vAiErrorTitle => 'تعذّر إكمال البحث';
+
+  @override
+  String get vNetworkErrorTitle => 'لا يوجد اتصال';
+
+  @override
+  String get vAiNetworkError =>
+      'تعذّر الاتصال بالخادم. تحقق من اتصالك ثم أعد المحاولة.';
+
+  @override
+  String get vSelectAndContact => 'اختيار والتواصل مع ولي الأمر';
+
+  @override
+  String get vLeaveAttemptHint =>
+      'المغادرة تُنهي محاولة التعرف وتحذف الصورة الملتقطة.';
 }

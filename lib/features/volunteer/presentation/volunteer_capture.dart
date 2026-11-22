@@ -8,6 +8,45 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import 'volunteer_components.dart';
 
+/// Deletes the camera plugin's temporary file for this capture and any
+/// earlier capture file an interrupted session (app killed between capture
+/// and deletion) left in the same app-private folder. The plugin names them
+/// `CAP*.jpg` in the cache directory on Android (camera_android_camerax) and
+/// `CAP_*.jpg` in `tmp/camera/pictures` on iOS (camera_avfoundation). The
+/// captured photo is kept in memory only; it never needs a file afterwards.
+Future<void> deleteCaptureFiles(String path) async {
+  if (path.isEmpty) return;
+  final file = File(path);
+  try {
+    await file.delete();
+  } catch (_) {}
+  final name = file.uri.pathSegments.isEmpty ? '' : file.uri.pathSegments.last;
+  if (!isCaptureFileName(name)) return;
+  try {
+    await for (final entry in file.parent.list(followLinks: false)) {
+      if (entry is File && isCaptureFileName(entry.uri.pathSegments.last)) {
+        try {
+          await entry.delete();
+        } catch (_) {}
+      }
+    }
+  } catch (_) {
+    // Listing is best effort; the OS also clears these cache folders.
+  }
+}
+
+/// Drops the decoded copy of a captured photo from Flutter's image cache.
+/// `Image.memory` caches by the identity of the byte buffer, so this must be
+/// given the same buffer that was displayed. Clearing a variable or removing
+/// the widget alone would leave the decoded image in memory.
+void forgetCapturedPhoto(Uint8List? bytes) {
+  if (bytes == null) return;
+  PaintingBinding.instance.imageCache.evict(MemoryImage(bytes));
+}
+
+bool isCaptureFileName(String name) =>
+    name.startsWith('CAP') && name.toLowerCase().endsWith('.jpg');
+
 /// In-app camera only, with explicit preview, retake and use-photo consent.
 class VolunteerCapture extends StatefulWidget {
   const VolunteerCapture({super.key});
@@ -113,11 +152,7 @@ class _VolunteerCaptureState extends State<VolunteerCapture>
     } catch (_) {
       if (mounted) setState(() => _failed = true);
     } finally {
-      if (file != null) {
-        try {
-          await File(file!.path).delete();
-        } catch (_) {}
-      }
+      if (file != null) await deleteCaptureFiles(file!.path);
       if (mounted) setState(() => _busy = false);
     }
   }
