@@ -329,17 +329,6 @@ def test_push_failure_never_fails_case_creation_and_the_notification_still_write
     assert len(notifications) == 1
     assert notifications[0]["kind"] == "case_created"
 
-def test_push_failure_never_fails_cancel_or_resolve(storage, monkeypatch):
-    db, _ = storage
-    s, individual_id = guardian_with_individual("owner")
-    s.register_fcm_token("token-a")
-    case_id = CaseService(s).create(CaseCreate(individual_id=individual_id))["id"]
-    def raising(messages, app=None):
-        raise ConnectionError("FCM unreachable")
-    monkeypatch.setattr(push.messaging, "send_each", raising)
-    resolved = CaseService(s).resolve(case_id)
-    assert resolved["status"] == "resolved"
-
 def test_push_payload_contains_only_minimal_navigation_fields(storage, monkeypatch):
     db, _ = storage
     s, individual_id = guardian_with_individual("owner")

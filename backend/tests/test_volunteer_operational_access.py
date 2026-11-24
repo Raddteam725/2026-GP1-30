@@ -19,7 +19,7 @@ def test_missing_or_outdated_consent_never_controls_access_or_is_migrated(db, le
         assert profile.json()['assigned'] is True
         assert profile.json()['event_id'] == 'test-event'
         assert 'consent_current' not in profile.json()
-        for path in ('cases/available', 'cases/mine', 'profiles', 'found-reports', 'notifications'):
+        for path in ('cases/available', 'cases/mine', 'found-reports', 'notifications'):
             assert client.get('/v1/volunteer/' + path).status_code == 200
     assert db.data['users/one'] == before
     assert '/v1/volunteer/consent' not in app.openapi()['paths']

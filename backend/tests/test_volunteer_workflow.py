@@ -1,3 +1,4 @@
+from workflow_fixtures import eligible_profiles, historical_closure
 import sys
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
@@ -25,7 +26,7 @@ def submit(uid='one', request_id='request-00000000001'):
 
 def matching(uid='one'):
     guardian, case_id = case()
-    profile = vol(uid).profiles_list()[0]
+    profile = eligible_profiles(vol(uid))[0]
     report = submit(uid)
     result = vol(uid).confirm(report['id'], profile['id'])
     return guardian, case_id, result
@@ -36,9 +37,8 @@ def code_of(db, report_id):
     return db.data['found_reports/' + report_id]['verification_code']
 
 
-@pytest.mark.parametrize('method', ['camera', 'manual'])
 @pytest.mark.parametrize('push_fails', [False, True])
-def test_standalone_notifies_owner_at_confirmation_and_handover(db, monkeypatch, method, push_fails):
+def test_standalone_notifies_owner_at_confirmation_and_handover(db, monkeypatch, push_fails):
     guardian, person = guardian_with_individual('guardian')
     other, _ = guardian_with_individual('other-guardian')
     profile_id = volunteer_workflow.key(guardian.get(person))
@@ -63,11 +63,8 @@ def test_standalone_notifies_owner_at_confirmation_and_handover(db, monkeypatch,
         if push_fails:
             raise OSError('push unavailable')
     monkeypatch.setattr(volunteer_workflow, 'notify_guardian', push)
-    if method == 'camera':
-        report = submit()
-        report = vol().confirm(report['id'], profile_id)
-    else:
-        report = manual(profile_id=profile_id)
+    report = submit()
+    report = vol().confirm(report['id'], profile_id)
     assert report['status'] == 'identity_confirmed'
     vol().confirm(report['id'], profile_id)
     assert len(pushes) == 1
@@ -102,21 +99,21 @@ def test_found_upload_is_real_private_idempotent_and_ai_explicitly_unavailable(d
 
 def test_profiles_are_real_event_scoped_and_do_not_leak_contact_or_paths(db):
     guardian, person = guardian_with_individual('guardian')
-    profiles = vol().profiles_list()
+    profiles = eligible_profiles(vol())
     assert len(profiles) == 1
     assert profiles[0]['full_name'] == 'Missing Person'
     assert 'guardian' not in profiles[0] and 'photo_path' not in profiles[0]
     assert 'guardian_id' not in profiles[0]
     assert vol().registration_photo(profiles[0]['id']).startswith(b'\xff\xd8')
     db.data[guardian.user.collection('individuals').document(person).path]['event_id'] = 'other-event'
-    assert vol().profiles_list() == []
+    assert eligible_profiles(vol()) == []
     with pytest.raises(HTTPException): vol().registration_photo(profiles[0]['id'])
 
-def test_confirm_manual_match_persists_shared_status_contact_and_other_volunteer_notification(db):
+def test_confirm_match_persists_shared_status_contact_and_other_volunteer_notification(db):
     guardian, case_id = case()
     vol().start_search(case_id)
     vol('two').start_search(case_id)
-    profile = vol().profiles_list()[0]
+    profile = eligible_profiles(vol())[0]
     report = submit()
     result = vol().confirm(report['id'], profile['id'])
     assert result['status'] == 'match_confirmed'
@@ -125,14 +122,14 @@ def test_confirm_manual_match_persists_shared_status_contact_and_other_volunteer
     assert vol().list() == vol('two').list() == vol('two').list(True) == []
     assert vol().list(True)[0]['id'] == case_id
     assert vol('two').notifications_list()[0]['status'] == 'match_confirmed'
-    assert vol().profiles_list() == []
+    assert eligible_profiles(vol()) == []
     with pytest.raises(HTTPException): vol('two').public_found(vol('two').found_owned(report['id']))
     assert vol().confirm(report['id'], profile['id'])['case_id'] == case_id
     assert 'token_hash' not in str(result)
 
 def test_standalone_found_report_identifies_without_manufacturing_missing_case(db):
     guardian, person_id = guardian_with_individual('guardian')
-    profile = vol().profiles_list()[0]
+    profile = eligible_profiles(vol())[0]
     report = submit()
     details = vol().profile_detail(profile['id'], found_report_id=report['id'])
     assert 'guardian' not in details
@@ -196,7 +193,7 @@ def test_account_level_qr_scan_for_one_case_never_affects_a_sibling_case(db):
     case_a = CaseService(guardian).create(CaseCreate(individual_id=person_a))['id']
     _, person_b = guardian_with_individual('guardian')
     case_b = CaseService(guardian).create(CaseCreate(individual_id=person_b))['id']
-    profiles = {p['case_id']: p['id'] for p in vol().profiles_list()}
+    profiles = {p['case_id']: p['id'] for p in eligible_profiles(vol())}
     report_a = submit('one', 'request-aaaaaaaaaaaaaaaa')
     report_b = submit('one', 'request-bbbbbbbbbbbbbbbb')
     vol().confirm(report_a['id'], profiles[case_a])
@@ -244,7 +241,7 @@ def test_notification_materialization_and_read_are_persistent_and_isolated(db):
 
 def test_two_volunteers_cannot_confirm_same_profile_concurrently(db):
     _, case_id = case()
-    profile_id = vol().profiles_list()[0]['id']
+    profile_id = eligible_profiles(vol())[0]['id']
     reports = {uid: submit(uid)['id'] for uid in ['one', 'two']}
     barrier = Barrier(2)
     def confirm(uid):
@@ -278,7 +275,7 @@ def test_inactive_and_guardian_are_rejected_by_workflow_endpoints(db):
         db.data['users/two']['active'] = False
         app.dependency_overrides[identity] = lambda uid=uid: {'uid': uid}
         with TestClient(app) as client:
-            for path in ['/profiles', '/found-reports', '/notifications']:
+            for path in ['/found-reports', '/notifications']:
                 assert client.get('/v1/volunteer' + path).status_code == 403
             assert client.post('/v1/volunteer/found-reports', json={'request_id': 'request-00000000002', 'photo_base64': photo()}).status_code == 403
     app.dependency_overrides.clear()
@@ -377,7 +374,7 @@ def test_volunteer_driven_stages_write_guardian_notifications_and_push(db, monke
     guardian, case_id = case()
     vol().start_search(case_id)
     vol('two').start_search(case_id)  # A second join changes nothing the Guardian sees.
-    profile = vol().profiles_list()[0]
+    profile = eligible_profiles(vol())[0]
     report = submit()
     vol().confirm(report['id'], profile['id'])
     vol().begin_verification(report['id'])
@@ -448,7 +445,7 @@ def test_report_history_remains_readable_after_guardian_deletes_reunited_registr
 # Shared contracts introduced by merging Guardian lifecycle work with Volunteer.
 def test_guardian_cancel_does_not_break_volunteer_found_report_feed(db):
     guardian, case_id, report = matching()
-    CaseService(guardian).cancel(case_id)
+    historical_closure(CaseService(guardian), case_id, 'cancelled')
     assert vol().found_list() == []
     assert vol().list() == [] and vol().list(True) == []
     assert db.data['found_reports/' + report['id']]['case_id'] == case_id
@@ -466,13 +463,13 @@ def test_volunteer_handover_sets_guardian_retention_metadata(db):
 
 def test_expired_registration_retains_reference_for_active_case(db):
     guardian, case_id = case()
-    profile_id = vol().profiles_list()[0]['id']
+    profile_id = eligible_profiles(vol())[0]['id']
     person_id = guardian.list()[0]['id']
     data = db.data[f'users/{guardian.uid}/individuals/{person_id}']
     data.update(registration_started_at=datetime.now(timezone.utc)-timedelta(days=4),
                 registration_expires_at=datetime.now(timezone.utc)-timedelta(hours=1),
                 photo_captured_at=datetime.now(timezone.utc)-timedelta(days=4))
-    assert vol().profiles_list() == []
+    assert eligible_profiles(vol()) == []
     assert vol().photo(case_id)
     with pytest.raises(HTTPException): vol().registration_photo(profile_id)
     report = submit()
@@ -493,8 +490,8 @@ def test_unknown_account_challenge_rejects_instead_of_crashing(db):
 
 def test_selected_profile_exposes_only_authorized_contact(db):
     guardian, person = guardian_with_individual('guardian')
-    identifier = vol().profiles_list()[0]['id']
-    assert 'guardian' not in vol().profiles_list()[0]
+    identifier = eligible_profiles(vol())[0]['id']
+    assert 'guardian' not in eligible_profiles(vol())[0]
     assert 'guardian' not in vol().profile_detail(identifier)
     report = submit()
     detail = vol().profile_detail(identifier, found_report_id=report['id'])
@@ -508,7 +505,7 @@ def test_selected_profile_exposes_only_authorized_contact(db):
 
 def test_profile_contact_requires_owned_active_context(db):
     guardian, case_id = case()
-    identifier = vol().profiles_list()[0]['id']
+    identifier = eligible_profiles(vol())[0]['id']
     assert 'guardian' not in vol().profile_detail(identifier)
     assert 'guardian' not in vol().profile_detail(identifier, case_id=case_id)
     with pytest.raises(HTTPException):
@@ -527,7 +524,7 @@ def test_profile_contact_requires_owned_active_context(db):
 def test_profile_contact_rejects_unrelated_case_and_other_event_report(db):
     guardian, case_id = case()
     _, other = guardian_with_individual('guardian')
-    profiles = vol().profiles_list()
+    profiles = eligible_profiles(vol())
     unrelated = next(p for p in profiles if not p.get('case_id'))
     with pytest.raises(HTTPException):
         vol().profile_detail(unrelated['id'], case_id=case_id)
@@ -541,7 +538,7 @@ def test_end_attempt_preserves_case_and_participation_and_blocks_resume(db):
     guardian, case_id = case()
     vol().start_search(case_id)
     report = submit()
-    profile = vol().profiles_list()[0]['id']
+    profile = eligible_profiles(vol())[0]['id']
     before = dict(db.data['cases/' + case_id])
     assert vol().end_identification(report['id'])['ended']
     assert db.data['cases/' + case_id] == before
@@ -566,7 +563,7 @@ def test_confirm_deletes_photo_before_verification_and_is_retryable(db):
 @pytest.mark.parametrize('confirm', [False, True])
 def test_storage_delete_failure_fails_closed_and_retry_finishes(db, monkeypatch, confirm):
     case()
-    identifier = vol().profiles_list()[0]['id']
+    identifier = eligible_profiles(vol())[0]['id']
     report = submit()
     original = volunteer_workflow.bucket
     class BrokenBucket:
@@ -583,7 +580,7 @@ def test_storage_delete_failure_fails_closed_and_retry_finishes(db, monkeypatch,
     assert 'photo_path' not in db.data['found_reports/' + report['id']]
 
 
-def test_manual_review_includes_all_fresh_event_registrations_without_joined_cases(db):
+def test_shared_gallery_includes_fresh_event_registrations_without_joined_cases(db):
     first, first_id = guardian_with_individual('first-guardian')
     second, second_id = guardian_with_individual('second-guardian')
     other, other_id = guardian_with_individual('other-event-guardian')
@@ -594,7 +591,7 @@ def test_manual_review_includes_all_fresh_event_registrations_without_joined_cas
         'registration_expires_at': datetime.now(timezone.utc) - timedelta(hours=1)})
     assert vol().list(True) == []
     assert list(db.collection('cases').stream()) == []
-    profiles = vol().profiles_list()
+    profiles = eligible_profiles(vol())
     assert len(profiles) == 2
     assert {p['id'] for p in profiles} == {
         volunteer_workflow.key(first.user.collection('individuals').document(first_id).get()),
@@ -606,20 +603,20 @@ def test_manual_review_includes_all_fresh_event_registrations_without_joined_cas
         assert vol().profile_detail(p['id'])['confirmation_available'] is False
 
 
-def test_manual_review_uses_period_not_photo_capture_age(db):
+def test_shared_gallery_uses_period_not_photo_capture_age(db):
     guardian, identifier = guardian_with_individual('period-owner')
     ref = guardian.get(identifier).reference
     ref.update({'photo_captured_at': datetime.now(timezone.utc)-timedelta(days=4)})
     profile_id = volunteer_workflow.key(ref.get())
-    assert profile_id in [p['id'] for p in vol().profiles_list()]
+    assert profile_id in [p['id'] for p in eligible_profiles(vol())]
     ref.update({'registration_started_at': datetime.now(timezone.utc)-timedelta(days=5),
                 'registration_expires_at': datetime.now(timezone.utc)-timedelta(seconds=1)})
-    assert profile_id not in [p['id'] for p in vol().profiles_list()]
+    assert profile_id not in [p['id'] for p in eligible_profiles(vol())]
 
 
 def test_found_first_links_later_guardian_case_without_search_or_reverification(db):
     guardian, identifier = guardian_with_individual('guardian')
-    profile = vol().profiles_list()[0]
+    profile = eligible_profiles(vol())[0]
     report = submit()
     vol().confirm(report['id'], profile['id'])
     vol().begin_verification(report['id'])
@@ -637,7 +634,7 @@ def test_standalone_expiry_defers_only_deletion_and_reunited_minimizes(db, monke
     monkeypatch.setattr(cleanup, 'database', lambda: db)
     monkeypatch.setattr(cleanup, 'bucket', service.bucket)
     guardian, identifier = guardian_with_individual('guardian')
-    profile = vol().profiles_list()[0]
+    profile = eligible_profiles(vol())[0]
     report = submit()
     vol().confirm(report['id'], profile['id'])
     ref = guardian.get(identifier).reference
@@ -645,7 +642,7 @@ def test_standalone_expiry_defers_only_deletion_and_reunited_minimizes(db, monke
     ref.update({'registration_started_at': expires-timedelta(days=3), 'registration_expires_at': expires})
     cleanup.expire_photos()
     assert ref.get().exists
-    assert vol().profiles_list() == []
+    assert eligible_profiles(vol()) == []
     assert vol().registration_bytes(ref.get(), report['id']).startswith(b'\xff\xd8')
     with pytest.raises(HTTPException): vol().registration_bytes(ref.get())
     with pytest.raises(HTTPException): CaseService(guardian).create(CaseCreate(individual_id=identifier))
@@ -667,7 +664,7 @@ def test_standalone_authorization_binding_and_minimal_admin_contract(db):
     from app.main import guardian_found_reports
     guardian, identifier = guardian_with_individual('guardian')
     other, _ = guardian_with_individual('other-guardian')
-    profile = next(p for p in vol().profiles_list() if p['id'] == volunteer_workflow.key(guardian.get(identifier)))
+    profile = next(p for p in eligible_profiles(vol()) if p['id'] == volunteer_workflow.key(guardian.get(identifier)))
     report = submit()
     assert report['status'] == 'identification_in_progress'
     assert report['event_id'] == 'test-event'
@@ -691,7 +688,7 @@ def test_standalone_authorization_binding_and_minimal_admin_contract(db):
 
 def test_two_found_reports_cannot_identify_same_registration_concurrently(db):
     guardian, identifier = guardian_with_individual('guardian')
-    profile = vol().profiles_list()[0]
+    profile = eligible_profiles(vol())[0]
     first, second = submit(), submit(request_id='request-00000000002')
     vol().confirm(first['id'], profile['id'])
     with pytest.raises(HTTPException): vol().confirm(second['id'], profile['id'])
@@ -703,7 +700,7 @@ def test_standalone_identifier_payload_and_guardian_qr_are_context_bound(db):
     assert IdentifierVerifyInput(identifier='FR-abc').case_id == 'FR-abc'
     assert IdentifierVerifyInput(case_id='RD-abc').case_id == 'RD-abc'
     guardian, identifier = guardian_with_individual('guardian')
-    profile = vol().profiles_list()[0]
+    profile = eligible_profiles(vol())[0]
     report = submit()
     vol().confirm(report['id'], profile['id'])
     vol().begin_verification(report['id'])
@@ -717,7 +714,7 @@ def test_standalone_identifier_payload_and_guardian_qr_are_context_bound(db):
 
 def test_completed_standalone_cannot_be_reidentified_or_reverified(db):
     guardian, identifier = guardian_with_individual('guardian')
-    profile = vol().profiles_list()[0]
+    profile = eligible_profiles(vol())[0]
     report = submit()
     vol().confirm(report['id'], profile['id'])
     vol().begin_verification(report['id'])
@@ -733,20 +730,15 @@ def test_completed_standalone_cannot_be_reidentified_or_reverified(db):
     assert db.data['found_reports/'+report['id']] == before
 
 @pytest.mark.parametrize('method', ['qr', 'identifier'])
-def test_manual_only_found_report_is_atomic_private_photo_free_and_reunites(db, monkeypatch, method):
+def test_photo_found_report_is_private_photo_deleted_and_reunites(db, monkeypatch, method):
     guardian, identifier = guardian_with_individual('guardian')
-    profile = vol().profiles_list()[0]
+    profile = eligible_profiles(vol())[0]
     assert 'guardian' not in profile
     assert 'guardian' not in vol().profile_detail(profile['id'])
     assert not any(p.startswith('found_reports/') for p in db.data)
-    def no_storage():
-        raise AssertionError('Manual-only flow must not create a photograph')
-    monkeypatch.setattr(volunteer_workflow, 'bucket', no_storage)
-    value = volunteer_workflow.ManualFoundInput(request_id='manual-request-00001', profile_id=profile['id'])
-    report = vol().submit_manual(value)
-    assert vol().submit_manual(value)['id'] == report['id']
+    report = identified(profile_id=profile['id'])
+    assert vol().confirm(report['id'], profile['id'])['id'] == report['id']
     data = vol().found_owned(report['id']).to_dict()
-    assert data['identification_method'] == 'manual'
     assert 'photo_path' not in data
     assert report['photo_available'] is False
     assert report['status'] == 'identity_confirmed'
@@ -779,11 +771,9 @@ def test_manual_only_found_report_is_atomic_private_photo_free_and_reunites(db, 
     assert not any(p.startswith('cases/') for p in db.data)
 
 
-def test_manual_only_rejects_invalid_profile_without_creating_report_and_ai_requires_photo(db):
+def test_ai_requires_captured_photo(db):
     from pydantic import ValidationError
     with pytest.raises(ValidationError): FoundInput(request_id='camera-request-0001')
-    with pytest.raises(HTTPException):
-        vol().submit_manual(volunteer_workflow.ManualFoundInput(request_id='manual-request-00001', profile_id='a'*64))
     assert not any(p.startswith('found_reports/') for p in db.data)
     report = submit()
     db.data['found_reports/' + report['id']].pop('photo_path')
@@ -791,61 +781,42 @@ def test_manual_only_rejects_invalid_profile_without_creating_report_and_ai_requ
     assert error.value.detail == 'capture_required'
 
 
-def test_manual_http_endpoint_accepts_no_photo_and_persists_confirmed_context(db):
-    guardian, individual = guardian_with_individual('manual-http-guardian')
-    profile_id = vol().profiles_list()[0]['id']
-    app.dependency_overrides[identity] = lambda: {'uid': 'one'}
+def test_manual_http_endpoint_is_absent(db):
     client = TestClient(app)
-    payload = {'request_id': 'manual-http-request-0001', 'profile_id': profile_id}
-    response = client.post('/v1/volunteer/found-reports/manual', json=payload)
-    assert response.status_code == 201
-    data = response.json()
-    stored = db.data['found_reports/' + data['id']]
-    assert stored['origin'] == 'volunteer_found'
-    assert stored['identification_method'] == 'manual'
-    assert stored['ai_status'] == 'not_requested'
-    assert stored['status'] == 'identity_confirmed'
-    assert stored['volunteer_uid'] == stored['confirmed_by'] == 'one'
-    assert stored['individual_id'] == individual
-    assert 'photo_path' not in stored
-    assert guardian.get(individual).to_dict()['active_found_report_id'] == data['id']
-    assert not any(p.startswith('cases/') for p in db.data)
-    assert client.post('/v1/volunteer/found-reports/manual', json=payload).json()['id'] == data['id']
+    assert '/v1/volunteer/found-reports/manual' not in app.openapi()['paths']
+    assert client.post('/v1/volunteer/found-reports/manual', json={}).status_code in (404, 405)
 
 
-def test_missing_case_hold_is_not_general_manual_eligibility(db):
+def test_missing_case_hold_is_not_general_gallery_eligibility(db):
     guardian, case_id = case()
-    profile = vol().profiles_list()[0]
+    profile = eligible_profiles(vol())[0]
     person = vol().registration(profile['id'])
     person.reference.update({'registration_started_at': datetime.now(timezone.utc)-timedelta(days=4),
                              'registration_expires_at': datetime.now(timezone.utc)-timedelta(seconds=1)})
-    assert vol().profiles_list() == []
+    assert eligible_profiles(vol()) == []
     with pytest.raises(HTTPException): vol().profile_detail(profile['id'])
     with pytest.raises(HTTPException): vol().registration_photo(profile['id'])
     assert vol().photo(case_id) # Authorized existing case still has its reference.
-    with pytest.raises(HTTPException):
-        vol().submit_manual(volunteer_workflow.ManualFoundInput(request_id='expired-manual-001', profile_id=profile['id']))
     assert not any(p.startswith('found_reports/') for p in db.data)
 
 
 # --- Standalone continuation: Confirm Identity on a registration that is
 # already inside an active standalone report must resume, never duplicate --
 
-def manual(uid='one', profile_id=None, request_id='manual-request-00001'):
-    return vol(uid).submit_manual(volunteer_workflow.ManualFoundInput(request_id=request_id, profile_id=profile_id))
+def identified(uid='one', profile_id=None, request_id='identified-request-00001'):
+    report = submit(uid, request_id)
+    return vol(uid).confirm(report['id'], profile_id)
 
 
 def test_confirm_identity_again_resumes_own_awaiting_report_without_duplicate_or_reset(db):
     guardian, identifier = guardian_with_individual('guardian')
-    profile = vol().profiles_list()[0]
-    first = manual(profile_id=profile['id'])
+    profile = eligible_profiles(vol())[0]
+    first = identified(profile_id=profile['id'])
     assert first['status'] == 'identity_confirmed' and first['case_id'] is None
     vol().begin_verification(first['id'])
     stored = dict(db.data['found_reports/' + first['id']])
-    # The Volunteer lost local state and confirms the same individual again
-    # from Manual Review (a different request id): the existing report comes
-    # back at its real stage; no second report, no status reset.
-    again = manual(profile_id=profile['id'], request_id='manual-request-00002')
+    # Retrying confirmation of the same report preserves its real stage.
+    again = vol().confirm(first['id'], profile['id'])
     assert again['id'] == first['id']
     assert again['status'] == again['found_status'] == 'awaiting_guardian_verification'
     assert again['case_id'] is None and again['verification'] is None
@@ -870,12 +841,12 @@ def test_confirm_identity_again_resumes_own_awaiting_report_without_duplicate_or
 
 def test_confirm_identity_on_another_volunteers_active_report_is_refused_clearly(db):
     guardian, identifier = guardian_with_individual('guardian')
-    profile = vol().profiles_list()[0]
-    first = manual(profile_id=profile['id'])
+    profile = eligible_profiles(vol())[0]
+    first = identified(profile_id=profile['id'])
     with pytest.raises(HTTPException) as error:
-        manual('two', profile_id=profile['id'])
+        identified('two', profile_id=profile['id'])
     assert error.value.status_code == 409 and error.value.detail == 'already_matched'
-    assert len([p for p in db.data if p.startswith('found_reports/')]) == 1
+    assert len([p for p in db.data if p.startswith('found_reports/')]) == 2
     assert db.data['found_reports/' + first['id']]['volunteer_uid'] == 'one'
     with pytest.raises(HTTPException):  # and it stays private to its reporter
         vol('two').found_owned(first['id'])
@@ -883,8 +854,8 @@ def test_confirm_identity_on_another_volunteers_active_report_is_refused_clearly
 
 def test_camera_report_cannot_take_over_a_profile_linked_to_own_other_report(db):
     guardian, identifier = guardian_with_individual('guardian')
-    profile = vol().profiles_list()[0]
-    first = manual(profile_id=profile['id'])
+    profile = eligible_profiles(vol())[0]
+    first = identified(profile_id=profile['id'])
     camera = submit()
     with pytest.raises(HTTPException) as error:
         vol().confirm(camera['id'], profile['id'])

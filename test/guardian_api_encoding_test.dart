@@ -109,7 +109,7 @@ void main() {
       ),
     );
     await expectLater(
-      api.cancelCase('RD-1'),
+      api.saveGuidedReport('RD-1', {'clothing': arabicAnswer}),
       throwsA(isA<AppFailure>().having((f) => f.code, 'code', 'caseClosed')),
     );
   });

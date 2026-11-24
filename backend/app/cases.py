@@ -177,47 +177,6 @@ class CaseService:
         safe_dispatch(self.db, case_id)
         return public_case(self.owned(case_id))
 
-    def _terminate(self, case_id, outcome):
-        # Shared by cancel() and resolve(): a Guardian-initiated terminal outcome,
-        # reachable from any still-active case (never sequential, never via
-        # validate_transition). Clears active_case_id so normal profile
-        # management (edit/delete) can resume on the individual.
-        @firestore.transactional
-        def terminate(tx):
-            doc = self.owned(case_id, tx)
-            data = doc.to_dict()
-            if data["status"] in TERMINAL_STATUSES:
-                raise HTTPException(409, detail="case_closed")
-            person = self.guardian.user.collection("individuals").document(data["individual_id"])
-            now = firestore.SERVER_TIMESTAMP
-            tx.update(doc.reference, {"status": outcome, "updated_at": now, "closed_at": now,
-                                      "verification_code": firestore.DELETE_FIELD})
-            tx.update(person, {"active_case_id": None, "active_found_report_id": firestore.DELETE_FIELD})
-            if data.get('found_report_id'):
-                tx.update(self.db.collection('found_reports').document(data['found_report_id']),
-                          {'ended': True, 'ended_at': now, 'updated_at': now})
-            tx.set(self.notifications.document(case_id + "-" + outcome), {
-                "event_id": data["event_id"], "case_id": case_id, "kind": "status_changed",
-                "status": outcome, "created_at": firestore.SERVER_TIMESTAMP, "read_at": None})
-        terminate(self.db.transaction())
-        logging.getLogger("uvicorn.error").info("Radd event %s-%s T2 committed epoch_ms=%d", case_id, outcome, time.time()*1000)
-        safe_dispatch(self.db, case_id)
-        result = public_case(self.owned(case_id))
-        try:
-            notify_guardian(self.uid, kind="status_changed", status=outcome,
-                case_id=case_id, event_id=result["event_id"])
-        except Exception:
-            pass
-        return result
-
-    def cancel(self, case_id):
-        """Guardian reports a mistaken case; never confuse with a Volunteer-confirmed reunification."""
-        return self._terminate(case_id, "cancelled")
-
-    def resolve(self, case_id):
-        """Guardian independently found the individual; never confuse with Reunited."""
-        return self._terminate(case_id, "resolved")
-
     def list_notifications(self):
         return sorted([{"id": d.id, **d.to_dict()} for d in self.notifications.stream()],
             key=lambda d: str(d["created_at"]), reverse=True)
@@ -261,7 +220,7 @@ class CaseService:
 #
 # Guardian-side contract for the Admin closure "Referred to Authority"
 # (status ADMIN_TERMINAL_OUTCOME, implemented by the Admin module): it is
-# terminal exactly like cancel()/resolve() above -- set `status`, `updated_at`
+# terminal consistently with historical closures -- set `status`, `updated_at`
 # and `closed_at`; clear the individual's `active_case_id` (and
 # `active_found_report_id`); end a linked found report; write the Guardian's
 # notification record `users/{uid}/notifications/{case_id}-referred_to_authority`

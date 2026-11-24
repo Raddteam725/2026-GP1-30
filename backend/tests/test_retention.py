@@ -1,4 +1,5 @@
 """Registration retention and separate terminal-case cleanup tests."""
+from workflow_fixtures import historical_closure
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -42,7 +43,7 @@ def test_terminal_case_is_not_scrubbed_before_24_hours(storage):
     s, individual_id = guardian_with_individual("owner")
     cs = CaseService(s)
     case_id = cs.create(CaseCreate(individual_id=individual_id))["id"]
-    cs.resolve(case_id)
+    historical_closure(cs, case_id, 'resolved')
     backdate_case(db, case_id, timedelta(hours=24) - timedelta(seconds=1))
     scrub_terminal_cases()
     data = db.data[f"cases/{case_id}"]
@@ -54,7 +55,7 @@ def test_terminal_case_is_scrubbed_at_and_after_24_hours(storage):
     s, individual_id = guardian_with_individual("owner")
     cs = CaseService(s)
     case_id = cs.create(CaseCreate(individual_id=individual_id))["id"]
-    cs.resolve(case_id)
+    historical_closure(cs, case_id, 'resolved')
     backdate_case(db, case_id, timedelta(hours=24))
     scrub_terminal_cases()
     data = db.data[f"cases/{case_id}"]
@@ -65,7 +66,7 @@ def test_scrub_removes_every_identifying_field_and_keeps_only_statistical_ones(s
     s, individual_id = guardian_with_individual("owner")
     cs = CaseService(s)
     case_id = cs.create(CaseCreate(individual_id=individual_id))["id"]
-    cs.resolve(case_id)
+    historical_closure(cs, case_id, 'resolved')
     backdate_case(db, case_id, timedelta(hours=25))
     scrub_terminal_cases()
     data = db.data[f"cases/{case_id}"]
@@ -103,7 +104,7 @@ def test_scrub_deletes_linked_found_report_alert_and_notification_debris(storage
     s, individual_id = guardian_with_individual("owner")
     cs = CaseService(s)
     case_id = cs.create(CaseCreate(individual_id=individual_id))["id"]
-    cs.resolve(case_id)
+    historical_closure(cs, case_id, 'resolved')
     # A found_reports doc + its Storage photo, standing in for the Volunteer side.
     bucket.blob("found/vol-1/FR-1/x.jpg").upload_from_string(b"x", content_type="image/jpeg")
     db.set(db.collection("found_reports").document("FR-1"), {"case_id": case_id, "photo_path": "found/vol-1/FR-1/x.jpg", "volunteer_uid": "vol-1"})
@@ -122,7 +123,7 @@ def test_scrub_preserves_a_found_report_when_its_photo_deletion_fails(storage):
     s, individual_id = guardian_with_individual("owner")
     cs = CaseService(s)
     case_id = cs.create(CaseCreate(individual_id=individual_id))["id"]
-    cs.resolve(case_id)
+    historical_closure(cs, case_id, 'resolved')
     path = "found/vol-1/FR-1/x.jpg"
     bucket.blob(path).upload_from_string(b"x", content_type="image/jpeg")
     db.set(db.collection("found_reports").document("FR-1"), {"case_id": case_id, "photo_path": path, "volunteer_uid": "vol-1"})
@@ -149,7 +150,7 @@ def test_scrub_removes_a_volunteer_notification_even_without_joined_by(storage):
     s, individual_id = guardian_with_individual("owner")
     cs = CaseService(s)
     case_id = cs.create(CaseCreate(individual_id=individual_id))["id"]
-    cs.resolve(case_id)
+    historical_closure(cs, case_id, 'resolved')
     db.set(db.collection("users").document("vol-onlooker"), {"role": "volunteer", "active": True, "full_name": "Onlooker", "volunteer_id": "V-1"})
     note_path = f"users/vol-onlooker/volunteer_notifications/{case_id}-new"
     db.set(db.collection("users").document("vol-onlooker").collection("volunteer_notifications").document(case_id + "-new"),
@@ -164,7 +165,7 @@ def test_scrub_is_idempotent_on_repeated_runs(storage):
     s, individual_id = guardian_with_individual("owner")
     cs = CaseService(s)
     case_id = cs.create(CaseCreate(individual_id=individual_id))["id"]
-    cs.resolve(case_id)
+    historical_closure(cs, case_id, 'resolved')
     backdate_case(db, case_id, timedelta(hours=25))
     scrub_terminal_cases()
     first_pass = dict(db.data[f"cases/{case_id}"])

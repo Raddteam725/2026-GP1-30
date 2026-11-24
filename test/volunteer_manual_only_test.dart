@@ -47,7 +47,7 @@ class CaptureCamera extends FailingCamera {
 void main() {
   for (final language in ['en', 'ar']) {
     testWidgets(
-      'Manual entry confirms a photo-free report only after explicit confirmation ($language)',
+      'Manual entry preserves search and filters without requests or fabricated records ($language)',
       (tester) async {
         final previousCamera = CameraPlatform.instance;
         final previousLocation = GeolocatorPlatform.instance;
@@ -64,7 +64,7 @@ void main() {
           await location.positions.close();
           await location.services.close();
         });
-        var aiRequests = 0, created = 0;
+        var aiRequests = 0, created = 0, profileRequests = 0;
         final repo = ApiVolunteerRepository(
           token: () async => 'unit-test',
           baseUrl: 'http://test',
@@ -89,7 +89,7 @@ void main() {
               'gender': 'female',
               'relationship': 'daughter',
             };
-            if (path.endsWith('/profiles')) response = [person];
+            if (path.endsWith('/profiles')) { profileRequests++; response = [person]; }
             if (path.endsWith('/profiles/profile-test')) {
               response = {...person, 'confirmation_available': false};
             }
@@ -156,41 +156,20 @@ void main() {
         expect(created, 0);
         expect(aiRequests, 0);
         expect(find.byType(TextField), findsOneWidget);
-        await press(tester, s.vViewDetails);
-        expect(created, 0);
-        expect(find.text('Private Guardian'), findsNothing);
-        expect(find.text('+966500000099'), findsNothing);
-        await press(tester, s.vConfirmIdentity);
-        expect(created, 0); // Opening confirmation dialog is not consent.
-        await tester.tap(find.widgetWithText(FilledButton, s.vConfirmMatch));
+        expect(profileRequests, 0);
+        expect(find.text('Test Person'), findsNothing);
+        expect(find.byType(ChoiceChip), findsNWidgets(3));
+        await tester.enterText(find.byType(TextField), 'Test');
+        await tester.tap(find.byType(ChoiceChip).last);
         await tester.pumpAndSettle();
-        expect(created, 1);
+        expect(profileRequests, 0);
+        expect(created, 0);
         expect(aiRequests, 0);
-        expect(repo.foundReports.single.photoBytes, isNull);
-        expect(repo.foundReports.single.caseId, isNull);
-        expect(find.text('Private Guardian'), findsWidgets);
+        expect(repo.foundReports, isEmpty);
+        expect(find.byType(SnackBar), findsNothing);
         await tester.tap(find.byType(BackButton));
         await tester.pumpAndSettle();
-        // Confirmation removes stale Manual Review/profile routes from Back.
-        await tester.scrollUntilVisible(
-          find.text(s.vOpenCamera),
-          150,
-          scrollable: find.byType(Scrollable).last,
-        );
-        expect(find.text(s.vOpenCamera), findsOneWidget);
         expect(find.byType(TextField), findsNothing);
-        await tester.tap(find.byKey(const ValueKey('radd-tab-1')));
-        await tester.pumpAndSettle();
-        expect(find.text(s.vFoundReportTitle), findsNothing);
-        expect(find.text('FR-manual'), findsNothing);
-        await tester.tap(find.byKey(const ValueKey('radd-tab-2')));
-        await tester.pumpAndSettle();
-        await tester.scrollUntilVisible(
-          find.text('FR-manual'),
-          150,
-          scrollable: find.byType(Scrollable).last,
-        );
-        expect(find.text('FR-manual'), findsOneWidget);
         await tester.pumpWidget(const SizedBox());
         await tester.pumpAndSettle();
       },

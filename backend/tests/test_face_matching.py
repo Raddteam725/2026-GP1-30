@@ -1,4 +1,5 @@
 """Face matching (PBI 15/16) with a fake engine: no model, no real faces."""
+from workflow_fixtures import eligible_profiles
 import json
 import math
 import pytest
@@ -270,7 +271,7 @@ def test_returns_ranked_candidates_without_exposing_embeddings(db, monkeypatch):
     assert len(result['candidates']) == 1  # the unrelated person is below the threshold
     top = result['candidates'][0]
     assert 0 <= top['similarity'] <= 1 and top['similarity'] > 0.99
-    assert top['person']['id'] in {p['id'] for p in vol().profiles_list()}
+    assert top['person']['id'] in {p['id'] for p in eligible_profiles(vol())}
     text = json.dumps(result)
     assert 'face_embedding' not in text and 'photo_path' not in text and 'guardian_id' not in text
 
@@ -308,7 +309,7 @@ def test_registrations_without_embedding_are_not_ai_candidates_but_stay_listed(d
     register(db, 'guardian-a', None)  # e.g. no face detected at registration
     use_engine(monkeypatch, unit(1))
     assert vol().candidates(submit()['id'])['state'] == 'no_reliable_candidate'
-    assert len(vol().profiles_list()) == 1  # still available for manual review
+    assert len(eligible_profiles(vol())) == 1  # registration remains eligible for shared retrieval
 
 
 def test_registration_with_explicit_null_embedding_is_not_an_ai_candidate_but_stays_listed(db, monkeypatch):
@@ -320,12 +321,12 @@ def test_registration_with_explicit_null_embedding_is_not_an_ai_candidate_but_st
     assert stored[face_matching.EMBEDDING_FIELD] is None
     reviewer = vol()
     assert reviewer.eligible(ref.get())
-    manual_profiles = reviewer.profiles_list()
+    manual_profiles = eligible_profiles(reviewer)
     assert len(manual_profiles) == 1
     engine = use_engine(monkeypatch, unit(1))
     assert reviewer.candidates(submit()['id']) == {'state': 'no_reliable_candidate', 'candidates': []}
     assert engine.calls == 1
-    assert reviewer.profiles_list() == manual_profiles
+    assert eligible_profiles(reviewer) == manual_profiles
 
 
 def test_model_failure_reports_unavailable_for_manual_review(db, monkeypatch):
@@ -374,3 +375,27 @@ def test_ended_identification_does_not_run_the_model(db, monkeypatch):
     with pytest.raises(Exception):
         vol().candidates(report['id'])
     assert engine.calls == 0
+
+@pytest.mark.parametrize('with_case', [False, True])
+@pytest.mark.parametrize('proof', ['qr', 'identifier'])
+def test_ranked_ai_candidate_confirms_and_reunites(db, monkeypatch, with_case, proof):
+    from app.cases import CaseService
+    from app.case_models import CaseCreate
+    path = register(db, 'guardian-a', unit(1))
+    # Use the same authenticated Guardian service that owns the registration.
+    from app.service import GuardianService
+    owner = GuardianService({'uid': 'guardian-a', 'email': 'guardian-a@example.test', 'email_verified': True})
+    if with_case:
+        CaseService(owner).create(CaseCreate(individual_id=path.rsplit('/', 1)[1]))
+    use_engine(monkeypatch, unit(1))
+    report = submit()
+    candidate = vol().candidates(report['id'])['candidates'][0]['person']
+    result = vol().confirm(report['id'], candidate['id'])
+    assert result['person']['guardian']['phone']
+    vol().begin_verification(report['id'])
+    if proof == 'qr':
+        assert vol().verify_guardian(report['id'], owner.account_verification()['payload'])['verified']
+    else:
+        context = ('cases/' + result['case_id']) if result['case_id'] else ('found_reports/' + report['id'])
+        assert vol().verify_guardian_identifier(report['id'], db.data[context]['verification_code'])['verified']
+    assert vol().handover_found(report['id'])['status'] == 'reunited'

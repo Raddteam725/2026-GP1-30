@@ -14,12 +14,7 @@ import 'volunteer_navigation_test.dart' show harness, press;
 import 'volunteer_location_test.dart' show LocationPlatform;
 import 'volunteer_manual_only_test.dart' show CaptureCamera;
 
-/// Confirm Identity on a registration that is ALREADY inside an active
-/// standalone Found Report (the Volunteer lost local state, reopened Manual
-/// Review, selected the same individual). The backend answers with the
-/// existing report or a specific refusal; the app must continue at the real
-/// stage or say exactly why -- never the generic "could not be completed",
-/// never a duplicate report, never a Missing Case.
+/// Existing found reports continue through the surviving report list.
 void main() {
   Future<ApiVolunteerRepository> workspace(
     WidgetTester tester,
@@ -75,10 +70,11 @@ void main() {
         if (path.endsWith('/profiles/profile-test/photo')) {
           return http.Response.bytes(CaptureCamera().bytes, 200);
         }
-        if (path.endsWith('/found-reports/manual') &&
-            request.method == 'POST') {
-          return onConfirm(request);
+        if (path.endsWith('/found-reports') && request.method == 'GET') {
+          final result = onConfirm(request);
+          return http.Response(jsonEncode([jsonDecode(result.body)]), 200);
         }
+        if (path.endsWith('/found-reports/FR-existing')) return onConfirm(request);
         if (path.endsWith('/candidates')) {
           response = {'state': 'unavailable', 'candidates': []};
         }
@@ -107,21 +103,19 @@ void main() {
     return repo;
   }
 
-  Future<AppLocalizations> confirmFromManualReview(WidgetTester tester) async {
+  Future<AppLocalizations> resumeExistingReport(WidgetTester tester) async {
     final s = AppLocalizations.of(
       tester.element(find.byType(VolunteerWorkspace)),
     )!;
     await tester.tap(find.byKey(const ValueKey('radd-tab-2')));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.text(s.vManualReview),
-      150,
-      scrollable: find.byType(Scrollable).last,
+      find.text(s.vContinueReport), 150, scrollable: find.byType(Scrollable).last,
     );
-    await press(tester, s.vManualReview);
-    await press(tester, s.vViewDetails);
-    await press(tester, s.vConfirmIdentity);
-    await tester.tap(find.widgetWithText(FilledButton, s.vConfirmMatch));
+    await Scrollable.ensureVisible(tester.element(find.text(s.vContinueReport)), alignment: 0.5);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(s.vContinueReport));
+    await tester.pumpAndSettle();
     // Bounded pumping: a refusal triggers a background state refresh whose
     // location request never resolves in the test fakes, so pumpAndSettle
     // would wait on its progress indicator forever.
@@ -134,7 +128,7 @@ void main() {
 
   for (final language in ['en', 'ar']) {
     testWidgets(
-      'Own report already awaiting verification: Confirm Identity resumes it '
+      'Own report already awaiting verification: report list resumes it '
       'at Guardian Verification with no duplicate ($language)',
       (tester) async {
         final posts = <String>[];
@@ -165,44 +159,20 @@ void main() {
             201,
           ),
         );
-        final s = await confirmFromManualReview(tester);
+        final s = await resumeExistingReport(tester);
         // Straight to Guardian Verification -- not Manual Review, not
         // Guardian Contact, no second identification.
         expect(find.text(s.vScanInstruction), findsOneWidget);
         expect(find.text(s.vActionFailed), findsNothing);
         expect(find.text(s.vManualReview), findsNothing);
-        expect(posts.where((p) => p.endsWith('/manual')).length, 1);
+        expect(posts.where((p) => p.endsWith('/manual')), isEmpty);
         expect(posts.where((p) => p.endsWith('/begin-verification')), isEmpty);
         await tester.pumpWidget(const SizedBox());
         await tester.pumpAndSettle();
       },
     );
 
-    testWidgets(
-      'Another Volunteer holds the active report: a clear localized refusal, '
-      'no generic message, no navigation ($language)',
-      (tester) async {
-        final posts = <String>[];
-        await workspace(
-          tester,
-          language,
-          posts: posts,
-          onConfirm: (_) =>
-              http.Response(jsonEncode({'detail': 'already_matched'}), 409),
-        );
-        final s = await confirmFromManualReview(tester);
-        expect(find.text(s.vFailureAlreadyMatched), findsOneWidget);
-        expect(find.text(s.vActionFailed), findsNothing);
-        expect(find.text(s.vScanInstruction), findsNothing);
-        expect(find.text('Private Guardian'), findsNothing);
-        expect(
-          find.text(s.vConfirmIdentity),
-          findsOneWidget,
-        ); // still on details
-        await tester.pumpWidget(const SizedBox());
-        await tester.pumpAndSettle();
-      },
-    );
+
   }
 
   final awaitingReport = {
@@ -290,7 +260,7 @@ void main() {
             );
           },
         );
-        final s = await confirmFromManualReview(tester);
+        final s = await resumeExistingReport(tester);
         expect(find.text(s.vScanInstruction), findsOneWidget);
         await useIdentifier(tester, s);
         expect(find.text(s.vFoundReportIdentifier), findsOneWidget);
@@ -362,7 +332,7 @@ void main() {
         );
         await repo.loadProfile();
         try {
-          await repo.confirmManualIdentity('a' * 64, 'request-0000000001');
+          await repo.loadReport('FR-existing');
           return null;
         } on StateError catch (error) {
           return error.message;

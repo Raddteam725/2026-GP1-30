@@ -424,9 +424,7 @@ class TestRepository implements GuardianRepository {
     return updated;
   }
 
-  @override
   Future<MissingCase> cancelCase(String id) => _terminate(id, 'cancelled');
-  @override
   Future<MissingCase> resolveCase(String id) => _terminate(id, 'resolved');
 
   final List<String> registeredFcmTokens = [];

@@ -23,11 +23,6 @@ class FoundInput(BaseModel):
     request_id: str = Field(min_length=16, max_length=128, pattern=r'^[a-zA-Z0-9-]+$')
     photo_base64: str = Field(min_length=1, max_length=11_000_000)
 
-class ManualFoundInput(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    request_id: str = Field(min_length=16, max_length=128, pattern=r'^[a-zA-Z0-9-]+$')
-    profile_id: str = Field(pattern=r'^[a-f0-9]{64}$')
-
 class MatchInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     profile_id: str = Field(pattern=r'^[a-f0-9]{64}$')
@@ -102,9 +97,6 @@ class VolunteerWorkflow:
             guardian = self.db.collection('users').document(data['guardian_id']).get().to_dict() or {}
             result['guardian'] = {'full_name': guardian.get('full_name'), 'phone': guardian.get('phone'), 'relationship': data.get('relationship')}
         return result
-
-    def profiles_list(self):
-        return [self.public_registration(doc) for doc in self.registrations() if self.eligible(doc)]
 
     def profile_detail(self, profile_id, found_report_id=None, case_id=None):
         doc = self.registration(profile_id)
@@ -307,21 +299,8 @@ class VolunteerWorkflow:
             {'person': self.public_registration(doc), 'similarity': face_matching.display_score(score)}
             for doc, score in matches]}
 
-    def submit_manual(self, value):
-        self.profile(require_active=True)
-        event = self.participation_event()
-        report_id = 'FR-' + hashlib.sha256((self.uid + ':manual:' + value.request_id).encode()).hexdigest()[:40]
-        seed = {'volunteer_uid': self.uid, 'event_id': event.id,
-                'created_at': firestore.SERVER_TIMESTAMP, 'updated_at': firestore.SERVER_TIMESTAMP,
-                'origin': 'volunteer_found', 'identification_method': 'manual',
-                'status': found_lifecycle.IDENTIFYING, 'ai_status': 'not_requested', 'case_id': None}
-        return self.confirm(report_id, value.profile_id, manual_seed=seed)
-
-    def confirm(self, report_id, profile_id, manual_seed=None):
-        found = (self.db.collection('found_reports').document(report_id).get()
-                 if manual_seed else self.found_owned(report_id))
-        if manual_seed and found.exists:
-            found = self.found_owned(report_id)
+    def confirm(self, report_id, profile_id):
+        found = self.found_owned(report_id)
 
         if (found.to_dict() or {}).get('ended') or found_lifecycle.found_status(found.to_dict() or {}) == found_lifecycle.REUNITED:
             raise HTTPException(409, detail='identification_ended')
@@ -335,14 +314,8 @@ class VolunteerWorkflow:
         def confirm(tx):
             self.profile(tx, require_active=True)
             event = self.participation_event(tx)
-            ref_report = self.db.collection('found_reports').document(report_id)
-            report = ref_report.get(transaction=tx)
-            creating = manual_seed is not None and not report.exists
-            if creating:
-                rd = {**manual_seed, 'event_id': event.id}
-            else:
-                report = self.found_owned(report_id, tx)
-                rd = report.to_dict()
+            report = self.found_owned(report_id, tx)
+            rd = report.to_dict()
 
             if rd.get('ended') or found_lifecycle.found_status(rd) == found_lifecycle.REUNITED:
                 raise HTTPException(409, detail='identification_ended')
@@ -352,30 +325,19 @@ class VolunteerWorkflow:
                 if rd['matched_profile_id'] == profile_id:
                     return
                 raise HTTPException(409, detail='already_matched')
-            if pd.get('deleting') or photo_expired(pd, self.db, tx, case_context=not creating) or pd.get('event_id') != rd['event_id']:
+            if pd.get('deleting') or photo_expired(pd, self.db, tx, case_context=True) or pd.get('event_id') != rd['event_id']:
                 raise HTTPException(409, detail='profile_unavailable')
             case_id = pd.get('active_case_id')
             linked_id = pd.get('active_found_report_id')
             linked = self.db.collection('found_reports').document(linked_id).get(transaction=tx) if linked_id else None
             if linked and linked.exists and not linked.to_dict().get('ended') and found_lifecycle.found_status(linked.to_dict() or {}) in found_lifecycle.ACTIVE and linked.id != report_id:
-                # This registration is already inside an active standalone
-                # reunification. Confirming it again from Manual Review is
-                # NOT a new identification: if that report is this
-                # Volunteer's own, resume it (no duplicate report, no state
-                # change) -- the app continues at whatever stage it reached.
-                # A camera report of this Volunteer, or another Volunteer's
-                # attempt, is refused with a distinct reason instead.
                 mine = (linked.to_dict() or {}).get('volunteer_uid') == self.uid
-                if creating and mine:
-                    return {'resume': linked.id}
                 raise HTTPException(409, detail='resume_existing_report' if mine else 'already_matched')
             identity = {'matched_profile_id': profile_id, 'guardian_id': pd['guardian_id'],
                         'individual_id': person.id, 'individual_path': person.reference.path,
                         'confirmed_by': self.uid, 'status': found_lifecycle.IDENTIFIED,
                         'updated_at': firestore.SERVER_TIMESTAMP}
             if not case_id:
-                if creating:
-                    tx.set(report.reference, rd)
                 tx.update(person.reference, {'active_found_report_id': report_id})
                 # Standalone only: the short Guardian-readable fallback code,
                 # fixed for this report's whole active life.
@@ -389,8 +351,6 @@ class VolunteerWorkflow:
             if case_id and (cd.get('status') not in STAGES[:2] or cd.get('guardian_id') != pd['guardian_id'] or cd.get('individual_id') != person.id or cd.get('event_id') != rd['event_id']):
                 raise HTTPException(409, detail='case_not_joinable')
             now = firestore.SERVER_TIMESTAMP
-            if creating:
-                tx.set(report.reference, rd)
             tx.update(person.reference, {'active_found_report_id': report_id})
             tx.update(ref, {'status': 'match_confirmed', 'confirmed_by': self.uid,
                 'found_report_id': report_id, 'updated_at': now, 'stage_timestamps.match_confirmed': now})
@@ -401,10 +361,7 @@ class VolunteerWorkflow:
             tx.set(self.db.collection('users').document(pd['guardian_id']).collection('notifications').document(ref.id + '-match_confirmed'),
                 {'case_id': ref.id, 'event_id': rd['event_id'], 'kind': 'status_update', 'status': 'match_confirmed', 'created_at': now, 'read_at': None})
             push.update(guardian_id=pd['guardian_id'], case_id=ref.id, event_id=rd['event_id'])
-        outcome = confirm(self.db.transaction())
-        if isinstance(outcome, dict) and outcome.get('resume'):
-            # Nothing was written: hand back the existing report as it stands.
-            return self.public_found(self.found_owned(outcome['resume']))
+        confirm(self.db.transaction())
         self.push_found_notification(found_push)
         if push:
             logging.getLogger('uvicorn.error').info('Radd event %s-match_confirmed T2 committed epoch_ms=%d', push['case_id'], time.time()*1000)
@@ -645,9 +602,6 @@ def register_workflow(router, service):
     @router.get('/cases/{case_id}')
     def case_details(case_id: str, s=Depends(service)):
         return s.public(s.accessible(case_id))
-    @router.get('/profiles')
-    def profiles(s=Depends(service)):
-        return s.profiles_list()
     @router.get('/profiles/{profile_id}')
     def profile_detail(profile_id: str, found_report_id: str | None = None,
                        case_id: str | None = None, s=Depends(service)):
@@ -661,9 +615,6 @@ def register_workflow(router, service):
     @router.post('/found-reports', status_code=201)
     def submit(value: FoundInput, s=Depends(service)):
         return s.submit_found(value)
-    @router.post('/found-reports/manual', status_code=201)
-    def submit_manual(value: ManualFoundInput, s=Depends(service)):
-        return s.submit_manual(value)
     @router.get('/found-reports/{report_id}')
     def report(report_id: str, s=Depends(service)):
         return s.public_found(s.found_owned(report_id))

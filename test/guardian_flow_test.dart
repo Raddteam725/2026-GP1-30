@@ -969,8 +969,12 @@ void main() {
     await scrollToText(t, 'Cancel Report');
     expect(find.text('Resolve Report'), findsWidgets);
     expect(find.text('Cancel Report'), findsWidgets);
-    await tapText(t, 'Resolve Report');
-    await tapText(t, 'Resolve Report');
+    // Historical closure fixture: the removed Guardian action is not used
+    // to set up the unrelated profile-unlocking regression.
+    await repo.resolveCase(repo.caseRecords.single.id);
+    GuardianPushRefresh.instance.acceptPush({
+      'role': 'guardian', 'case_id': repo.caseRecords.single.id, 'status': 'resolved',
+    });
     await t.pumpAndSettle();
     await scrollToText(t, 'Resolved', delta: -200);
     expect(find.text('Resolved'), findsWidgets);
@@ -1139,4 +1143,37 @@ void main() {
       },
     );
   }
+  for (final locale in ['en', 'ar']) {
+    for (final resolve in [false, true]) {
+      testWidgets('Guardian final closure action is an enabled no-op ($locale, $resolve)', (t) async {
+        await start(t, locale: locale);
+        auth.active = true;
+        repo.records.add(const Individual(id: 'test-id', fullName: 'Test Person', age: 7, gender: 'female', relationship: 'child'));
+        final value = await repo.reportMissing('test-id');
+        await route(t, AppRoutes.caseStatus, arguments: value.id);
+        final s = AppLocalizations.of(t.element(find.byType(CaseStatusScreen)))!;
+        final label = resolve ? s.resolveReport : s.cancelReport;
+        await scrollToText(t, label);
+        await tapText(t, label);
+        final dialog = find.byType(AlertDialog);
+        expect(dialog, findsOneWidget);
+        final action = find.descendant(of: dialog, matching: find.widgetWithText(FilledButton, label));
+        expect(t.widget<FilledButton>(action).onPressed, isNotNull);
+        final before = List<MissingCase>.of(repo.caseRecords);
+        await t.tap(action);
+        await t.pumpAndSettle();
+        await t.tap(action);
+        await t.pumpAndSettle();
+        expect(dialog, findsOneWidget);
+        expect(repo.caseRecords, before);
+        expect(find.byType(SnackBar), findsNothing);
+        await t.tap(find.descendant(of: dialog, matching: find.widgetWithText(TextButton, s.cancel)));
+        await t.pumpAndSettle();
+        expect(dialog, findsNothing);
+        Navigator.pop(t.element(find.byType(CaseStatusScreen)));
+        await t.pumpAndSettle();
+      });
+    }
+  }
+
 }

@@ -8,7 +8,7 @@ import 'package:radd/features/volunteer/data/api_volunteer_repository.dart';
 import 'package:radd/features/volunteer/domain/volunteer_models.dart';
 
 void main() {
-  test('Real API workflow persists report, resumes, confirms manual match, verifies QR and hands over', () async {
+  test('Real API workflow persists report, resumes, confirms AI candidate, verifies QR and hands over', () async {
     final requests = <http.Request>[];
     var submitted = false;
     String? status;
@@ -83,7 +83,7 @@ void main() {
           },
         ]);
       }
-      if (path.endsWith('/profiles')) return json([person]);
+
       if (path.endsWith('/profiles/profile-key')) {
         return json({
           ...person,
@@ -105,7 +105,7 @@ void main() {
         return json(submitted ? [report()] : []);
       }
       if (path.endsWith('/candidates')) {
-        return json({'state': 'unavailable', 'candidates': []});
+        return json({'state': 'candidates', 'candidates': [{'person': person, 'similarity': .9}]});
       }
       if (path.endsWith('/confirm-match')) {
         expect(jsonDecode(request.body), {'profile_id': 'profile-key'});
@@ -142,21 +142,20 @@ void main() {
       requestId: 'request-000000000001',
     );
     expect(found.id, 'FR-real');
-    await expectLater(repo.findMatches(found), throwsStateError);
-    await repo.loadProfiles();
-    expect(repo.profiles.single.guardian.phone, isNull);
-    expect(repo.profiles.single.photoBytes, [1, 2, 3]);
-    final browsing = await repo.loadProfileDetails(repo.profiles.single);
+    final selected = (await repo.findMatches(found)).single.person;
+    expect(selected.guardian.phone, isNull);
+    expect(selected.photoBytes, [1, 2, 3]);
+    final browsing = await repo.loadProfileDetails(selected);
     expect(browsing.guardian.phone, isNull);
     final contextual = await repo.loadProfileDetails(
-      repo.profiles.single,
+      selected,
       foundReportId: found.id,
     );
     expect(contextual.guardian.phone, '+966500000003');
-    await repo.confirmMatch(repo.account!, found, repo.profiles.single);
+    await repo.confirmMatch(repo.account!, found, selected);
     expect(found.status, CaseStatus.matchConfirmed);
     expect(found.matchedPerson!.guardian.phone, '+966500000003');
-    expect(found.matchedPerson!.photoBytes, [1, 2, 3]);
+    expect((await repo.loadReport(found.id)).matchedPerson!.photoBytes, [1, 2, 3]);
     repo.dispose(); // Restart: only the server-side report carries progress.
     repo = repository();
     await repo.refresh();

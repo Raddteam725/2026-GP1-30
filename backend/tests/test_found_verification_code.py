@@ -4,6 +4,7 @@ The full document id (FR-…) stays internal; the Guardian card shows a 6-digit
 code bound to ONE active report, stable for its whole active life, verified only
 inside the Volunteer's own authorized report context, and dropped at Reunited.
 """
+from workflow_fixtures import eligible_profiles
 import sys
 from pathlib import Path
 import pytest
@@ -15,7 +16,7 @@ from app.case_models import CaseCreate
 from app.main import guardian_found_reports
 from test_volunteer import db, vol, case
 from test_cases import guardian_with_individual
-from test_volunteer_workflow import submit, manual, matching, code_of
+from test_volunteer_workflow import submit, identified, matching, code_of
 
 
 @pytest.fixture(autouse=True)
@@ -26,8 +27,8 @@ def photos(db, monkeypatch):
 def standalone(db, uid='one', request_id='manual-request-00001', guardian_uid='guardian'):
     guardian, identifier = guardian_with_individual(guardian_uid)
     wanted = volunteer_workflow.key(guardian.get(identifier))
-    profile = next(p for p in vol(uid).profiles_list() if p['id'] == wanted)
-    report = manual(uid, profile_id=profile['id'], request_id=request_id)
+    profile = next(p for p in eligible_profiles(vol(uid)) if p['id'] == wanted)
+    report = identified(uid, profile_id=profile['id'], request_id=request_id)
     return guardian, identifier, report
 
 
@@ -52,8 +53,8 @@ def test_code_is_stable_across_reload_resume_and_guardian_reopen(db):
         assert guardian_found_reports(guardian)[0]['verification_code'] == code
     vol().public_found(vol().found_owned(report['id']))  # Volunteer reload
     vol().begin_verification(report['id'])
-    # Confirm Identity again from Manual Review resumes the same report.
-    again = manual(profile_id=report['person']['id'], request_id='manual-request-00002')
+    # An idempotent confirmation retry preserves the same report.
+    again = vol().confirm(report['id'], report['person']['id'])
     assert again['id'] == report['id']
     assert code_of(db, report['id']) == code
     assert guardian_found_reports(guardian)[0]['verification_code'] == code
@@ -91,9 +92,9 @@ def test_code_tolerates_spacing_hash_and_arabic_indic_digits(db):
 def test_another_reports_code_fails_and_is_never_looked_up_globally(db):
     guardian_a, identifier_a, first = standalone(db)
     guardian_b, identifier_b = guardian_with_individual('other-guardian')
-    profile_b = next(p for p in vol('two').profiles_list()
+    profile_b = next(p for p in eligible_profiles(vol('two'))
                      if p['id'] == volunteer_workflow.key(guardian_b.get(identifier_b)))
-    second = manual('two', profile_id=profile_b['id'], request_id='manual-request-00002')
+    second = identified('two', profile_id=profile_b['id'], request_id='manual-request-00002')
     code_a, code_b = code_of(db, first['id']), code_of(db, second['id'])
     if code_a == code_b:  # astronomically unlikely; make the cross-check meaningful
         db.data['found_reports/' + second['id']]['verification_code'] = code_b = str((int(code_a) + 7) % 10**6).zfill(6)
@@ -120,7 +121,7 @@ def test_code_is_rejected_and_removed_after_reunited(db):
     with pytest.raises(HTTPException):
         vol().verify_guardian_identifier(report['id'], code)
     # A later report for the same registration gets its own, new code.
-    later = manual(profile_id=report['person']['id'], request_id='manual-request-00003')
+    later = identified(profile_id=report['person']['id'], request_id='manual-request-00003')
     assert later['id'] != report['id']
     assert code_of(db, later['id']).isdigit()
 
@@ -166,7 +167,7 @@ def test_existing_active_report_without_code_gets_one_safely_when_shown(db):
 def test_guardian_list_follows_authoritative_status_and_names_the_individual(db):
     guardian, identifier = guardian_with_individual('guardian')
     wanted = volunteer_workflow.key(guardian.get(identifier))
-    profile = next(p for p in vol().profiles_list() if p['id'] == wanted)
+    profile = next(p for p in eligible_profiles(vol()) if p['id'] == wanted)
     camera = submit()
     # identification_in_progress: no Guardian relationship confirmed yet, so
     # nothing is listed and no code exists.
@@ -192,8 +193,8 @@ def test_guardian_list_follows_authoritative_status_and_names_the_individual(db)
 def test_guardian_list_excludes_legacy_terminal_documents_and_never_backfills_them(db):
     guardian, identifier = guardian_with_individual('guardian')
     wanted = volunteer_workflow.key(guardian.get(identifier))
-    profile = next(p for p in vol().profiles_list() if p['id'] == wanted)
-    active = manual(profile_id=profile['id'])
+    profile = next(p for p in eligible_profiles(vol()) if p['id'] == wanted)
+    active = identified(profile_id=profile['id'])
     live = dict(db.data['found_reports/' + active['id']])
     # A historical Reunited document that was never minimized: it still
     # carries the Guardian link, the matched profile and an old code.
@@ -219,9 +220,9 @@ def test_multiple_active_reports_are_each_named_and_verify_only_with_their_own_c
     _, second_id = guardian_with_individual('guardian')  # same Guardian, second individual
     guardian.db.collection('users').document('guardian').collection('individuals').document(second_id).update({'full_name': 'Second Person'})
     keys = {volunteer_workflow.key(guardian.get(i)): i for i in (first_id, second_id)}
-    profiles = {keys[p['id']]: p for p in vol().profiles_list() if p['id'] in keys}
-    first = manual(profile_id=profiles[first_id]['id'], request_id='manual-request-00001')
-    second = manual(profile_id=profiles[second_id]['id'], request_id='manual-request-00002')
+    profiles = {keys[p['id']]: p for p in eligible_profiles(vol()) if p['id'] in keys}
+    first = identified(profile_id=profiles[first_id]['id'], request_id='manual-request-00001')
+    second = identified(profile_id=profiles[second_id]['id'], request_id='manual-request-00002')
     assert first['id'] != second['id']
     listed = {r['id']: r for r in guardian_found_reports(guardian)}
     assert set(listed) == {first['id'], second['id']}

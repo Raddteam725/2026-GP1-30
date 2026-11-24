@@ -158,7 +158,7 @@ void main() {
           await tester.pump();
         }
         await tester.pumpAndSettle();
-        expect(profiles, greaterThan(0));
+        expect(profiles, 0);
         expect(aiRequests, 0);
         expect(find.byType(TextField), findsOneWidget);
         await tester.pumpWidget(const SizedBox());

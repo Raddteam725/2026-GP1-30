@@ -40,7 +40,7 @@ void main() {
             'event_id': 'test-event',
           };
         }
-        if (path.endsWith('/profiles')) response = [person];
+        if (path.endsWith('/candidates')) response = {'state': 'candidates', 'candidates': [{'person': person, 'similarity': .9}]};
         if (request.method == 'POST' && path.endsWith('/found-reports')) {
           response = reportData;
         }
@@ -95,8 +95,8 @@ void main() {
       requestId: 'test-request',
     );
     expect(report.foundStatus, FoundStatus.identifying);
-    await repo.loadProfiles();
-    await repo.confirmMatch(account, report, repo.profiles.single);
+    final selected = (await repo.findMatches(report)).single.person;
+    await repo.confirmMatch(account, report, selected);
     expect(report.caseId, isNull);
     expect(report.photoBytes, isNull);
     expect(report.foundStatus, FoundStatus.identified);

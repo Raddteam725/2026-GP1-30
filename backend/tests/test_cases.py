@@ -1,3 +1,4 @@
+from workflow_fixtures import historical_closure
 import base64
 import io
 import sys
@@ -154,7 +155,7 @@ def test_case_retains_age_group_and_closure_timestamp_for_admin_reporting(storag
     created = cs.create(CaseCreate(individual_id=individual_id))
     assert created["age_group"] == "6-17"  # guardian_with_individual registers age 7
     assert created["closed_at"] is None
-    resolved = cs.resolve(created["id"])
+    resolved = historical_closure(cs, created["id"], 'resolved')
     assert resolved["closed_at"] is not None
     assert resolved["age_group"] == "6-17"  # preserved unchanged through closure
 
@@ -179,26 +180,9 @@ def test_active_case_blocks_editing_the_individual_and_lifts_on_cancel(storage):
         s.save(edit, individual_id)
     assert error.value.status_code == 409
     case_id = s.get(individual_id).to_dict()["active_case_id"]
-    cs.cancel(case_id)
+    historical_closure(cs, case_id, 'cancelled')
     assert s.get(individual_id).to_dict()["active_case_id"] is None
     assert s.save(edit, individual_id)["full_name"] == "Renamed"
-
-def test_cancel_and_resolve_are_distinct_terminal_outcomes_blocked_once_closed(storage):
-    s, individual_id = guardian_with_individual("owner")
-    cs = CaseService(s)
-    case_id = cs.create(CaseCreate(individual_id=individual_id))["id"]
-    resolved = cs.resolve(case_id)
-    assert resolved["status"] == "resolved"
-    with pytest.raises(HTTPException) as error:
-        cs.cancel(case_id)
-    assert error.value.status_code == 409
-
-    s2, individual_id2 = guardian_with_individual("owner-2")
-    cs2 = CaseService(s2)
-    case_id2 = cs2.create(CaseCreate(individual_id=individual_id2))["id"]
-    cancelled = cs2.cancel(case_id2)
-    assert cancelled["status"] == "cancelled"
-    assert "cancelled" in TERMINAL_STATUSES and "resolved" in TERMINAL_STATUSES
 
 def test_save_report_is_read_only_once_submitted(storage):
     s, individual_id = guardian_with_individual("owner")
@@ -295,8 +279,7 @@ def test_referred_to_authority_is_terminal_for_the_guardian(storage):
     case_id = cs.create(CaseCreate(individual_id=individual_id))["id"]
     db.data[f"cases/{case_id}"].update(status="referred_to_authority", closed_at=db.data[f"cases/{case_id}"]["created_at"])
     assert cs.list()[0]["status"] == "referred_to_authority"
-    for action in (lambda: cs.cancel(case_id), lambda: cs.resolve(case_id),
-                   lambda: cs.save_report(case_id, GuidedReport(same_location=False))):
+    for action in (lambda: cs.save_report(case_id, GuidedReport(same_location=False)),):
         with pytest.raises(HTTPException) as error:
             action()
         assert error.value.status_code == 409 and error.value.detail == "case_closed"

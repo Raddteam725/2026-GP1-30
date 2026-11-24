@@ -1,3 +1,4 @@
+from workflow_fixtures import eligible_profiles, historical_closure
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -39,18 +40,18 @@ def test_history_committed_before_async_send_and_logout_before_worker_blocks_del
         send()
     assert sends.call_count == 0
 
-def test_general_and_priority_use_real_case_and_do_not_duplicate_on_retry(db, sends):
+def test_location_never_generates_priority_and_general_does_not_duplicate_on_retry(db, sends):
     device('one', latitude=24.7, longitude=46.7)
     device('two', latitude=25.7, longitude=46.7)
     guardian, identifier = case()
     assert sends.call_count == 2
     assert all(call.args[0].data['case_id'] == identifier for call in sends.call_args_list)
     CaseService(guardian).save_report(identifier, GuidedReport(same_location=True, latitude=24.7, longitude=46.7))
-    assert sends.call_count == 3
-    assert sends.call_args.args[0].data['kind'] == 'priority'
-    assert sends.call_args.args[0].token == 'device-one'
+    assert sends.call_count == 2
+    assert all(call.args[0].data['kind'] == 'general' for call in sends.call_args_list)
+    assert not any(d.get('kind') == 'priority' for d in db.data.values())
     volunteer_alerts.dispatch(db, identifier)
-    assert sends.call_count == 3
+    assert sends.call_count == 2
     assert len([p for p in db.data if p.startswith('cases/')]) == 1
 
 def test_no_location_inactive_expired_or_terminal_receives_no_priority(db, sends):
@@ -65,7 +66,7 @@ def test_no_location_inactive_expired_or_terminal_receives_no_priority(db, sends
     sends.reset_mock()
     volunteer_alerts.dispatch(db, identifier)
     assert sends.call_count == 0
-    CaseService(guardian).cancel(identifier)
+    historical_closure(CaseService(guardian), identifier, 'cancelled')
     volunteer_alerts.dispatch(db, identifier)
     assert sends.call_count == 0
 
@@ -100,7 +101,7 @@ def test_confirm_notifies_other_joined_volunteer_only(db, sends, monkeypatch):
     vol().start_search(identifier)
     vol('two').start_search(identifier)
     found = vol().submit_found(FoundInput(request_id='real-report-request-1', photo_base64=photo()))
-    profile = vol().profiles_list()[0]['id']
+    profile = eligible_profiles(vol())[0]['id']
     sends.reset_mock()
     vol().confirm(found['id'], profile)
     assert sends.call_count == 1
@@ -122,46 +123,35 @@ def test_stale_or_cleared_location_cannot_trigger_priority(db, sends):
     assert sends.call_count == 1
 
 @pytest.mark.parametrize('outcome', ['cancelled', 'resolved'])
-def test_guardian_closure_notifies_received_and_joined_once_and_keeps_history(db, sends, outcome):
+def test_historical_guardian_closure_never_generates_new_delivery(db, sends, outcome):
     device('one')
     device('two')
     guardian, identifier = case()
     vol('two').start_search(identifier)
-    # An unrelated account created after the report did not receive/join it.
-    db.collection('users').document('unrelated').set({'role': 'volunteer', 'active': True})
+    historical_closure(CaseService(guardian), identifier, outcome)
     sends.reset_mock()
-    getattr(CaseService(guardian), 'cancel' if outcome == 'cancelled' else 'resolve')(identifier)
-    assert sends.call_count == 2
-    for call in sends.call_args_list:
-        message = call.args[0]
-        assert message.data['kind'] == outcome
-        assert message.data['notification_id'] == identifier + '-' + outcome
-        assert message.android.priority == 'high'
-        assert message.android.notification.tag == message.data['notification_id']
+    before = dict(db.data)
     volunteer_alerts.dispatch(db, identifier)
-    assert sends.call_count == 2
-    for uid in ('one', 'two'):
-        history = vol(uid).notifications_list()
-        assert {row['kind'] for row in history} == {'new_case', outcome}
-        assert vol(uid).list() == vol(uid).list(True) == []
-    assert not list(db.collection('users').document('unrelated').collection('volunteer_notifications').stream())
+    assert sends.call_count == 0
+    assert db.data == before
 
 
 def test_history_does_not_depend_on_fcm_permission_or_device(db, sends):
     guardian, identifier = case()
     assert sends.call_count == 0
     assert vol().notifications_list()[0]['id'] == identifier + '-new'
-    CaseService(guardian).cancel(identifier)
+    historical_closure(CaseService(guardian), identifier, 'cancelled')
     assert sends.call_count == 0
-    assert vol().notifications_list()[0]['kind'] == 'cancelled'
+    assert vol().notifications_list()[0]['kind'] == 'new_case'
 
 
 def test_closure_delivery_retries_and_does_not_recreate_expired_history(db, sends):
     device('one')
     guardian, identifier = case()
     sends.side_effect = OSError('temporary offline')
-    CaseService(guardian).resolve(identifier)
-    note = db.collection('users').document('one').collection('volunteer_notifications').document(identifier + '-resolved')
+    historical_closure(CaseService(guardian), identifier, 'reunited')
+    volunteer_alerts.dispatch(db, identifier)
+    note = db.collection('users').document('one').collection('volunteer_notifications').document(identifier + '-reunited')
     assert note.get().exists
     assert not list(note.collection('deliveries').stream())
     sends.side_effect = None
@@ -215,9 +205,9 @@ def test_approved_id_token_expiry_stops_push_but_preserves_real_history(db, send
     assert sends.call_count == 0
     assert vol().profile()['active'] is True
     assert vol().notifications_list()[0]['id'] == identifier + '-new'
-    CaseService(guardian).cancel(identifier)
+    historical_closure(CaseService(guardian), identifier, 'cancelled')
     assert sends.call_count == 0
-    assert vol().notifications_list()[0]['kind'] == 'cancelled'
+    assert vol().notifications_list()[0]['kind'] == 'new_case'
 
 
 @pytest.mark.parametrize('disabled,valid_after', [(True, 0), (False, 2000000)])
@@ -261,13 +251,14 @@ def test_session_validation_failure_fails_closed_and_retries(db, sends, monkeypa
     volunteer_alerts.dispatch(db,identifier)
     assert sends.call_count==1
 
-@pytest.mark.parametrize('outcome', ['cancelled', 'resolved'])
+@pytest.mark.parametrize('outcome', ['reunited'])
 def test_confirmed_only_recipient_without_history_or_device_is_not_lost(db, sends, outcome):
     guardian, identifier = case()
     for note in list(vol('one').user.collection('volunteer_notifications').stream()):
         note.reference.delete()
     db.data['cases/' + identifier].update(confirmed_by='one', joined_by=[])
-    getattr(CaseService(guardian), 'cancel' if outcome == 'cancelled' else 'resolve')(identifier)
+    historical_closure(CaseService(guardian), identifier, outcome)
+    volunteer_alerts.dispatch(db, identifier)
     note = vol('one').user.collection('volunteer_notifications').document(identifier + '-' + outcome).get()
     assert note.to_dict()['kind'] == outcome
     assert sends.call_count == 0
