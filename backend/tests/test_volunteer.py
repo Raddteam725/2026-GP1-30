@@ -1,4 +1,5 @@
 """Isolated shared-document/API tests; no production Firebase calls."""
+from workflow_fixtures import historical_closure
 import sys
 from pathlib import Path
 from datetime import datetime, timezone
@@ -81,7 +82,7 @@ def case():
 def test_closed_state_is_minimal_authoritative_and_scoped_to_previous_recipient(db, outcome):
     from datetime import timedelta
     guardian, identifier = case()
-    getattr(CaseService(guardian), 'cancel' if outcome == 'cancelled' else 'resolve')(identifier)
+    historical_closure(CaseService(guardian), identifier, outcome)
     assert vol().case_state(identifier) == {'id': identifier, 'status': outcome}
     with pytest.raises(HTTPException):
         vol().accessible(identifier)  # Status access never unlocks private details.

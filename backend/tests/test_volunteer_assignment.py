@@ -1,3 +1,4 @@
+from workflow_fixtures import eligible_profiles
 import pytest
 from fastapi import HTTPException
 from app.volunteer_access import VolunteerManagement, assignment_ref
@@ -47,7 +48,7 @@ def test_removal_revokes_existing_case_access_without_mutating_case(db):
     before = dict(db.data['cases/' + identifier])
     VolunteerManagement(db).change('one', actor='test', operation='remove', event_id='test-event')
     for action in (lambda: vol().start_search(identifier), lambda: vol().accessible(identifier),
-                   lambda: vol().profiles_list(), lambda: vol().found_list(),
+                   lambda: eligible_profiles(vol()), lambda: vol().found_list(),
                    lambda: vol().notifications_list()):
         with pytest.raises(HTTPException): action()
     assert db.data['cases/' + identifier] == before
@@ -60,7 +61,7 @@ def test_event_end_and_other_event_assignment_do_not_authorize_current_event(db)
     assert vol().profile(require_assignment=False)['assigned'] is False
     db.set(db.collection('events').document('next'), {'active': True})
     assert vol().profile(require_assignment=False)['assigned'] is False
-    with pytest.raises(HTTPException): vol().profiles_list()
+    with pytest.raises(HTTPException): eligible_profiles(vol())
 
 
 def test_management_rejects_guardian_missing_user_and_missing_event(db):

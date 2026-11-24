@@ -210,8 +210,6 @@ abstract class GuardianRepository {
   /// Active standalone Found Reports naming this Guardian's individuals,
   /// each with the short verification code the Guardian reads out.
   Future<List<GuardianFoundReport>> activeFoundReports();
-  Future<MissingCase> cancelCase(String id);
-  Future<MissingCase> resolveCase(String id);
 
   /// Registers (or refreshes) this installation's FCM registration for the
   /// authenticated Guardian. Idempotent -- safe to call again with the same

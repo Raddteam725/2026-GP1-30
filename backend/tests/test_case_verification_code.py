@@ -6,6 +6,7 @@ the Volunteer types, is the case's own `verification_code`: 6 secure digits,
 unique among the event's active cases, persisted once on the case record,
 stable for the workflow, removed at every terminal outcome.
 """
+from workflow_fixtures import eligible_profiles, historical_closure
 import sys
 from pathlib import Path
 import pytest
@@ -83,7 +84,7 @@ def test_code_is_stable_across_reads_and_correct_wrong_other_case(db):
 @pytest.mark.parametrize('outcome', ['cancel', 'resolve'])
 def test_guardian_terminal_outcomes_remove_the_code_and_never_backfill(db, outcome):
     guardian, case_id = case()
-    getattr(CaseService(guardian), outcome)(case_id)
+    historical_closure(CaseService(guardian), case_id, 'cancelled' if outcome == 'cancel' else 'resolved')
     assert 'verification_code' not in stored(db, case_id)
     assert CaseService(guardian).get(case_id)['verification_code'] is None
     assert 'verification_code' not in stored(db, case_id)  # a read never backfills a terminal case
@@ -119,7 +120,7 @@ def test_collision_within_active_scope_retries_and_terminal_codes_do_not_block(d
     assert second['verification_code'] == '000001'
     assert second['id'] != first_id
     # A terminal case's old code is out of scope: it may be reused.
-    CaseService(guardian).cancel(second['id'])
+    historical_closure(CaseService(guardian), second['id'], 'cancelled')
     sequence = iter(['000001'])
     _, third_person = guardian_with_individual('guardian')
     third = CaseService(guardian).create(CaseCreate(individual_id=third_person))
@@ -179,8 +180,9 @@ def test_qr_verification_and_found_report_codes_are_unchanged(db):
     # Standalone Found Report: still its own 6-digit code, still FR id hidden.
     other, identifier = guardian_with_individual('other-guardian')
     wanted = volunteer_workflow.key(other.get(identifier))
-    profile = next(p for p in vol('two').profiles_list() if p['id'] == wanted)
-    found = vol('two').submit_manual(volunteer_workflow.ManualFoundInput(request_id='manual-request-00009', profile_id=profile['id']))
+    profile = next(p for p in eligible_profiles(vol('two')) if p['id'] == wanted)
+    from test_volunteer_workflow import identified
+    found = identified('two', request_id='identified-request-00009', profile_id=profile['id'])
     found_code = db.data['found_reports/' + found['id']]['verification_code']
     assert len(found_code) == 6 and found_code.isdigit() and 'verification_code' not in found
     vol('two').begin_verification(found['id'])

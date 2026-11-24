@@ -865,7 +865,7 @@ void main() {
     expect(reason, 'volunteer_inactive');
     expect(repo.account, isNull);
     expect(repo.cases, isEmpty);
-    await expectLater(repo.loadProfiles(), throwsStateError);
+    await expectLater(repo.loadCase('RD-real'), throwsStateError);
     expect(calls, 1);
   });
   for (final language in ['en', 'ar']) {

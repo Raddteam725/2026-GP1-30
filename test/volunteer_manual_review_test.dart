@@ -70,8 +70,8 @@ void main() {
         final person = repo.reviewableProfiles.first;
         await tester.enterText(find.byType(TextField), person.name.en);
         await tester.pumpAndSettle();
-        await press(tester, s.vViewDetails);
-        expect(find.text(s.vConfirmIdentity), findsOneWidget);
+        expect(find.text(s.vNoResults), findsOneWidget);
+        expect(find.text(s.vViewDetails), findsNothing);
         expect(find.text(s.vGuardianName), findsNothing);
         expect(find.text(person.guardian.phone!), findsNothing);
         expect(repo.cases.first.confirmedBy, isNull);

@@ -275,14 +275,6 @@ class GuardianApi implements GuardianRepository {
         _json(await _request('POST', '/guardian/verification')),
       );
   @override
-  Future<MissingCase> cancelCase(String id) async => MissingCase.fromJson(
-    _json(await _request('POST', '/cases/${Uri.encodeComponent(id)}/cancel')),
-  );
-  @override
-  Future<MissingCase> resolveCase(String id) async => MissingCase.fromJson(
-    _json(await _request('POST', '/cases/${Uri.encodeComponent(id)}/resolve')),
-  );
-  @override
   Future<void> registerFcmToken(String token, String locale) async {
     // The token itself is the whole point of this request; never logged
     // (this call goes through the same _request as everything else, which

@@ -294,7 +294,7 @@ void main() {
       await repo.refresh();
       expect(repo.account!.eventAuthorized, isFalse);
       expect(paths, ['/v1/volunteer']);
-      await expectLater(repo.loadProfiles(), throwsStateError);
+      await expectLater(repo.loadCase('RD-real'), throwsStateError);
       expect(paths, ['/v1/volunteer']);
     },
   );

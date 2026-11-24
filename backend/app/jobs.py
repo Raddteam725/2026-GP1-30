@@ -25,7 +25,7 @@ def retry_alerts():
     for event in db.collection('events').where(filter=FieldFilter('active', '==', True)).stream():
         for case in db.collection('cases').where(filter=FieldFilter('event_id', '==', event.id)).stream():
             status = case.to_dict().get('status')
-            if status in (*STAGES, 'cancelled', 'resolved'):
+            if status in STAGES:
                 try:
                     dispatch(db, case.id, matched=status in STAGES[2:])
                 except Exception as error:

@@ -97,16 +97,7 @@ void main() {
             },
           ];
         }
-        if (path.endsWith('/profiles')) {
-          response = [
-            {
-              'id': 'person',
-              'full_name': 'Person',
-              'age': 7,
-              'gender': 'female',
-            },
-          ];
-        }
+        if (path.endsWith('/candidates')) response = {'state': 'candidates', 'candidates': [{'person': {'id': 'person', 'full_name': 'Person', 'age': 7, 'gender': 'female'}, 'similarity': .9}]};
         if (path.endsWith('/photo')) return http.Response('', 404);
         if (path.endsWith('/profiles/person')) {
           response = {
@@ -122,11 +113,12 @@ void main() {
     );
     addTearDown(repo.dispose);
     await repo.refresh();
-    await repo.loadProfiles();
+    final selected = (await repo.findMatches(FoundReport(id: 'test-report', volunteerUid: 'test', photo: ''))).single.person;
     expect(repo.cases.single.status, CaseStatus.reunited);
-    expect(repo.reviewableProfiles.single.id, 'person');
+    expect(repo.reviewableProfiles, isEmpty);
+    expect(selected.id, 'person');
     final person = await repo.loadProfileDetails(
-      repo.profiles.single,
+      selected,
       foundReportId: 'test-report',
     );
     expect(person.confirmationAvailable, isFalse);

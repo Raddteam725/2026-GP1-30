@@ -49,7 +49,7 @@ def test_every_guardian_route_rejects_unverified_identity(api):
     protected = [(method, route.path) for route in app.routes if isinstance(route, APIRoute)
                  and route.path.startswith('/v1/') and route.path != '/v1/session'
                  and not route.path.startswith('/v1/volunteer') for method in route.methods]
-    assert len(protected) == 26
+    assert len(protected) == 24
     before = dict(db.data)
     for method, path in protected:
         resolved = path.replace('{item_id}', 'person').replace('{case_id}', 'case').replace('{notification_id}', 'notice')

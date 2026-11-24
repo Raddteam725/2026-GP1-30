@@ -219,13 +219,6 @@ class ApiVolunteerRepository extends VolunteerRepository {
       }
       rethrow;
     }
-    if (kDebugMode &&
-        path == '/found-reports/manual' &&
-        response.statusCode == 405) {
-      debugPrint(
-        'Radd manual confirmation: server does not support POST /found-reports/manual; check running backend version.',
-      );
-    }
     if (response.statusCode == 401 || response.statusCode == 403) {
       String? detail;
       try {
@@ -797,27 +790,6 @@ class ApiVolunteerRepository extends VolunteerRepository {
     return _person(row, photo: person.photoBytes);
   }
 
-  Future<void> loadProfiles() async {
-    final rows = jsonDecode((await _request('GET', '/profiles')).body) as List;
-    final result = <RegisteredPerson>[];
-    for (final row in rows) {
-      Uint8List? photo;
-      try {
-        photo = (await _request(
-          'GET',
-          '/profiles/${row['id']}/photo',
-        )).bodyBytes;
-      } catch (_) {
-        /* No sample fallback. */
-      }
-      result.add(_person(row as Map<String, dynamic>, photo: photo));
-    }
-    if (!_disposed && !_accessLost) {
-      _profiles = result;
-      notifyListeners();
-    }
-  }
-
   Future<void> markRead(VolunteerAlert alert) async {
     if (alert.id != null) {
       await _request(
@@ -857,23 +829,6 @@ class ApiVolunteerRepository extends VolunteerRepository {
     }
     _refreshAfterAction();
     return item;
-  }
-
-  Future<FoundReport> confirmManualIdentity(
-    String profileId,
-    String requestId,
-  ) async {
-    final data = jsonDecode(
-      (await _request(
-        'POST',
-        '/found-reports/manual',
-        body: {'profile_id': profileId, 'request_id': requestId},
-      )).body,
-    ) as Map<String, dynamic>;
-    final result = _found(data);
-    _reports = [result, ..._reports.where((r) => r.id != result.id)];
-    if (!_disposed) notifyListeners();
-    return result;
   }
 
   @override

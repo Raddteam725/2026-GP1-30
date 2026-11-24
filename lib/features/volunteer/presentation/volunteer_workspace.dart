@@ -106,7 +106,6 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
   bool _independentReview = false;
   Uint8List? _pendingCapture;
   String? _captureRequestId;
-  String? _manualRequestId;
   final List<VolunteerView> _stack = [VolunteerView.home];
   int _tab = 0, _searchGeneration = 0;
   bool _mine = false,
@@ -795,7 +794,12 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
       item.information?.coordinates != null &&
       location!.distanceTo(item.information!.coordinates!) <=
           repo.proximityRadiusMeters;
-  Future<bool> _confirm(String title, String message, String action) =>
+  Future<bool> _confirm(
+    String title,
+    String message,
+    String action, {
+    VoidCallback? onConfirm,
+  }) =>
       showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
@@ -816,7 +820,7 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
               child: Text(s.vCancel),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(context, true),
+              onPressed: onConfirm ?? () => Navigator.pop(context, true),
               child: Text(action),
             ),
           ],

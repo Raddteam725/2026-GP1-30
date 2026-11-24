@@ -267,12 +267,8 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     if (!independent && _report?.ended == true) {
       throw StateError('identification-ended');
     }
-    if (repo is ApiVolunteerRepository) {
-      await (repo as ApiVolunteerRepository).loadProfiles();
-    }
     if (mounted) {
       _independentReview = independent;
-      if (independent) _manualRequestId = null;
       _open(VolunteerView.manual);
     }
   });
@@ -797,7 +793,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
 
   List<Widget> _manual() {
     final query = _search.text.trim().toLowerCase();
-    final people = repo.reviewableProfiles
+    final people = const <RegisteredPerson>[]
         .where(
           (p) =>
               (_gender == null || p.gender == _gender) &&
@@ -1142,26 +1138,17 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
           s.vConfirmMatchQuestion,
           '${dataText(context, _person!.name)}\n\n${s.vConfirmMatchHint}',
           _independentReview ? s.vConfirmMatch : s.vSelectAndContact,
+          onConfirm: _independentReview || _similarity == null ? () {} : null,
         ) ||
         !mounted) {
       return;
     }
     await _run(() async {
-      if (_independentReview) {
-        if (repo is! ApiVolunteerRepository) return;
-        _manualRequestId ??= _newRequestId();
-        _report = await (repo as ApiVolunteerRepository).confirmManualIdentity(
-          _person!.id,
-          _manualRequestId!,
-        );
-        _independentReview = false;
-      } else {
-        // Confirmation concludes the attempt: the server deletes the photo
-        // and the repository drops its bytes; drop the decoded copy too.
-        final photo = _report!.photoBytes;
-        await repo.confirmMatch(account, _report!, _person!);
-        forgetCapturedPhoto(photo);
-      }
+      // Confirmation concludes the attempt: the server deletes the photo
+      // and the repository drops its bytes; drop the decoded copy too.
+      final photo = _report!.photoBytes;
+      await repo.confirmMatch(account, _report!, _person!);
+      forgetCapturedPhoto(photo);
       if (mounted) {
         if (repo is ApiVolunteerRepository) {
           _restoreReport(_report!);

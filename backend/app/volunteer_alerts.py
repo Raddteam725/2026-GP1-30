@@ -5,7 +5,6 @@ Location is available during authorized participation; estimates expire after 60
 FCM registration eligibility expires with the verified Firebase ID token.
 """
 import logging
-import math
 import time
 from datetime import datetime, timedelta, timezone
 from firebase_admin import auth, firestore, messaging
@@ -13,23 +12,16 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from .firebase import firebase_app
 from . import delivery_queue
 from .case_models import STAGES
-from .alerts import PROXIMITY_RADIUS_METERS
 from .volunteer_access import eligible_for_event
 
 TEXT = {
-    'en': {'general': 'A new missing-person case needs your help.', 'priority': 'A nearby missing-person case needs your help.', 'status_update': 'A match has been found for a case you joined.', 'cancelled': 'The guardian cancelled this missing-person case.', 'resolved': 'The guardian found the individual and resolved this case.', 'reunited': 'The individual has been reunited with their guardian.'},
-    'ar': {'general': 'بلاغ فقدان جديد يحتاج إلى مساعدتك.', 'priority': 'بلاغ فقدان قريب يحتاج إلى مساعدتك.', 'status_update': 'تم العثور على تطابق لحالة انضممت إلى البحث عنها.', 'cancelled': 'ألغى ولي الأمر بلاغ الفقدان لهذه الحالة.', 'resolved': 'عثر ولي الأمر على الشخص وأغلق الحالة.', 'reunited': 'تم تسليم الشخص إلى ولي أمره بعد التحقق.'},
+    'en': {'general': 'A new missing-person case needs your help.', 'status_update': 'A match has been found for a case you joined.', 'reunited': 'The individual has been reunited with their guardian.'},
+    'ar': {'general': 'بلاغ فقدان جديد يحتاج إلى مساعدتك.', 'status_update': 'تم العثور على تطابق لحالة انضممت إلى البحث عنها.', 'reunited': 'تم تسليم الشخص إلى ولي أمره بعد التحقق.'},
 }
-
-def distance(a, b, c, d):
-    lat = math.radians(c-a)
-    lon = math.radians(d-b)
-    h = math.sin(lat/2)**2 + math.cos(math.radians(a))*math.cos(math.radians(c))*math.sin(lon/2)**2
-    return 6371000 * 2 * math.asin(min(1, math.sqrt(h)))
 
 def delivery(db, user, case, kind, registrations):
     cd = case.to_dict()
-    suffix = {'general': 'new', 'priority': 'priority', 'status_update': 'match_confirmed'}.get(kind, kind)
+    suffix = {'general': 'new', 'status_update': 'match_confirmed'}.get(kind, kind)
     ref = user.reference.collection('volunteer_notifications').document(case.id + '-' + suffix)
     @firestore.transactional
     def record(tx):
@@ -50,7 +42,7 @@ def _send_registration(db, user, case, kind, ref, registration):
         return
     if not latest or latest.get('scrubbed_at') or not ref.get().exists:
         return
-    if kind in ('general', 'priority') and latest.get('status') not in STAGES[:2]:
+    if kind == 'general' and latest.get('status') not in STAGES[:2]:
         return
     fresh = registration.reference.get()
     rd = fresh.to_dict() or {}
@@ -109,7 +101,7 @@ def dispatch(db, case_id, *, matched=False, recipient=None):
     case = db.collection('cases').document(case_id).get()
     cd = case.to_dict() or {}
     status = cd.get('status')
-    terminal = status in ('cancelled', 'resolved', 'reunited')
+    terminal = status == 'reunited'
     closed_at = cd.get('closed_at')
     if cd.get('scrubbed_at') or (terminal and isinstance(closed_at, datetime) and
             datetime.now(timezone.utc) - closed_at >= timedelta(hours=24)):
@@ -134,26 +126,6 @@ def dispatch(db, case_id, *, matched=False, recipient=None):
         logging.getLogger("uvicorn.error").info("Radd event %s eligibility active_devices=%d epoch_ms=%d", case.id, len(registrations), time.time()*1000)
         # History is durable even with notifications denied or no current device.
         delivery(db, user, case, status if terminal else 'status_update' if matched else 'general', registrations)
-        guided = cd.get('guided_report') or {}
-        if terminal or matched or guided.get('same_location') is not True or guided.get('latitude') is None or guided.get('longitude') is None:
-            continue
-        nearby = []
-        for registration in registrations:
-            loc = registration.to_dict().get('location') or {}
-            at = loc.get('at')
-            if not isinstance(at, datetime) or (now-at).total_seconds() > 60:
-                continue
-            if distance(loc['latitude'], loc['longitude'], guided['latitude'], guided['longitude']) <= PROXIMITY_RADIUS_METERS:
-                nearby.append(registration)
-        if nearby:
-            # One case, a separate priority notification, never a priority case.
-            intent = db.collection('alerts').document(case.id + '-priority-' + user.id)
-            intent.set({'case_id': case.id, 'event_id': cd['event_id'], 'kind': 'priority',
-                        'recipient_volunteer_id': user.id, 'proximity_eligible': True,
-                        'status': cd['status'], 'delivered': False,
-                        'distance_meters': min(distance(r.to_dict()['location']['latitude'], r.to_dict()['location']['longitude'], guided['latitude'], guided['longitude']) for r in nearby),
-                        'created_at': firestore.SERVER_TIMESTAMP}, merge=True)
-            delivery(db, user, case, 'priority', nearby)
 
 def safe_dispatch(db, case_id, *, matched=False, recipient=None):
     try:

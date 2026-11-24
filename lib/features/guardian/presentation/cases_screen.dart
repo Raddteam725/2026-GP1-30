@@ -233,7 +233,7 @@ const _liveStatusPollInterval = Duration(seconds: 30);
 class _CaseStatusScreenState extends State<CaseStatusScreen> {
   Future<MissingCase>? _data;
   MissingCase? _live;
-  bool _busy = false;
+  final bool _busy = false;
   Object? _error;
   Timer? _poll;
   @override
@@ -317,32 +317,14 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
 
   Future<void> _terminate({required bool resolve}) async {
     final s = AppLocalizations.of(context)!;
-    final confirmed = await guardianConfirmation(
+    await guardianConfirmation(
       context,
       title: resolve ? s.resolveReport : s.cancelReport,
       confirm: resolve ? s.resolveReport : s.cancelReport,
       message: resolve ? s.resolveReportConfirm : s.cancelReportConfirm,
       icon: resolve ? Icons.task_alt : Icons.cancel_outlined,
+      onConfirm: () {},
     );
-    if (confirmed != true || !mounted) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      final guardian = AppServices.of(context).guardian;
-      final outcome = await (resolve
-          ? guardian.resolveCase(widget.id)
-          : guardian.cancelCase(widget.id));
-      // Their own explicit action, already reflected on this screen: no
-      // transient banner for the push that follows (history keeps it).
-      GuardianPushRefresh.instance.markOwnAction(outcome.id, outcome.status);
-      if (mounted) _reload();
-    } catch (e) {
-      if (mounted) setState(() => _error = e);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
   }
 
   @override

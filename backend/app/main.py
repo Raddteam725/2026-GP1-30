@@ -187,14 +187,6 @@ def guided_report(case_id: str, value: GuidedReport, s=Depends(cases_service)):
 def verification(case_id: str, s=Depends(cases_service)):
     return s.verification(case_id)
 
-@app.post("/v1/cases/{case_id}/cancel")
-def cancel_case(case_id: str, s=Depends(cases_service)):
-    return s.cancel(case_id)
-
-@app.post("/v1/cases/{case_id}/resolve")
-def resolve_case(case_id: str, s=Depends(cases_service)):
-    return s.resolve(case_id)
-
 @app.get("/v1/notifications")
 def notifications(s=Depends(cases_service)):
     return s.list_notifications()

@@ -369,6 +369,7 @@ Future<bool?> guardianConfirmation(
   required String message,
   required String confirm,
   required IconData icon,
+  VoidCallback? onConfirm,
 }) {
   final s = AppLocalizations.of(context)!;
   return showDialog<bool>(
@@ -392,7 +393,7 @@ Future<bool?> guardianConfirmation(
         ),
         FilledButton(
           style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-          onPressed: () => Navigator.pop(context, true),
+          onPressed: onConfirm ?? () => Navigator.pop(context, true),
           child: Text(confirm),
         ),
       ],
