@@ -12,7 +12,7 @@ real_retry_alerts = jobs.retry_alerts
 LEASE = 'configuration/cleanup_lock'
 
 RETRY = ['alerts', 'guardian']
-CLEANUP = ['queue', 'photos', 'cases', 'found', 'abandoned']
+CLEANUP = ['queue', 'found', 'abandoned']
 
 @pytest.fixture
 def calls(monkeypatch, db):
@@ -23,15 +23,12 @@ def calls(monkeypatch, db):
     monkeypatch.setattr(jobs, 'retry_alerts', record('alerts'))
     monkeypatch.setattr(jobs, 'retry_guardian_alerts', record('guardian'))
     monkeypatch.setattr(cleanup, 'run', record('queue'))
-    monkeypatch.setattr(cleanup, 'expire_photos', record('photos'))
-    monkeypatch.setattr(cleanup, 'scrub_terminal_cases', record('cases'))
     monkeypatch.setattr(cleanup, 'delete_finished_found_photos', record('found'))
     monkeypatch.setattr(cleanup, 'end_abandoned_found_attempts', record('abandoned'))
     return calls
 
 @pytest.fixture
 def mode(monkeypatch):
-    # setenv first so monkeypatch restores the original (unset) value afterwards.
     monkeypatch.setenv('RADD_DELIVERY_MODE', '')
     monkeypatch.delenv('RADD_DELIVERY_MODE')
 
@@ -114,9 +111,9 @@ def test_cleanup_takes_over_expired_lease(calls, db):
 def test_release_does_not_delete_lease_replaced_by_another_owner(calls, db, monkeypatch):
     replaced = other_lease(10)
     def take_over():
-        calls.append('photos')
+        calls.append('found')
         db.data[LEASE] = dict(replaced)
-    monkeypatch.setattr(cleanup, 'expire_photos', take_over)
+    monkeypatch.setattr(cleanup, 'delete_finished_found_photos', take_over)
     assert jobs.run_cleanup() is True
     assert calls == CLEANUP
     assert db.data[LEASE] == replaced

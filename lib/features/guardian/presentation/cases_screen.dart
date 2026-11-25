@@ -87,8 +87,6 @@ class _CasesScreenState extends State<CasesScreen> {
       future: _data,
       builder: (context, state) {
         final cases = state.data ?? const <MissingCase>[];
-        // Only non-terminal cases are Active; closed ones are history and
-        // never counted or mixed into the active section.
         final active = cases.where((c) => c.active).toList();
         final closed = cases.where((c) => !c.active).toList();
         return FeaturePage(
@@ -98,11 +96,6 @@ class _CasesScreenState extends State<CasesScreen> {
               ? null
               : const GuardianNavigation(selected: 3),
           children: [
-            // No manual refresh control: the list follows the backend on its
-            // own -- a validated case event (FCM) or an app resume triggers
-            // the authoritative refetch above (_recover), and returning from
-            // Case Status reloads. Only an explicit load FAILURE offers a
-            // retry (ErrorNotice below).
             Text(
               s.cases,
               style: const TextStyle(
@@ -220,14 +213,6 @@ class CaseStatusScreen extends StatefulWidget {
   State<CaseStatusScreen> createState() => _CaseStatusScreenState();
 }
 
-// The case-status screen must reflect Volunteer-driven progress (stage
-// changes, guardian-verification requests) without the Guardian needing to
-// pull to refresh -- this polls quietly in the background while the case is
-// still active and this screen is on-screen, per the "status updates
-// automatically" requirement. Radd talks to the Business Logic Layer only
-// through the REST API (no direct Firestore listener on the client), so a
-// foreground FCM/resume event refreshes immediately. This poll is recovery
-// only, for a missed signal or a temporary transport failure.
 const _liveStatusPollInterval = Duration(seconds: 30);
 
 class _CaseStatusScreenState extends State<CaseStatusScreen> {
@@ -239,9 +224,6 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
   @override
   void initState() {
     super.initState();
-    // A foreground push is a hint only -- this reuses the same silent
-    // background refresh the 8-second poll already does; it never trusts
-    // the push payload itself for status/case data.
     GuardianPushRefresh.instance.addListener(_onCaseEvent);
   }
 
@@ -285,7 +267,7 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
   Future<void> _pollOnce() => _caseRefresh.run(_fetchCase);
   Future<void> _fetchCase() async {
     if (!mounted) return;
-    if (_busy) return; // Never race a Guardian-initiated action's own reload.
+    if (_busy) return;
     final generation = ++_liveGeneration;
     try {
       final value = await AppServices.of(context).guardian
@@ -293,14 +275,12 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
       if (!mounted || generation != _liveGeneration) return;
       setState(() => _live = value);
       if (value.active) _startPolling();
-      if (!value.active) _poll?.cancel(); // Terminal: nothing left to watch.
+      if (!value.active) _poll?.cancel();
     } catch (error) {
       assert(() {
         debugPrint('Radd Guardian case refresh failed (${error.runtimeType})');
         return true;
       }());
-      // A transient failure here must not surface as an error banner over an
-      // otherwise-fine screen; the next tick (or manual refresh) retries.
     }
   }
 
@@ -334,9 +314,6 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
       future: _data,
       builder: (context, state) {
         final value = _live ?? state.data;
-        // No manual refresh control: this screen follows its case through
-        // the event refetch (_onCaseEvent), app resume and the slow fallback
-        // poll; only an explicit load failure offers a retry (below).
         return FeaturePage(
           title: s.caseStatus,
           centerTitle: false,
@@ -453,8 +430,6 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
                     runSpacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      // Real identifiers are long; the chip wraps to its own
-                      // line rather than squeezing the name.
                       CaseIdChip(id: value.id),
                       StatusChip(status: value.status),
                       Text(
@@ -512,9 +487,6 @@ class _CaseStatusScreenState extends State<CaseStatusScreen> {
   );
 
   Widget _timeline(AppLocalizations s, MissingCase value) {
-    // A terminal outcome that is not itself the fifth stage (resolved,
-    // cancelled, transferred) is shown as its own clearly-labelled branch at
-    // the end -- never as if Stage 5 "Reunited" had happened.
     final outcome = !value.active && value.status != 'reunited';
     final currentIndex = caseStages.indexOf(value.status);
     return GuardianPanel(
@@ -642,8 +614,6 @@ class _TimelineStep extends StatelessWidget {
   });
   final int? number;
 
-  /// The stage's own semantic status colour (see caseStatusColor); only
-  /// reached steps paint with it, upcoming steps stay muted.
   final Color color;
   final String title;
   final _StepState state;

@@ -89,7 +89,6 @@ void main() {
               if (path.endsWith('/found-reports/FR-resume')) {
                 return http.Response(jsonEncode(report()), 200);
               }
-              // Stale list card deliberately survives completion; detail is authoritative.
               if (path.endsWith('/found-reports')) {
                 return http.Response(jsonEncode([report()]), 200);
               }
@@ -141,7 +140,6 @@ void main() {
           );
           expect(find.text(expected()), findsOneWidget);
           expect(writes, isEmpty);
-          // Recreating the workspace must reconstruct exactly the same server state.
           await tester.pumpWidget(const SizedBox());
           await tester.pumpAndSettle();
           await mount();

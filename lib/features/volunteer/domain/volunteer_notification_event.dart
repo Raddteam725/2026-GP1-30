@@ -1,7 +1,5 @@
 import 'volunteer_models.dart';
 
-/// FCM contains navigation hints, never identity or authorization. Text is
-/// localized in Radd; case details always go through the authenticated API.
 class VolunteerNotificationEvent {
   const VolunteerNotificationEvent({
     required this.id,
@@ -36,7 +34,7 @@ class VolunteerNotificationEvent {
 
   static AlertKind? parseKind(dynamic kind, dynamic status) => switch (kind) {
     'general' || 'new_case' => AlertKind.newCase,
-    'priority' => AlertKind.priority,
+    'priority' => AlertKind.newCase,
     'status_update' => AlertKind.statusUpdate,
     'case_closed' => switch (status) {
       'cancelled' => AlertKind.cancelled,
@@ -50,8 +48,6 @@ class VolunteerNotificationEvent {
   };
 }
 
-/// Scoped to one authenticated workspace. Backend history uses the same stable
-/// ID, so duplicate FCM deliveries cannot create extra history rows either.
 class VolunteerNotificationDeduplicator {
   final Set<String> _seen = {};
   bool accept(VolunteerNotificationEvent event) => _seen.add(

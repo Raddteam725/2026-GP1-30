@@ -1,13 +1,3 @@
-"""Event-configured registration retention; no photo-age lifetime or implicit migration.
-
-The retention period is the Guardian's choice at registration (Sprint-0
-"Registration Period and Data Retention"): it starts at the successful
-registration, cannot extend beyond the event's end, and defines when the
-individual's identifiable data is deleted. A Guardian may later change the
-choice from the profile (`reschedule`): the start never moves, the new
-deadline must still lie in the future and within the event, and the same
-edit restrictions as any other profile edit apply (no active case).
-"""
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 from .case_models import STAGES
@@ -22,7 +12,6 @@ def timestamp(value):
 
 
 def configured_periods(event):
-    """The event's configured options, schema-checked; independent of time."""
     data = event.to_dict()
     start, end = data.get('starts_at'), data.get('ends_at')
     options = data.get('registration_periods')
@@ -41,7 +30,6 @@ def configured_periods(event):
 
 
 def valid_periods(event, now=None):
-    """Options a NEW registration may choose right now."""
     now = now or utc_now()
     start, end, periods = configured_periods(event)
     if event.to_dict().get('active') is not True or not start <= now < end:
@@ -65,12 +53,6 @@ def establish(event, period_id=None):
 
 
 def edit_options(event, data, now=None):
-    """Every configured option for an EXISTING registration, each with the
-    deadline it would produce (counted from the ORIGINAL start) and whether
-    it may be chosen: `available` is False with `reason` 'deadline_passed'
-    when that deadline is already behind us, or 'beyond_event' when it would
-    end after the event. The current choice is always available (a no-op).
-    The client only uses this to disable choices; `reschedule` decides."""
     now = now or utc_now()
     _, end, periods = configured_periods(event)
     if event.to_dict().get('active') is not True or not known_period(data):
@@ -88,13 +70,6 @@ def edit_options(event, data, now=None):
 
 
 def reschedule(event, data, period_id, now=None):
-    """The Guardian changes the retention period of an existing registration.
-
-    Never moves the start. Rejects an option that is not configured or would
-    end after the event (422 invalid_registration_period), and one whose
-    deadline has already passed (409 retention_deadline_passed) -- a choice
-    can never retroactively expire the data.
-    """
     now = now or utc_now()
     _, end, periods = configured_periods(event)
     if event.to_dict().get('active') is not True or not known_period(data):
@@ -131,12 +106,10 @@ def registration_available(data, db=None, tx=None, *, case_context=False):
         return False
     if data['registration_started_at'] > utc_now():
         return False
-    # A deletion hold never renews general registration eligibility.
     return data['registration_expires_at'] > utc_now() or (case_context and active_case_required(data, db, tx))
 
 
 def validate_configuration(current, proposed):
-    """Trusted management boundary, reused by the dev CLI; no Admin endpoint."""
     start, end = proposed.get('starts_at'), proposed.get('ends_at')
     if not timestamp(start) or not timestamp(end) or end <= start:
         raise ValueError('Timezone-aware starts_at < ends_at required')
@@ -148,5 +121,4 @@ def validate_configuration(current, proposed):
     class Snapshot:
         def to_dict(self):
             return {**proposed, 'active': True}
-    # Validate schema and at least one period fits in the event's full window.
     valid_periods(Snapshot(), start)

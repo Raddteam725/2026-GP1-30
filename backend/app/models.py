@@ -2,17 +2,10 @@ import re
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-# The current release supports Saudi Arabian mobile numbers (Sprint-0 scope);
-# other numbering plans are future work. Any common way of writing a Saudi
-# number is accepted -- +966…, 00966…, 966… or the national 0… form, with
-# spaces/dashes and Arabic-Indic digits -- and stored in one canonical
-# international form. Shared by Guardian self-registration and Admin
-# Volunteer creation; the Flutter validator mirrors it (lib/shared/saudi_phone.dart).
 SAUDI_PHONE_CANONICAL = r"^\+9665[0-9]{8}$"
 _ARABIC_INDIC = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 
 def normalize_saudi_phone(value):
-    """Canonical +9665XXXXXXXX, or None for an invalid Saudi mobile number."""
     if not isinstance(value, str):
         return None
     digits = re.sub(r"[\s\-().]", "", value.translate(_ARABIC_INDIC))
@@ -47,14 +40,7 @@ class ProfileCreate(ProfileUpdate):
 
 class FcmRegistration(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
-    # The registration identifier the Firebase Messaging SDK issues to the
-    # installation -- opaque to this backend, never interpreted or logged.
     token: str = Field(min_length=1, max_length=4096)
-    # This installation's CURRENT in-app language (Radd's own explicit
-    # selection, e.g. Localizations.localeOf(context) -- not the device's
-    # system locale, which may differ). Determines which language the visible
-    # notification text is sent in for this registration. Optional and
-    # defaults to "en" (Radd's own default) so older/unaware clients still work.
     locale: Literal["en", "ar"] = "en"
 
 class FcmUnregister(BaseModel):

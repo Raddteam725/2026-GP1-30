@@ -36,18 +36,13 @@ enum IdentificationState {
   candidates,
   noReliableCandidate,
 
-  /// AI matching is switched off or its model is not available.
   unavailable,
 
-  /// The server answered the matching request with a failure.
   error,
 
-  /// The server could not be reached (no connection or timeout).
   network,
 }
 
-/// Views that belong to one AI identification attempt. Leaving them (back
-/// past the options screen, or another tab) concludes the attempt.
 const identificationAttemptViews = {
   VolunteerView.finding,
   VolunteerView.matches,
@@ -327,7 +322,6 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
         _push?.sync(Localizations.localeOf(context).languageCode, location);
       }
     } catch (_) {
-      // Keep the existing screen with an explicit retry; never populate fixtures.
     } finally {
       if (mounted) {
         setState(() => _refreshing = false);
@@ -341,8 +335,6 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
 
   void _receiveNotification(VolunteerNotificationEvent event) {
     if (!mounted || !_canParticipate || !_noticeDedup.accept(event)) return;
-    // A newly arriving important event is visible immediately, even if the
-    // previous banner was not dismissed. Both remain in server-side history.
     _noticeOverlay?.remove();
     _noticeOverlay?.dispose();
     _noticeOverlay = null;
@@ -350,8 +342,6 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
       ..clear()
       ..add(event);
     _showNotice();
-    // Display immediately; targeted authenticated lists/history reconcile the
-    // event without waiting for a full workspace refresh or device registration.
     unawaited(_refreshEvent(event));
   }
 
@@ -434,8 +424,6 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
       _pendingNotificationOpen = event;
       return;
     }
-    // Return from a camera/QR route only on an explicit notification action.
-    // This never ends a Found Report or confirms a handover.
     final workspaceRoute = ModalRoute.of(context);
     Navigator.of(context).popUntil((route) => route == workspaceRoute);
     if (!event.opensCase) {
@@ -509,8 +497,6 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
         (repo as ApiVolunteerRepository).proximityLocation = location;
       }
       if (repo is ApiVolunteerRepository && _case != null) {
-        // Preserve context when a case leaves active lists. Details render the
-        // authoritative history outcome below instead of silently navigating.
         _case = repo.caseById(_case!.id) ?? _case;
       }
     });
@@ -529,7 +515,6 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     _push?.close();
     WidgetsBinding.instance.removeObserver(this);
     ++_searchGeneration;
-    // Decoded copies only; an open attempt stays resumable from its report.
     forgetCapturedPhoto(_report?.photoBytes);
     _pendingCapture = null;
     repo.removeListener(_refresh);
@@ -577,7 +562,6 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     }
     if (view == VolunteerView.matches) {
       if (_identificationState != IdentificationState.ready) {
-        // Results/outcome screens step back to the two options.
         _update(() {
           _candidates = [];
           _identificationState = IdentificationState.ready;
@@ -597,8 +581,6 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     }
   }
 
-  /// An AI identification attempt that has not concluded yet and therefore
-  /// still holds the temporary captured photo (on the server and here).
   bool get _attemptOpen {
     final report = _report;
     return repo is ApiVolunteerRepository &&
@@ -609,8 +591,6 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
         _stack.any(identificationAttemptViews.contains);
   }
 
-  /// Navigation bar: switching tabs away from an open attempt concludes it,
-  /// exactly like End Identification Attempt.
   void _onTabSelected(int tab) {
     if (_busy) return;
     if (_attemptOpen) {
@@ -623,7 +603,6 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
   void _selectTab(int tab) {
     if (_busy) return;
     ++_searchGeneration;
-    // A capture whose upload failed is only kept for an immediate retry.
     _pendingCapture = null;
     _captureRequestId = null;
     _update(() {
@@ -638,8 +617,6 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
   void _message(String text) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
-  /// Refusals that mean the persisted report/case is at a different stage
-  /// than this screen assumed.
   static const staleStateFailures = {
     'already-matched',
     'resume-existing-report',
@@ -651,8 +628,6 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     'report-state-unavailable',
   };
 
-  /// The Guardian-facing text for a failed Volunteer action: known workflow
-  /// refusals get their own explanation; anything else the safe generic one.
   static String volunteerFailureMessage(AppLocalizations s, Object error) =>
       switch (error is StateError ? error.message : null) {
         'already-matched' => s.vFailureAlreadyMatched,
@@ -685,7 +660,6 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
       await action();
     } catch (error, stack) {
       assert(() {
-        // Stage/code only -- never identifiers, contact data or QR content.
         debugPrint(
           'Radd Volunteer action failed (${error.runtimeType}'
           '${error is StateError ? ': ${error.message}' : ''})\n$stack',
@@ -693,8 +667,6 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
         return true;
       }());
       if (mounted) _message(volunteerFailureMessage(s, error));
-      // The backend refused because the stored workflow moved on: pull the
-      // authoritative state so the screens catch up instead of retrying blind.
       if (mounted &&
           error is StateError &&
           staleStateFailures.contains(error.message)) {
@@ -711,8 +683,6 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
   }
 
   Future<void> _logout() async {
-    // Signing out concludes an open attempt; failure falls back to the
-    // server's abandoned-attempt cleanup.
     final report = _report;
     if (_attemptOpen && report != null) {
       try {
@@ -788,12 +758,7 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     }
   }
 
-  bool _isNearby(VolunteerCase item) =>
-      item.joinable &&
-      location != null &&
-      item.information?.coordinates != null &&
-      location!.distanceTo(item.information!.coordinates!) <=
-          repo.proximityRadiusMeters;
+  bool _isNearby(VolunteerCase _) => false;
   Future<bool> _confirm(
     String title,
     String message,

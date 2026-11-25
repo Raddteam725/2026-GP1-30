@@ -4,25 +4,11 @@ import 'package:flutter/material.dart';
 
 import 'onboarding_layout.dart';
 
-/// SEARCH → FIND → RADD, told with the official logo's own pieces.
-///
-/// 1. The magnifying glass enters from above and settles.
-/// 2. A yellow radar beam appears inside the glass and sweeps one full turn,
-///    searching -- the person is not there yet.
-/// 3. The sweep stops in the logo's own beam direction (straight down) and
-///    hands over to the real beam of the logo.
-/// 4. The person is revealed inside the beam (fade + subtle scale).
-/// 5. The pieces are exactly the official composition; the plain logo asset
-///    takes over for the rest of the splash. No rings, pulses or bounces.
-///
-/// Every piece is a masked region of the one transparent official logo, so the
-/// final frame is pixel-identical to the asset.
 class SplashLogoAnimation extends StatelessWidget {
   const SplashLogoAnimation({super.key, required this.progress});
   final Animation<double> progress;
   static const asset = OnboardingLayout.logoAsset;
 
-  // Phases of the overall splash progress (see OnboardingLayout.splashDuration).
   static const glassPhase = Interval(0.0, 0.20, curve: Curves.easeOutCubic);
   static const sweepPhase = Interval(0.22, 0.58, curve: Curves.easeInOutCubic);
   static const sweepFadeIn = Interval(0.22, 0.27, curve: Curves.easeOut);
@@ -31,8 +17,6 @@ class SplashLogoAnimation extends StatelessWidget {
   static const personPhase = Interval(0.61, 0.72, curve: Curves.easeOutCubic);
   static const settled = 0.74;
 
-  /// The logo's beam points straight down; the sweep ends exactly there
-  /// after one clockwise turn.
   static const finalAngle = math.pi / 2;
 
   @override
@@ -56,7 +40,6 @@ class SplashLogoAnimation extends StatelessWidget {
           return Stack(
             fit: StackFit.expand,
             children: [
-              // 1. The magnifying glass enters from above and settles.
               FadeTransition(
                 key: const ValueKey('logo-glass'),
                 opacity: glass,
@@ -67,8 +50,6 @@ class SplashLogoAnimation extends StatelessWidget {
                   child: _piece('glass'),
                 ),
               ),
-              // 2-3. The radar beam searches inside the glass, one full
-              // turn, and stops in the logo's beam direction.
               Opacity(
                 key: const ValueKey('logo-radar'),
                 opacity: radarOpacity,
@@ -78,13 +59,11 @@ class SplashLogoAnimation extends StatelessWidget {
                   ),
                 ),
               ),
-              // 3. The real beam of the logo takes over where the sweep stops.
               FadeTransition(
                 key: const ValueKey('logo-light'),
                 opacity: light,
                 child: _piece('light'),
               ),
-              // 4. The person is found inside the beam.
               FadeTransition(
                 key: const ValueKey('logo-person'),
                 opacity: person,
@@ -107,18 +86,13 @@ class SplashLogoAnimation extends StatelessWidget {
   );
 }
 
-/// The searching beam: a yellow wedge (the logo's own beam colour) rotating
-/// about the magnifying glass's centre, clipped to the inside of the ring.
-/// [angle] is the direction of the wedge's leading edge in radians, screen
-/// convention (0 = right, pi/2 = down), in the logo's 500x500 space.
 class RadarSweepPainter extends CustomPainter {
   const RadarSweepPainter({required this.angle});
   final double angle;
 
-  // Ring geometry measured on the 500x500 asset.
   static const center = Offset(247.5, 224);
   static const radius = 106.0;
-  static const sweepWidth = 1.35; // radians: a broad, soft search cone
+  static const sweepWidth = 1.35;
   static const beam = Color(0xFFFEAD1D);
 
   @override
@@ -131,7 +105,6 @@ class RadarSweepPainter extends CustomPainter {
     );
     canvas.translate(center.dx, center.dy);
     canvas.rotate(angle);
-    // Leading edge at 0 rad (brightest), trailing off behind it.
     final wedge = Path()
       ..moveTo(0, 0)
       ..arcTo(
@@ -166,8 +139,6 @@ class RadarSweepPainter extends CustomPainter {
       oldDelegate.angle != angle;
 }
 
-/// Masks follow transparent gaps around the 500 x 500 source. The light's
-/// trapezoid excludes the ring ends, unlike a rectangular crop would.
 class _LogoRegion extends CustomClipper<Path> {
   const _LogoRegion(this.part);
   final String part;

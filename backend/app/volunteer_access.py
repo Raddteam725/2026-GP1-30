@@ -1,9 +1,3 @@
-"""Shared event authorization and privileged account/assignment operations.
-
-Management operations are internal services, not public endpoints. A future
-Admin API must authorize its caller before invoking them; the local ADC CLI is
-the current trusted operator boundary.
-"""
 from fastapi import HTTPException
 from firebase_admin import firestore
 from .events import active_event
@@ -13,11 +7,6 @@ from .firebase import firebase_app
 
 
 def signal_access_change(user):
-    """Non-sensitive invalidation hint; authorization always comes from API.
-
-    Best-effort foreground acceleration. The client's existing periodic/resume
-    recovery remains authoritative if delivery fails or the app is backgrounded.
-    """
     try:
         for registration in user.collection('fcm_registrations').stream():
             token = registration.to_dict().get('token')
@@ -56,7 +45,6 @@ def eligible_for_event(db, uid, event_id):
 
 
 def require_event(db, uid, tx=None):
-    """Bind each query to the same event whose assignment was checked."""
     try:
         event = active_event(db, tx)
     except HTTPException as error:

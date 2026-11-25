@@ -1,4 +1,3 @@
-// Explicit manual UI fixture only. Production always starts at lib/main.dart.
 import 'package:flutter/material.dart';
 import 'package:radd/app/app_services.dart';
 import 'package:radd/app/radd_app.dart';

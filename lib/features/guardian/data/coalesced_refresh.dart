@@ -2,8 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-/// One active request and one pending follow-up. Resume is never discarded
-/// because a push arrived: a failed fetch must still have a recovery path.
 class CoalescedRefresh {
   Future<void>? _running;
   bool _again = false;

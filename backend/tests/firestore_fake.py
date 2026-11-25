@@ -1,17 +1,3 @@
-"""Minimal in-memory Firestore/Storage fake shared by the isolated service tests.
-
-Not a Firestore emulator: enough surface (documents, merge/update, filtered
-queries with limit, and a transaction that is just the db itself once
-firestore.transactional is monkeypatched to identity) for the app.service /
-app.cases transactional functions to run against. Never touches production.
-
-SERVER_TIMESTAMP is resolved to a real `datetime.now(timezone.utc)` at write
-time (mirroring what the real Firestore server does on commit) rather than
-stored as the literal sentinel -- retention/expiry code needs to do real
-datetime arithmetic on fields like `closed_at` and `photo_captured_at` after
-reading them back, exactly as it would against production Firestore.
-DELETE_FIELD is likewise honored on `update()`/merge writes.
-"""
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from firebase_admin import firestore as _firestore
@@ -20,9 +6,6 @@ _clock = {"last": None}
 _clock_lock = Lock()
 
 def server_now():
-    """Strictly increasing UTC timestamps. The Windows clock can return the
-    same value for two consecutive commits, which would make created_at-ordered
-    reads nondeterministic in tests -- real Firestore commits never tie."""
     with _clock_lock:
         now = datetime.now(timezone.utc)
         if _clock["last"] is not None and now <= _clock["last"]:
@@ -62,9 +45,6 @@ class Reference:
         self.db.data.pop(self.path, None)
 
 def _predicate(filter):
-    # `a is not None` guards ordering ops so a document missing the field is
-    # excluded rather than raising -- matching real Firestore, which never
-    # matches an inequality filter against an absent field.
     ops = {
         "==": lambda a, b: a == b,
         "!=": lambda a, b: a != b,
@@ -150,8 +130,6 @@ class Blob:
         return self.path in self.store
     def delete(self):
         if self.path in self.failures:
-            # Fails exactly once per fail_next_delete() call -- simulates one
-            # transient Storage error, then succeeds on the next attempt.
             self.failures.remove(self.path)
             raise IOError("simulated transient storage failure")
         self.store.pop(self.path)
@@ -163,7 +141,6 @@ class Bucket:
     def blob(self, path):
         return Blob(self.data, path, self.failures)
     def fail_next_delete(self, path):
-        """Test-only: makes the next delete() of this exact path raise once."""
         self.failures.add(path)
 
 

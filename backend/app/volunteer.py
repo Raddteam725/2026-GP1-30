@@ -1,4 +1,3 @@
-"""Volunteer access to the existing users and shared cases; no client-owned identity."""
 from fastapi import APIRouter, Depends, HTTPException, Response
 from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -53,18 +52,14 @@ class VolunteerService(VolunteerWorkflow):
         ref = self.user.collection('fcm_registrations').document(hashlib.sha256(value.token.encode()).hexdigest())
         previous = ref.get().to_dict() or {}
         if not previous:
-            # Cross-account token cleanup is required on registration, not on
-            # every foreground location heartbeat for the same owned device.
             GuardianService.register_fcm_token(self, value.token, value.locale)
         location = None
         if value.latitude is not None and value.longitude is not None:
             location = {'latitude': value.latitude, 'longitude': value.longitude, 'at': firestore.SERVER_TIMESTAMP}
         ref.update({'locale': value.locale, 'updated_at': firestore.SERVER_TIMESTAMP, 'event_id': event.id, 'session_expires_at': self.token.get('exp', 0), 'session_auth_time': self.token.get('auth_time', 0), 'location': location})
-        # Registration renews eligibility only; history is not a new event.
         return {'registered': True}
 
     def unregister_device(self, value):
-        # Unregistration may be needed after deactivation; only this UID's device.
         self.profile(require_active=False, require_assignment=False)
         ref = self.user.collection('fcm_registrations').document(hashlib.sha256(value.token.encode()).hexdigest())
         ref.delete()
@@ -81,7 +76,6 @@ class VolunteerService(VolunteerWorkflow):
         if guardian_id and person_id and '/' not in guardian_id and '/' not in person_id:
             person_doc = self.db.collection('users').document(guardian_id).collection('individuals').document(person_id).get()
             person = person_doc.to_dict() or {}
-        # No contact information, private paths, other volunteers' identities or QR challenges.
         return {'id': doc.id, 'photo_available': bool(person.get('photo_path')) and not photo_expired(person, self.db, case_context=True), 'profile_id': key(person_doc) if person else None, 'gender': person.get('gender'), **{k: data.get(k) for k in (
             'individual_id', 'individual_name', 'age', 'status', 'created_at',
             'updated_at', 'stage_timestamps', 'guided_report')},
@@ -95,7 +89,6 @@ class VolunteerService(VolunteerWorkflow):
         result = []
         for doc in docs:
             data = doc.to_dict()
-            # Active workload only; preserve completed records and participation history.
             if data.get('status') in TERMINAL_STATUSES:
                 continue
             joined = self.uid in data.get('joined_by', [])
@@ -116,7 +109,6 @@ class VolunteerService(VolunteerWorkflow):
         return doc
 
     def case_state(self, case_id):
-        """Minimal authoritative outcome; closure never grants private detail access."""
         self.profile(require_active=True)
         event = self.participation_event()
         if not case_id or '/' in case_id:
@@ -137,7 +129,7 @@ class VolunteerService(VolunteerWorkflow):
         push = {}
         @firestore.transactional
         def join(tx):
-            push.clear()  # Firestore may retry after another Volunteer starts first.
+            push.clear()
             doc = self.accessible(case_id, tx)
             data = doc.to_dict()
             if data['status'] not in JOINABLE:
@@ -145,17 +137,11 @@ class VolunteerService(VolunteerWorkflow):
             joined = data.get('joined_by', [])
             if self.uid in joined:
                 return
-            # The document read participates in the transaction: conflicting writes retry.
             update = {'joined_by': [*joined, self.uid]}
             if data['status'] == 'report_received':
                 now = firestore.SERVER_TIMESTAMP
                 update.update(status='search_in_progress', updated_at=now)
                 update['stage_timestamps.search_in_progress'] = now
-                # The first Volunteer to start searching moves the case to
-                # Search in Progress -- a Guardian-visible status change, so
-                # the Guardian gets the same notification record (and push)
-                # as every other status update. Later joins change nothing
-                # the Guardian sees and notify nobody.
                 tx.set(self.db.collection('users').document(data['guardian_id']).collection('notifications').document(case_id + '-search_in_progress'),
                     {'case_id': case_id, 'event_id': data['event_id'], 'kind': 'status_update', 'status': 'search_in_progress', 'created_at': now, 'read_at': None})
                 push.update(guardian_id=data['guardian_id'], event_id=data['event_id'])
@@ -172,7 +158,6 @@ class VolunteerService(VolunteerWorkflow):
 
     def photo(self, case_id):
         data = self.accessible(case_id).to_dict()
-        # Construct the registration reference from its server-owned case relationship.
         guardian_id, person_id = data.get('guardian_id'), data.get('individual_id')
         if not guardian_id or not person_id or '/' in guardian_id or '/' in person_id:
             raise HTTPException(404, detail='not_found')

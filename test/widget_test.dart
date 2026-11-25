@@ -9,7 +9,6 @@ void main() {
   for (final language in ['en', 'ar', 'fr']) {
     testWidgets('$language resolves direction and typography', (tester) async {
       await tester.pumpWidget(RaddApp(locale: Locale(language)));
-      // Splash keeps an indeterminate loading animation running.
       await tester.pump(const Duration(seconds: 1));
       final context = tester.element(find.byType(Scaffold));
       expect(

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:radd/features/volunteer/data/mock_volunteer_repository.dart';
 import 'package:radd/features/volunteer/data/volunteer_repository.dart';
 import 'package:radd/features/volunteer/domain/volunteer_models.dart';
+import 'package:radd/features/volunteer/domain/volunteer_notification_event.dart';
 
 void main() {
   const a = MockVolunteerRepository.account;
@@ -79,7 +80,6 @@ void main() {
       await expectLater(repo.beginVerification(a, report), throwsStateError);
       await repo.confirmMatch(a, report, item.person);
       await repo.beginVerification(a, report);
-      // The Guardian reads the case's 6-digit code; the RD-… id is not it.
       expect(
         await repo.verify(
           a,
@@ -87,7 +87,7 @@ void main() {
           VerificationMethod.caseIdentifier,
           item.verificationCode!,
         ),
-        isFalse, // authenticated account not confirmed as shown
+        isFalse,
       );
       expect(
         await repo.verify(
@@ -104,7 +104,7 @@ void main() {
           a,
           report,
           VerificationMethod.caseIdentifier,
-          '804900', // another case's code
+          '804900',
           authenticatedAccountShown: true,
         ),
         isFalse,
@@ -201,6 +201,20 @@ void main() {
       await expectLater(live.submitFound(a), throwsStateError);
     },
   );
+  test('Historical priority alert rows parse as standard case alerts', () {
+    expect(
+      VolunteerNotificationEvent.parseKind('priority', null),
+      AlertKind.newCase,
+    );
+    expect(
+      VolunteerNotificationEvent.fromData({
+        'role': 'volunteer',
+        'case_id': 'RD-1',
+        'kind': 'priority',
+      })!.kind,
+      AlertKind.newCase,
+    );
+  });
   test('500 meter distance boundary for nearby cases', () {
     const origin = Coordinates(0, 0);
     expect(origin.distanceTo(origin), 0);

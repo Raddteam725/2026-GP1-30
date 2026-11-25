@@ -13,7 +13,6 @@ enum Gender { male, female }
 
 enum VerificationMethod { qr, caseIdentifier }
 
-/// Bilingual fixture/user content, distinct from localized interface strings.
 class LocalizedData {
   const LocalizedData(this.en, this.ar);
   final String en, ar;
@@ -122,9 +121,6 @@ class VolunteerCase {
   }) : joinedBy = {...?joinedBy};
   final String id;
 
-  /// Preview/mock only: the 6-digit code the Guardian's device shows for
-  /// this case. The real API never sends a case's code to a Volunteer; the
-  /// backend compares what the Volunteer typed.
   final String? verificationCode;
   RegisteredPerson person;
   final DateTime createdAt;

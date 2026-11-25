@@ -227,7 +227,7 @@ void main() {
       (t) async {
         await mount(t, const AuthScreen(mode: AuthMode.register), language);
         await fillRegistration(t, s);
-        auth.emailVerified = true; // Firebase accepted its verification link.
+        auth.emailVerified = true;
         repo.rejectProfile = true;
         await t.pump(const Duration(seconds: 3));
         await t.pumpAndSettle();
@@ -271,7 +271,7 @@ void main() {
         expect(
           auth.verificationRequests,
           isEmpty,
-        ); // Restart never spams email.
+        );
         expect(repo.reads, 0);
         auth.emailVerified = true;
         await t.pump(const Duration(seconds: 3));
@@ -450,7 +450,6 @@ void main() {
       (t) async {
         auth.active = true;
         await mount(t, const SessionScreen(), language);
-        // A missing role is ambiguous: preserve the original recovery choice.
         expect(find.byType(EmailVerificationScreen), findsNothing);
         await press(t, s.completeGuardianProfile);
         expect(find.byType(EmailVerificationScreen), findsOneWidget);

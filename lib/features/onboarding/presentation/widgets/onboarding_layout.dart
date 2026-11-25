@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import 'onboarding_background.dart';
 
-/// Shared onboarding measurements in logical pixels, independent of device size.
 abstract final class OnboardingLayout {
   static const pagePadding = 24.0;
   static const contentWidth = 400.0;
@@ -18,9 +17,6 @@ abstract final class OnboardingLayout {
   static const splashDuration = Duration(milliseconds: 3800);
 }
 
-/// Language and role screens share the same header, content and footer anchors.
-/// On small screens/large text the intrinsic content scrolls; tall screens cap
-/// the composition height so whitespace never expands without a bound.
 class OnboardingPage extends StatelessWidget {
   const OnboardingPage({
     super.key,

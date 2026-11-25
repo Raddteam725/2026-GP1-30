@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'volunteer_components.dart';
 
-/// Visual feedback while the backend matches the captured face. It only
-/// shows that work is in progress; it does not depict real processing stages
-/// or progress. Honors the platform "reduce motion" setting.
 class FaceScanView extends StatefulWidget {
   const FaceScanView({
     super.key,
@@ -61,7 +58,6 @@ class _FaceScanViewState extends State<FaceScanView>
                   fit: StackFit.expand,
                   children: [
                     widget.image,
-                    // Slight tint so the scan line reads on light photos.
                     const ColoredBox(color: Color(0x14000000)),
                     if (!still)
                       AnimatedBuilder(
@@ -117,7 +113,6 @@ class _ScanLine extends StatelessWidget {
   );
 }
 
-/// Four face-detection style corner brackets around the photograph.
 class _CornerPainter extends CustomPainter {
   const _CornerPainter(this.color);
   final Color color;

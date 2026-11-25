@@ -21,11 +21,6 @@ def storage(monkeypatch):
     monkeypatch.setattr(service, "database", lambda: db)
     monkeypatch.setattr(service, "bucket", lambda: bucket)
     monkeypatch.setattr(service.firestore, "transactional", lambda f: f)
-    # cases.create()/_terminate() fire a best-effort push via app.push, which
-    # does its own `from .firebase import database` -- a separate binding
-    # from service.database, so it needs its own patch or it would otherwise
-    # try to reach real Firebase (harmless since notify_guardian swallows the
-    # failure, but real network calls have no place in an isolated unit test).
     monkeypatch.setattr(push, "database", lambda: db)
     return db, bucket
 
@@ -98,14 +93,10 @@ def test_save_report_persists_guided_answers(storage):
     assert updated["guided_report"]["completed"] is True
 
 def test_account_verification_issues_a_guardian_scoped_token(storage):
-    # Guardian verification is account-level, not per-case (the Volunteer's own
-    # current case supplies case context) -- issuance never depends on any
-    # particular case existing or being at any particular status.
     s, individual_id = guardian_with_individual("owner")
     result = s.account_verification()
     assert result["payload"].startswith(f"radd:guardian-verification:v1:{s.uid}:")
     assert "expires_at" in result
-    # Refreshing rotates the token; the previous nonce alone no longer matches.
     first_nonce = result["payload"].rsplit(":", 1)[-1]
     second = s.account_verification()
     assert second["payload"].rsplit(":", 1)[-1] != first_nonce
@@ -135,7 +126,7 @@ def test_validate_transition_enforces_ordered_progression():
         validate_transition("unknown", STAGES[0])
 
 def test_guided_report_requires_coordinates_only_when_same_location():
-    assert GuidedReport(same_location=True)  # Permission denied/unavailable: general alert only.
+    assert GuidedReport(same_location=True)
     with pytest.raises(ValidationError):
         GuidedReport(same_location=True, latitude=1)
     with pytest.raises(ValidationError):
@@ -153,11 +144,11 @@ def test_case_retains_age_group_and_closure_timestamp_for_admin_reporting(storag
     s, individual_id = guardian_with_individual("owner")
     cs = CaseService(s)
     created = cs.create(CaseCreate(individual_id=individual_id))
-    assert created["age_group"] == "6-17"  # guardian_with_individual registers age 7
+    assert created["age_group"] == "6-17"
     assert created["closed_at"] is None
     resolved = historical_closure(cs, created["id"], 'resolved')
     assert resolved["closed_at"] is not None
-    assert resolved["age_group"] == "6-17"  # preserved unchanged through closure
+    assert resolved["age_group"] == "6-17"
 
 def test_create_case_writes_the_shared_general_alert_intent(storage):
     db, _ = storage
@@ -194,6 +185,18 @@ def test_save_report_is_read_only_once_submitted(storage):
         cs.save_report(case_id, GuidedReport(clothing="different"))
     assert error.value.status_code == 409
 
+def test_guided_report_coordinates_are_never_persisted(storage):
+    db, _ = storage
+    s, individual_id = guardian_with_individual("owner")
+    cs = CaseService(s)
+    case_id = cs.create(CaseCreate(individual_id=individual_id))["id"]
+    saved = cs.save_report(case_id, GuidedReport(same_location=True, latitude=24.7, longitude=46.7, clothing="shirt",
+                                                carrying_distinctive=False, completed=True))["guided_report"]
+    assert saved["same_location"] is True and saved["completed"] is True
+    assert saved["latitude"] is None and saved["longitude"] is None
+    stored = db.data[f"cases/{case_id}"]["guided_report"]
+    assert stored["latitude"] is None and stored["longitude"] is None
+
 def test_guided_report_distinctive_description_is_consistent_with_the_flag():
     with pytest.raises(ValidationError):
         GuidedReport(carrying_distinctive=False, distinctive_description="a red bag")
@@ -202,28 +205,23 @@ def test_guided_report_distinctive_description_is_consistent_with_the_flag():
     assert GuidedReport(carrying_distinctive=True, distinctive_description="a red bag")
 
 
-# --- Latest Sprint-0 rules: the Guided Assistant's documented questions only,
-# and Saudi phone numbers for Guardian registration ---------------------------
 
 def test_guided_report_completes_without_a_textual_last_seen_answer(storage):
-    # "No" to the location question records no location and is not a blocker:
-    # the only required answers are location Yes/No, clothing and the
-    # distinctive-item Yes/No (plus its description when Yes).
     s, individual_id = guardian_with_individual("owner")
     cs = CaseService(s)
     case_id = cs.create(CaseCreate(individual_id=individual_id))["id"]
     report = GuidedReport(same_location=False, clothing="Blue shirt", carrying_distinctive=False, completed=True)
     saved = cs.save_report(case_id, report)["guided_report"]
     assert saved["completed"] is True and saved["latitude"] is None and saved["last_seen_description"] == ""
-    with pytest.raises(ValidationError):  # Clothing is still required to complete.
+    with pytest.raises(ValidationError):
         GuidedReport(same_location=False, carrying_distinctive=False, completed=True)
-    with pytest.raises(ValidationError):  # Coordinates only ever accompany a "Yes".
+    with pytest.raises(ValidationError):
         GuidedReport(same_location=False, latitude=24.7, longitude=46.7, clothing="x", carrying_distinctive=False)
 
 @pytest.mark.parametrize("phone,canonical", [
-    ("+966512345678", "+966512345678"), ("0512345678", "+966512345678"),  # mobile, either form
+    ("+966512345678", "+966512345678"), ("0512345678", "+966512345678"),
     ("00966 51 234 5678", "+966512345678"), ("966-51-234-5678", "+966512345678"),
-    ("٠٥١٢٣٤٥٦٧٨", "+966512345678"),  # Arabic-Indic digits
+    ("٠٥١٢٣٤٥٦٧٨", "+966512345678"),
     (" (05) 123.456-78 ", "+966512345678"), ("+٩٦٦٥١٢٣٤٥٦٧٨", "+966512345678"),
     ("+966112345678", None), ("0112345678", None),
     ("0412345678", None), ("+966412345678", None), ("٠٤١٢٣٤٥٦٧٨", None),
@@ -246,9 +244,6 @@ def test_terminal_vocabulary_is_the_documented_one():
     assert "transferred_to_authority" not in TERMINAL_STATUSES
 
 def test_deactivated_guardian_is_refused_everywhere_and_receives_no_push(storage, monkeypatch):
-    # Admin account management sets users/{uid}.active = false (the Admin
-    # module writes it); the Guardian side must refuse every authenticated
-    # function and stop push delivery while the durable history remains.
     db, _ = storage
     s, individual_id = guardian_with_individual("owner")
     cs = CaseService(s)
@@ -258,8 +253,6 @@ def test_deactivated_guardian_is_refused_everywhere_and_receives_no_push(storage
     monkeypatch.setattr(push.messaging, "send_each", lambda messages, app=None: sent.extend(messages))
     monkeypatch.setattr(push, "firebase_app", lambda: None)
     db.data["users/owner"]["active"] = False
-    # Every request builds a fresh service (main.service/cases_service), so
-    # the account check runs on each of them.
     for action in (s.profile, s.list, lambda: CaseService(s), s.account_verification):
         with pytest.raises(HTTPException) as error:
             action()
@@ -267,12 +260,10 @@ def test_deactivated_guardian_is_refused_everywhere_and_receives_no_push(storage
     push.notify_guardian("owner", kind="status_update", status="search_in_progress", case_id=case_id, event_id="test-event")
     assert sent == []
     assert db.data[f"users/owner/notifications/{case_id}-search_in_progress"]["status"] == "search_in_progress"
-    db.data["users/owner"]["active"] = True  # Reactivation: absent or True means enabled.
+    db.data["users/owner"]["active"] = True
     assert s.profile()["full_name"] == "Test Guardian"
 
 def test_referred_to_authority_is_terminal_for_the_guardian(storage):
-    # The Admin module performs the transition; the Guardian side treats the
-    # result exactly like any other closure: no cancel/resolve, no guided edits.
     db, _ = storage
     s, individual_id = guardian_with_individual("owner")
     cs = CaseService(s)

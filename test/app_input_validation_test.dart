@@ -83,7 +83,6 @@ void main() {
           invalidMessage: s.invalidName,
           requiredMessage: s.requiredField,
         );
-        // Editing one field must never expose errors on its pristine neighbors.
         expect(error(t, fields.at(1)), isNull);
         await exercise(
           t,
@@ -168,12 +167,12 @@ void main() {
             requiredMessage: s.requiredField,
           );
           await edit(t, fields.last, 'legacy');
-          expect(error(t, fields.last), isNull); // Do not apply sign-up policy.
+          expect(error(t, fields.last), isNull);
           await edit(t, fields.last, '');
           expect(error(t, fields.last), s.requiredField);
           await edit(t, fields.last, 'legacy');
           expect(error(t, fields.last), isNull);
-          expect(auth.logins, 0); // No server auth on each keystroke.
+          expect(auth.logins, 0);
         },
       );
     }
@@ -216,7 +215,7 @@ void main() {
         requiredMessage: s.requiredField,
       );
       final form = t.state<FormState>(find.byType(Form));
-      expect(form.validate(), isFalse); // Both declarations remain required.
+      expect(form.validate(), isFalse);
       await t.pumpAndSettle();
       expect(find.text(s.requiredField), findsNWidgets(2));
     });
@@ -246,7 +245,7 @@ void main() {
           invalidMessage: s.invalidPhone,
           requiredMessage: s.requiredField,
         );
-        expect(find.text(repo.person.email), findsOneWidget); // Read-only.
+        expect(find.text(repo.person.email), findsOneWidget);
       },
     );
 
@@ -316,7 +315,7 @@ void main() {
         await t.tap(find.text(s.other).last);
         await t.pumpAndSettle();
         final other = find.byType(TextFormField).last;
-        expect(error(t, other), isNull); // Newly visible field is pristine.
+        expect(error(t, other), isNull);
         await edit(t, other, ' ');
         expect(error(t, other), s.requiredField);
         await edit(t, other, 'Family friend');
@@ -328,7 +327,7 @@ void main() {
         await t.tap(find.text(s.child).last);
         await t.pumpAndSettle();
         expect(find.byType(TextFormField), findsOneWidget);
-        expect(form.validate(), isTrue); // Hidden Other cannot block submit.
+        expect(form.validate(), isTrue);
         await t.pumpAndSettle();
         expect(repo.records, isEmpty);
       },

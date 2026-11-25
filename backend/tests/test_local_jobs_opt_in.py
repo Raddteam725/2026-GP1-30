@@ -1,4 +1,3 @@
-"""Local maintenance jobs are opt-in (--local-jobs): cleanup deletes shared data."""
 import os
 import sys
 from pathlib import Path

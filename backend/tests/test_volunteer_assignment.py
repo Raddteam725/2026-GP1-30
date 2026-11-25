@@ -11,11 +11,10 @@ def test_profile_api_reports_existing_active_event_assignment(db):
     from app.main import app
     from app.firebase import identity
 
-    # Existence is sufficient: no legacy assigned/active field is required.
     assert db.data['events/test-event/volunteers/one'] == {}
     app.dependency_overrides[identity] = lambda: {'uid': 'one'}
     with TestClient(app) as client:
-        for _ in range(2):  # A fresh profile request must reload the same access.
+        for _ in range(2):
             response = client.get('/v1/volunteer')
             assert response.status_code == 200
             profile = response.json()
@@ -94,7 +93,6 @@ def test_unassigned_volunteer_gets_no_new_case_history_or_queued_delivery(db, mo
     monkeypatch.setattr(volunteer_alerts.messaging, 'send', lambda *a, **kw: pytest.fail('Unassigned push'))
     user = db.collection('users').document('one').get()
     case_doc = db.collection('cases').document(case_id).get()
-    # Assignment is checked before reading the old queued registration/ref.
     volunteer_alerts._send_registration(db, user, case_doc, 'general', None, None)
 
 

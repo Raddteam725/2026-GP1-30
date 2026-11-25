@@ -10,8 +10,6 @@ import 'package:radd/features/volunteer/presentation/volunteer_workspace.dart';
 
 import 'volunteer_navigation_test.dart' show harness;
 
-// Isolated event/widget tests. Production receives these fields from FCM;
-// these tests do not claim Firebase delivery or insert real history/cases.
 void main() {
   testWidgets('History opens exact case and back returns to Notifications', (
     tester,

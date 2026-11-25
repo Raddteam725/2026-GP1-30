@@ -8,12 +8,6 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import 'volunteer_components.dart';
 
-/// Deletes the camera plugin's temporary file for this capture and any
-/// earlier capture file an interrupted session (app killed between capture
-/// and deletion) left in the same app-private folder. The plugin names them
-/// `CAP*.jpg` in the cache directory on Android (camera_android_camerax) and
-/// `CAP_*.jpg` in `tmp/camera/pictures` on iOS (camera_avfoundation). The
-/// captured photo is kept in memory only; it never needs a file afterwards.
 Future<void> deleteCaptureFiles(String path) async {
   if (path.isEmpty) return;
   final file = File(path);
@@ -31,14 +25,9 @@ Future<void> deleteCaptureFiles(String path) async {
       }
     }
   } catch (_) {
-    // Listing is best effort; the OS also clears these cache folders.
   }
 }
 
-/// Drops the decoded copy of a captured photo from Flutter's image cache.
-/// `Image.memory` caches by the identity of the byte buffer, so this must be
-/// given the same buffer that was displayed. Clearing a variable or removing
-/// the widget alone would leave the decoded image in memory.
 void forgetCapturedPhoto(Uint8List? bytes) {
   if (bytes == null) return;
   PaintingBinding.instance.imageCache.evict(MemoryImage(bytes));
@@ -47,7 +36,6 @@ void forgetCapturedPhoto(Uint8List? bytes) {
 bool isCaptureFileName(String name) =>
     name.startsWith('CAP') && name.toLowerCase().endsWith('.jpg');
 
-/// In-app camera only, with explicit preview, retake and use-photo consent.
 class VolunteerCapture extends StatefulWidget {
   const VolunteerCapture({super.key});
   @override
@@ -70,8 +58,6 @@ class _VolunteerCaptureState extends State<VolunteerCapture>
   Future<void> _operations = Future<void>.value();
   bool _foreground = true, _initializing = false;
 
-  // CameraX owns shared native resources. Finish closing one controller before
-  // creating the next, including when a permission dialog changes lifecycle.
   Future<void> _enqueue(Future<void> Function() action) {
     final operation = _operations.then((_) => action());
     _operations = operation.catchError((Object error) {
@@ -87,8 +73,6 @@ class _VolunteerCaptureState extends State<VolunteerCapture>
     try {
       await camera.dispose();
     } catch (error) {
-      // A failed initialization may leave CameraX without a preview surface.
-      // Cleanup failure must not escape a lifecycle callback or block retry.
       debugPrint('Radd camera disposal failed (${error.runtimeType})');
     }
   }
@@ -159,8 +143,6 @@ class _VolunteerCaptureState extends State<VolunteerCapture>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Android permission prompts can emit inactive/resumed during initialize.
-    // They must not dispose the controller which is requesting permission.
     if (state == AppLifecycleState.inactive && _initializing) return;
     if (state == AppLifecycleState.resumed) {
       if (_foreground) return;

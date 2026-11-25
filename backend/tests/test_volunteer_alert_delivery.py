@@ -275,9 +275,9 @@ def test_registration_rotation_logout_history_and_refresh_never_replay(db, sends
     vol().notifications_list()
     assert sends.call_count == 1
     for registration in vol().user.collection('fcm_registrations').stream():
-        registration.reference.delete() # Isolated fixture models logout.
+        registration.reference.delete()
     vol('one', exp=9999999999).register_device(VolunteerDevice(token='rotated-device'))
-    volunteer_alerts.dispatch(db, identifier) # Recovery job must not replay either.
+    volunteer_alerts.dispatch(db, identifier)
     assert sends.call_count == 1
     assert ref.get().to_dict() == original
     from test_cases import guardian_with_individual

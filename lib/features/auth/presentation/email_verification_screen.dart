@@ -236,7 +236,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     try {
       await RegistrationDraft.update(_identity!.uid, values);
     } catch (_) {
-      // Local hints never grant verification or access.
     }
   }
 

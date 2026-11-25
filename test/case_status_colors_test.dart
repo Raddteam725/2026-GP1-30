@@ -4,9 +4,6 @@ import 'package:radd/core/localization/generated/app_localizations.dart';
 import 'package:radd/features/guardian/data/case_models.dart';
 import 'package:radd/features/guardian/presentation/case_widgets.dart';
 
-/// The ONE Guardian case-status colour contract (case_widgets.dart):
-/// canonical backend status -> exact colour, identical on every screen and
-/// in both languages; "Report Missing" is an action colour, not a status.
 void main() {
   const expected = {
     'report_received': Color(0xFF2563EB),
@@ -23,8 +20,6 @@ void main() {
     expected.forEach((status, colour) {
       expect(caseStatusColor(status), colour, reason: status);
     });
-    // Nothing more, nothing less: the five ordered stages and every
-    // terminal outcome, keyed on the backend identifier only.
     expect(caseStatusColors.keys.toSet(), {...caseStages, ...terminalStatuses});
     expect(caseStatusColors.keys.toSet(), expected.keys.toSet());
   });
@@ -38,7 +33,6 @@ void main() {
     expect(reportMissingColor, const Color(0xFFDC2626));
     expect(caseStatusColors.containsKey('report_missing'), isFalse);
     expect(caseStatusColors.values, isNot(contains(reportMissingColor)));
-    // "Active Case" is not a canonical status either: no colour of its own.
     expect(caseStatusColors.containsKey('active'), isFalse);
     expect(caseStatusColors.containsKey('active_case'), isFalse);
   });
@@ -48,8 +42,6 @@ void main() {
     expect(caseStatusTint('cancelled').a, closeTo(.12, .01));
   });
 
-  // The chip's status dot: the circular DecoratedBox (the chip's own tinted
-  // background is a rectangle-shaped DecoratedBox too).
   Color chipDot(WidgetTester t) {
     final dot = t
         .widgetList<DecoratedBox>(
@@ -102,7 +94,6 @@ void main() {
             )
             .data!;
       }
-      // Different words, identical colour: colour comes from the identifier.
       expect(labels['ar'], isNot(labels['en']));
       expect(seen['ar'], expected[status]);
       expect(seen['en'], expected[status]);

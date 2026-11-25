@@ -11,14 +11,6 @@ import 'package:radd/features/onboarding/presentation/screens/language_selection
 
 import 'support/guardian_fakes.dart';
 
-/// Sprint-0 retention and event awareness on the Guardian side:
-/// - registration explains the retention choice in plain words and previews
-///   the deletion date;
-/// - an existing registration's retention can be changed from Edit (only a
-///   changed choice is sent; other edits never touch it);
-/// - the profile shows the deletion deadline;
-/// - Home shows the authoritative Active event once, and says when there is
-///   none -- never a built-in event name.
 void main() {
   late TestAuth auth;
   late TestRepository repo;
@@ -106,7 +98,6 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('deleted automatically'), findsOneWidget);
-    // Longest option is the default: its deadline is previewed immediately.
     expect(find.byKey(const ValueKey('retention-until')), findsOneWidget);
     expect(find.textContaining('Data kept until'), findsOneWidget);
     await t.tap(find.byKey(const ValueKey('registration-period')));
@@ -119,7 +110,6 @@ void main() {
       find.textContaining('cannot go beyond the end of the event'),
       findsOneWidget,
     );
-    // No database terminology in the primary explanation.
     expect(find.textContaining('embedding'), findsNothing);
   });
 
@@ -130,27 +120,22 @@ void main() {
     repo.records.add(person());
     await route(t, AppRoutes.guardian);
     await tapText(t, 'Test Person');
-    // The profile shows the deletion deadline.
     await scrollToText(t, 'Data retention period');
     expect(find.textContaining('Data kept until'), findsOneWidget);
     await tapText(t, 'Edit');
     expect(find.byType(IndividualFormScreen), findsOneWidget);
     expect(repo.retentionOptionsRequests, 1);
-    // Edit the name first (the form is a lazy list: the name field sits at
-    // the top, the retention panel below the fold).
     await t.enterText(find.byType(TextFormField).first, 'Renamed Person');
     await scrollToText(t, 'Data retention period');
     final selector = find.byKey(const ValueKey('registration-period'));
     expect(
       t.state<FormFieldState<String>>(selector).value,
       'test-long',
-    ); // current choice
+    );
     expect(find.textContaining('Counted from the original'), findsOneWidget);
-    // Saving without touching retention sends no period at all.
     await tapText(t, 'Save Changes');
     expect(repo.lastSavedPeriodId, isNull);
     expect(repo.records.single.registrationPeriodId, 'test-long');
-    // Now extend to a week from Edit.
     await tapText(t, 'Edit');
     await scrollToText(t, 'Data retention period');
     await t.tap(find.byKey(const ValueKey('registration-period')));
@@ -166,7 +151,7 @@ void main() {
       'profile shows the new deadline', (t) async {
     await start(t);
     auth.active = true;
-    repo.records.add(person()); // current: test-long (48 h from the start)
+    repo.records.add(person());
     await route(t, AppRoutes.guardian);
     await tapText(t, 'Test Person');
     await scrollToText(t, 'Data retention period');
@@ -175,13 +160,11 @@ void main() {
     await scrollToText(t, 'Data retention period');
     await t.tap(find.byKey(const ValueKey('registration-period')));
     await t.pumpAndSettle();
-    await t.tap(find.text('2 hours').last); // still ahead: allowed
+    await t.tap(find.text('2 hours').last);
     await t.pumpAndSettle();
-    // The preview follows the selection (deadline counted from the start).
     expect(find.byKey(const ValueKey('retention-until')), findsOneWidget);
     await tapText(t, 'Save Changes');
     expect(repo.lastSavedPeriodId, 'test-short');
-    // Back on the profile, refreshed from the repository.
     await scrollToText(t, 'Data retention period');
     final after = t.widget<Text>(find.textContaining('Data kept until')).data;
     expect(after, isNot(before));
@@ -197,7 +180,6 @@ void main() {
     await scrollToText(t, 'Data retention period');
     await t.tap(find.byKey(const ValueKey('registration-period')));
     await t.pumpAndSettle();
-    // 1 hour already passed; 30 days would end after the event.
     expect(find.text('1 hours (already passed)'), findsOneWidget);
     expect(find.text('30 days (after the event ends)'), findsOneWidget);
     final passed = t.widget<DropdownMenuItem<String>>(
@@ -209,7 +191,6 @@ void main() {
     expect(passed.enabled, isFalse);
     await t.tap(find.text('1 hours (already passed)'));
     await t.pumpAndSettle();
-    // A disabled item does not change the selection; the menu stays open.
     expect(
       t
           .state<FormFieldState<String>>(
@@ -226,7 +207,6 @@ void main() {
     await start(t);
     auth.active = true;
     repo.records.add(person());
-    // Stale state / race: the backend rules out what the UI still offered.
     repo.rejectNextSave = const AppFailure('retentionPassed');
     await route(t, AppRoutes.editIndividual, arguments: repo.records.single);
     await scrollToText(t, 'Data retention period');
@@ -238,7 +218,6 @@ void main() {
     expect(find.byType(IndividualFormScreen), findsOneWidget);
     expect(find.textContaining('would already have ended'), findsOneWidget);
     expect(repo.records.single.registrationPeriodId, 'test-long');
-    // Beyond the event boundary: the localized backend reason as well.
     repo.rejectNextSave = const AppFailure('retentionInvalid');
     await tapText(t, 'Save Changes');
     expect(find.textContaining('not available for this event'), findsOneWidget);
@@ -288,7 +267,6 @@ void main() {
       expect(find.byKey(const ValueKey('home-event')), findsOneWidget);
       expect(find.text('Boulevard Night'), findsOneWidget);
       expect(find.text('Riyadh'), findsOneWidget);
-      // Dates are localized (Arabic uses Arabic-Indic digits).
       expect(
         find.textContaining(locale == 'ar' ? '٢٠٢٦' : '2026'),
         findsWidgets,

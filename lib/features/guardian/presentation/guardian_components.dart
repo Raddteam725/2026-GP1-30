@@ -65,10 +65,6 @@ class GuardianNavigation extends StatelessWidget {
                                   final route = i == 2
                                       ? AppRoutes.qrCode
                                       : AppRoutes.cases;
-                                  // QR and Cases are pushed on top of Home.
-                                  // Moving between those two tabs swaps the
-                                  // current one instead of stacking screens,
-                                  // so Back always returns to Home.
                                   if (selected == 2 || selected == 3) {
                                     Navigator.of(context)
                                         .pushReplacementNamed(route);
@@ -177,7 +173,6 @@ class GuardianPanel extends StatelessWidget {
   );
 }
 
-/// Small uppercase section heading ("PROGRESS TIMELINE", "CASE DETAILS").
 class SectionLabel extends StatelessWidget {
   const SectionLabel(
     this.label, {

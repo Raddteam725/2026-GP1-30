@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// Locale owned by RaddApp; startup supplies local preference persistence.
 class AppLocaleScope extends InheritedWidget {
   const AppLocaleScope({
     super.key,

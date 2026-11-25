@@ -1,20 +1,15 @@
 part of 'volunteer_workspace.dart';
 
-/// Length of the short Guardian-read verification code of a standalone Found
-/// Report (server-defined; the internal FR-… report id is never typed).
 const verificationCodeLength = 6;
 
-/// Drops separators a Guardian may read aloud or a keyboard may insert
-/// (spaces, '#', dashes) and maps Arabic-Indic numerals to ASCII digits.
-/// Any other character is kept so that it fails validation.
 String normalizeVerificationCode(String value) {
   final out = StringBuffer();
   for (final rune in value.runes) {
     if (rune == 0x20 || rune == 0x23 || rune == 0x2D || rune == 0x09) continue;
     if (rune >= 0x0660 && rune <= 0x0669) {
-      out.writeCharCode(0x30 + rune - 0x0660); // Arabic-Indic ٠..٩
+      out.writeCharCode(0x30 + rune - 0x0660);
     } else if (rune >= 0x06F0 && rune <= 0x06F9) {
-      out.writeCharCode(0x30 + rune - 0x06F0); // Eastern Arabic-Indic ۰..۹
+      out.writeCharCode(0x30 + rune - 0x06F0);
     } else {
       out.writeCharCode(rune);
     }
@@ -109,20 +104,6 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
         ),
       ),
   ];
-  // ---------------------------------------------------------------------------
-  // AI identification attempt lifecycle
-  //
-  // Starts: "Use Photo" in the in-app camera. The photo is sent once, kept by
-  //   the server as a temporary Storage object and here in memory only.
-  // Concludes (photo deleted on the server, dropped here): identity confirmed,
-  //   End Identification Attempt, leaving the identification screens (back
-  //   past the options or another tab, after confirmation), Search Again with
-  //   a new photo, sign-out, loss of event access, handover, or the server's
-  //   abandoned-attempt cleanup for a device that never returns.
-  // Does not conclude: cancelling a running search, opening a result's
-  //   details, manual review within the attempt, or an app restart (the
-  //   report stays resumable until one of the above happens).
-  // ---------------------------------------------------------------------------
 
   Future<Uint8List?> _captureFace() => Navigator.of(context).push<Uint8List>(
     MaterialPageRoute(builder: (_) => const VolunteerCapture()),
@@ -188,7 +169,6 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
       ),
     );
     if (capture != true || !mounted) return;
-    // Preview: same options-first flow; no AI service or photo upload occurs.
     await _run(() async {
       _report = await repo.submitFound(account);
       if (!mounted) return;
@@ -219,8 +199,6 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
   }
 
   VolunteerView _reportDestination(FoundReport report) {
-    // The persisted lifecycle, not a cached profile or an AI result, controls
-    // continuation. Incomplete identified data must never restart identification.
     if (report.ended) throw StateError('identification-ended');
     switch (report.foundStatus) {
       case FoundStatus.reunited:
@@ -250,7 +228,6 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     _candidates = [];
     _identificationState = IdentificationState.ready;
     _update(() {
-      // Back must not return an already-confirmed report to old identification.
       _stack.removeWhere((page) => page.index >= VolunteerView.finding.index);
       if (_stack.isEmpty) _stack.add(VolunteerView.report);
       _stack.add(destination);
@@ -309,7 +286,6 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
 
   void _startAi() {
     final report = _report;
-    // One request at a time: the options are gone once the scan view opens.
     if (report == null ||
         report.ended ||
         _busy ||
@@ -324,8 +300,6 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     unawaited(_loadCandidates(report, ++_searchGeneration));
   }
 
-  /// Stops waiting for the running search and returns to the options. The
-  /// late response is ignored; the attempt itself continues.
   void _cancelSearch() {
     ++_searchGeneration;
     _update(() {
@@ -364,7 +338,7 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
       _candidates = results;
       _identificationState = outcome;
       _stack
-          .removeLast(); // the scan view; the attempt screen shows the outcome
+          .removeLast();
     });
   }
 
@@ -380,8 +354,6 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     await _concludeAttempt(() => _selectTab(2));
   }
 
-  /// Leaving the identification screens concludes the attempt, exactly like
-  /// End Identification Attempt; the Volunteer confirms first.
   Future<void> _leaveAttempt(VoidCallback then) async {
     if (!await _confirm(
           s.vEndIdentification,
@@ -394,9 +366,6 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     await _concludeAttempt(then);
   }
 
-  /// Ends the attempt on the server (which deletes the captured photo) and
-  /// drops every client copy. Navigation runs only after success, so a failed
-  /// request leaves the Volunteer where they can retry.
   Future<bool> _concludeAttempt(VoidCallback then) async {
     final report = _report;
     if (report == null) return false;
@@ -415,11 +384,9 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     return true;
   }
 
-  /// No reliable match: take a new photo. The current attempt (and its photo)
-  /// ends only once a new photo was actually taken.
   Future<void> _searchAgain() async {
     if (repo is! ApiVolunteerRepository) {
-      _startAi(); // preview: no camera or stored photo
+      _startAi();
       return;
     }
     if (!_canParticipate || _busy) return;
@@ -499,7 +466,6 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     ),
   );
 
-  // Screen 2: processing. No results, manual review or end-attempt actions.
   List<Widget> _finding() => [
     const SizedBox(height: 16),
     Center(child: FaceScanView(image: _foundImage(width: 220, height: 264))),
@@ -552,7 +518,6 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     IdentificationState.processing => _identificationOptions(),
   };
 
-  // Screen 1: the two ways to identify the found individual.
   List<Widget> _identificationOptions() => [
     _capturedPhotoRow(),
     const SizedBox(height: 4),
@@ -572,7 +537,6 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     if (_attemptOpen) _endAttemptButton(),
   ];
 
-  // Screen 3: ranked candidates, in the order the backend prioritized them.
   List<Widget> _results() => [
     VolunteerHeading(s.vResultsCount(numberText(context, _candidates.length))),
     const SizedBox(height: 8),
@@ -683,7 +647,6 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     );
   }
 
-  // Screen 5: no sufficiently reliable candidate. Manual review leads.
   List<Widget> _noMatch() => [
     const SizedBox(height: 12),
     const Center(
@@ -730,7 +693,6 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     if (_attemptOpen) _endAttemptButton(),
   ];
 
-  // Service unavailable, server failure and no connection: distinct messages.
   List<Widget> _searchFailed() {
     final (title, message, icon) = switch (_identificationState) {
       IdentificationState.unavailable => (
@@ -940,9 +902,6 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     return null;
   }
 
-  /// No Missing Case behind this report: the code belongs to the standalone
-  /// Found Report itself rather than to a linked case (wording only; the
-  /// entry is a 6-digit code in both contexts).
   bool get _standaloneVerification =>
       _report?.caseId == null && _associatedCase == null;
 
@@ -962,13 +921,10 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
     ],
   );
 
-  // Screen 4: one candidate. Comparison and authorized details only; the
-  // action continues into the existing confirm -> Guardian contact -> QR flow.
   List<Widget> _matchDetails() {
     final person = _person!;
     final info =
         person.information ?? repo.caseForPerson(person.id)?.information;
-    // Contact details are released by the server only after confirmation.
     final guardianName = dataText(context, person.guardian.name);
     final aiAttempt = !_independentReview;
     return [
@@ -1144,8 +1100,6 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
       return;
     }
     await _run(() async {
-      // Confirmation concludes the attempt: the server deletes the photo
-      // and the repository drops its bytes; drop the decoded copy too.
       final photo = _report!.photoBytes;
       await repo.confirmMatch(account, _report!, _person!);
       forgetCapturedPhoto(photo);
@@ -1330,10 +1284,6 @@ extension _VolunteerIdentificationViews on _VolunteerWorkspaceState {
               controller: _identifier,
               autovalidateMode: AutovalidateMode.onUserInteraction,
               textDirection: TextDirection.ltr,
-              // Missing Case or standalone Found Report alike: the Guardian
-              // reads a 6-digit verification code, never an RD-/FR- id. The
-              // workflow context (this report, its linked case if any)
-              // decides which record the code is checked against.
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 errorMaxLines: 3,

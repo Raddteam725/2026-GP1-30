@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:geolocator/geolocator.dart';
 
 import '../../../app/app_services.dart';
 import '../../../core/localization/generated/app_localizations.dart';
@@ -12,11 +11,6 @@ import 'case_widgets.dart';
 import 'guardian_components.dart';
 import 'individual_widgets.dart';
 
-/// The Reporting Assistant: a structured, one-time guided case-details
-/// workflow presented as a conversation (per the approved design) -- not a
-/// general chatbot and not a permanent chat. It opens automatically after a
-/// case is created and must be completed before leaving; every answer is
-/// persisted to the real case on the backend as it is given.
 class GuidedReportScreen extends StatefulWidget {
   const GuidedReportScreen({super.key, required this.id});
   final String id;
@@ -35,7 +29,6 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
   bool _busy = false;
   Object? _error;
 
-  /// Keeps the newest exchange in view, like a conversation should.
   void _scrollToEnd() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scroll.hasClients) return;
@@ -67,10 +60,6 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
     super.dispose();
   }
 
-  /// The predefined question sequence (Sprint-0 backlog): last-seen location
-  /// Yes/No, clothing, distinctive item Yes/No (+ description when Yes), and
-  /// optional additional information. A "No" to the location question simply
-  /// records no location -- no further location question is asked.
   int get _step {
     if (_answers['same_location'] == null) return 0;
     if ((_answers['clothing'] ?? '').isEmpty) return 1;
@@ -99,43 +88,8 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
     try {
       if (step == 0) {
         next['same_location'] = choice;
-        if (choice == true) {
-          try {
-            // Real current location, only with the Guardian's permission --
-            // never invented, and never captured at all when they answer No.
-            if (!await Geolocator.isLocationServiceEnabled()) {
-              throw const AppFailure('locationRequired');
-            }
-            var permission = await Geolocator.checkPermission();
-            if (permission == LocationPermission.denied) {
-              permission = await Geolocator.requestPermission();
-            }
-            if (permission == LocationPermission.denied ||
-                permission == LocationPermission.deniedForever) {
-              throw const AppFailure('locationRequired');
-            }
-            final position = await Geolocator.getCurrentPosition(
-              locationSettings: const LocationSettings(
-                accuracy: LocationAccuracy.high,
-                timeLimit: Duration(seconds: 15),
-              ),
-            );
-            next['latitude'] = position.latitude;
-            next['longitude'] = position.longitude;
-          } catch (_) {
-            // Consent to using this last-seen location does not guarantee the
-            // device can provide coordinates. Continue with a general alert.
-            next['latitude'] = null;
-            next['longitude'] = null;
-            if (mounted) {
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(SnackBar(content: Text(s.locationNotRecorded)));
-            }
-          }
-        } else {
-          next['latitude'] = null;
-          next['longitude'] = null;
-        }
+        next['latitude'] = null;
+        next['longitude'] = null;
       } else if (step == 1) {
         next['clothing'] = _text.text.trim();
       } else if (step == 2) {
@@ -280,15 +234,11 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
                 if (_answers['same_location'] != null)
                   _reply(
                     _answers['same_location'] == true ? s.yes : s.no,
-                    note: _answers['same_location'] == true
-                        ? (_answers['latitude'] != null
-                              ? s.locationReady
-                              : s.locationNotRecorded)
+                    note: _answers['same_location'] == true &&
+                            _answers['latitude'] != null
+                        ? s.locationReady
                         : null,
                   ),
-                // A report saved before the location question was reduced to
-                // Yes/No may still carry a textual last-seen answer: keep
-                // showing what the Guardian actually said, never ask it again.
                 if ((_answers['last_seen_description'] ?? '').isNotEmpty) ...[
                   _assistant(s.lastSeenDescription),
                   _reply(_answers['last_seen_description'] as String),
@@ -544,9 +494,6 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
     ),
   );
 
-  /// Bottom answer area: Yes/No for the two boolean questions, a rounded
-  /// text field with a send button for the free-text ones, and "View
-  /// Status" once every required answer has been saved.
   Widget _inputBar(AppLocalizations s, int step) {
     final Widget child;
     if (step == 0 || step == 2) {
@@ -624,8 +571,6 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
       );
     } else {
       child = FilledButton(
-        // The one-time workflow is over: the assistant is replaced by the
-        // case's status screen rather than lingering on the stack.
         onPressed: () => Navigator.of(context)
             .pushReplacementNamed(AppRoutes.caseStatus, arguments: widget.id),
         child: Text(s.viewStatus),

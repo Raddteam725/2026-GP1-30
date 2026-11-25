@@ -5,13 +5,6 @@ import '../../../core/theme/app_colors.dart';
 import 'case_widgets.dart';
 import 'guardian_components.dart';
 
-/// One period choice as the Guardian sees it: a duration and the deletion
-/// deadline it produces. For a new registration the deadline is a preview
-/// (the backend stamps the authoritative start when registration succeeds);
-/// for an existing one it comes from the backend, counted from the ORIGINAL
-/// registration -- never from the day of the edit. A choice the backend has
-/// already ruled out (deadline passed, or after the event ends) is shown
-/// disabled with its reason; the backend remains the authority either way.
 class RetentionChoice {
   const RetentionChoice(
     this.id,
@@ -39,9 +32,6 @@ String? retentionReasonLabel(AppLocalizations s, String? reason) =>
       _ => null,
     };
 
-/// The "Data retention period" panel shared by Add and Edit Individual.
-/// Plain language only: what is being chosen and when the data is deleted;
-/// the event boundary is a secondary note.
 class RetentionPeriodPanel extends StatelessWidget {
   const RetentionPeriodPanel({
     super.key,
@@ -62,7 +52,7 @@ class RetentionPeriodPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
     final selected = selectedId == null
-        ? (choices.isEmpty ? null : choices.last) // longest is the default
+        ? (choices.isEmpty ? null : choices.last)
         : choices.cast<RetentionChoice?>().firstWhere(
             (c) => c!.id == selectedId,
             orElse: () => null,
@@ -77,8 +67,6 @@ class RetentionPeriodPanel extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           if (eventName != null) ...[
-            // The Active event this registration is associated with,
-            // as the backend describes it -- never a built-in name.
             Row(
               key: const ValueKey('active-event'),
               children: [

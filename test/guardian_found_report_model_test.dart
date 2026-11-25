@@ -6,9 +6,6 @@ import 'package:http/testing.dart';
 import 'package:radd/features/guardian/data/guardian_api.dart';
 import 'package:radd/features/guardian/data/guardian_repository.dart';
 
-/// The Guardian-facing contract of GET /v1/guardian/found-reports: the value
-/// the Guardian reads out is `verification_code`; the document id is carried
-/// only as an internal handle and is never used as the verification value.
 void main() {
   test(
     'Guardian API maps verification_code and individual_name, not the id',

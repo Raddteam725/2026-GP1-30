@@ -1,4 +1,3 @@
-"""Firebase account-first lifecycle; real HTTP authorization, synthetic Auth only."""
 import pytest
 
 from app import firebase

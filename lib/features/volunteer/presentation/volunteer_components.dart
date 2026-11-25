@@ -345,8 +345,6 @@ class VolunteerBell extends StatelessWidget {
   );
 }
 
-/// A tappable choice card: icon, title and one-line description. The primary
-/// option is emphasized with the brand tint; both keep a 48dp+ target.
 class VolunteerOption extends StatelessWidget {
   const VolunteerOption({
     super.key,

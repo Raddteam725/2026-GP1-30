@@ -6,8 +6,6 @@ import 'package:radd/features/guardian/data/guardian_repository.dart';
 
 class TestAuth implements AuthService {
   bool active = false;
-  // Existing regression fixtures represent established, verified accounts.
-  // Verification workflow tests explicitly start with an unverified account.
   bool emailVerified = true;
   String uid = 'test-auth-user', email = 'test@example.test';
   int identityRefreshes = 0;
@@ -100,8 +98,6 @@ class TestRepository implements GuardianRepository {
     RegistrationPeriod('test-long', 48),
   ];
 
-  /// Options the backend would offer an existing registration (deadlines
-  /// counted from a fixed start). `retentionOptionsRequests` counts calls.
   int retentionOptionsRequests = 0;
   bool failNextRetentionOptions = false;
   DateTime retentionStart = DateTime.utc(2026, 9, 29, 8);
@@ -113,9 +109,6 @@ class TestRepository implements GuardianRepository {
       throw const AppFailure('photoExpired');
     }
     final p = records.singleWhere((i) => i.id == id);
-    // Mirrors the backend contract: every configured option with the
-    // deadline counted from the ORIGINAL start; 'test-min' already passed
-    // and 'test-month' would end after the event, so both are unavailable.
     return RetentionOptions(
       currentPeriodId: p.registrationPeriodId,
       expiresAt: p.registrationExpiresAt,
@@ -154,10 +147,8 @@ class TestRepository implements GuardianRepository {
     );
   }
 
-  /// The period id the last save carried (null = unchanged / default).
   String? lastSavedPeriodId;
 
-  /// Makes the next saveIndividual fail with this backend reason.
   AppFailure? rejectNextSave;
   @override
   Future<String> accountRole() async => 'guardian';
@@ -173,8 +164,6 @@ class TestRepository implements GuardianRepository {
   bool failNextMissingCase = false;
   int _caseCounter = 0;
 
-  /// Simulates an Admin deactivation: the backend answers every Guardian
-  /// request with 403 `account_inactive`.
   bool deactivated = false;
   @override
   Future<GuardianProfile> profile() async {
@@ -220,8 +209,6 @@ class TestRepository implements GuardianRepository {
       'test-month' => 720,
       _ => null,
     };
-    // Backend rule mirrored for the edit path only: a choice whose deadline
-    // (from the original start) has passed or lies after the event is refused.
     if (existing != null && input.registrationPeriodId != null) {
       if (periodId == 'test-min') throw const AppFailure('retentionPassed');
       if (periodId == 'test-month') throw const AppFailure('retentionInvalid');
@@ -253,8 +240,6 @@ class TestRepository implements GuardianRepository {
     records.removeWhere((i) => i.id == id);
   }
 
-  // Counts authoritative list refetches (event/resume-driven) and simulates
-  // one transient load failure (flips back after throwing once).
   int caseListFetches = 0;
   bool failNextCases = false;
   @override
@@ -294,7 +279,6 @@ class TestRepository implements GuardianRepository {
       createdAt: now,
       updatedAt: now,
       stages: {'report_received': now.toIso8601String()},
-      // Server-assigned in production; a fixed, recognizable 6-digit value here.
       verificationCode: '80${_caseCounter.toString().padLeft(4, '0')}',
     );
     caseRecords.add(value);
@@ -379,7 +363,6 @@ class TestRepository implements GuardianRepository {
 
   int _verificationCounter = 0;
 
-  /// How many short-lived credentials the QR screen has requested.
   int get verificationRequests => _verificationCounter;
   @override
   Future<GuardianVerification>
@@ -403,7 +386,6 @@ class TestRepository implements GuardianRepository {
       updatedAt: DateTime.now().toUtc(),
       stages: current.stages,
       report: current.report,
-      // Terminal: the backend drops the code with the outcome.
     );
     caseRecords
       ..removeWhere((c) => c.id == id)
@@ -430,9 +412,6 @@ class TestRepository implements GuardianRepository {
   final List<String> registeredFcmTokens = [];
   final List<String> unregisteredFcmTokens = [];
   String? lastRegisteredLocale;
-  // Lets tests simulate a temporary failure (e.g. offline) without any real
-  // network involved -- both flip back to false after throwing once, since a
-  // real failure is transient, not a permanent condition.
   bool failNextFcmRegister = false;
   bool failNextFcmUnregister = false;
   @override

@@ -89,9 +89,6 @@ void main() {
     await t.pumpAndSettle();
   }
 
-  // Scrolls a lazily-built list until `text` is realized, without tapping it
-  // -- for assertions on long FeaturePage screens where the target sits below
-  // the fold and a plain find.text would see nothing yet (not "not present").
   Future<void> scrollToText(
     WidgetTester t,
     String text, {
@@ -160,8 +157,6 @@ void main() {
     expect(auth.registrations, 0);
     await tapText(t, 'Privacy Notice');
     expect(find.byType(PrivacyScreen), findsOneWidget);
-    // The final notice in the selected language, never the old placeholder;
-    // the 18+ declaration stays a separate checkbox, not part of the notice.
     await scrollToText(t, 'Information We Collect and Use');
     expect(find.text('Information We Collect and Use'), findsOneWidget);
     await scrollToText(t, 'Your Agreement');
@@ -202,7 +197,6 @@ void main() {
     await scrollToText(t, 'Passwords do not match.', delta: -200);
     expect(find.text('Passwords do not match.'), findsOneWidget);
     expect(auth.registrations, 0);
-    // Changing the password re-checks the confirmation on the next submit.
     final password = find.descendant(
       of: find.byType(PasswordInput).first,
       matching: find.byType(TextFormField),
@@ -316,11 +310,9 @@ void main() {
       await t.pumpAndSettle();
       await t.tap(find.text('Other').last);
       await t.pumpAndSettle();
-      // Selecting Other immediately reveals the required custom-text field.
       expect(find.text('Specify relationship'), findsWidgets);
       await t.enterText(find.byType(TextFormField).at(1), 'Family friend');
       await tapText(t, 'Save');
-      // The relationship is now satisfied; only the still-missing photo blocks saving.
       expect(find.text('Photo required.'), findsOneWidget);
       expect(repo.records, isEmpty);
     },
@@ -380,7 +372,6 @@ void main() {
             id: 'FR-legacy-no-code',
             status: 'identity_confirmed',
           ),
-          // A stale terminal item must never render as a verification card.
           const GuardianFoundReport(
             id: 'FR-done',
             status: 'reunited',
@@ -393,7 +384,6 @@ void main() {
         final s = AppLocalizations.of(
           t.element(find.byType(GuardianQrScreen).first),
         )!;
-        // Each code sits under the name of the individual it belongs to.
         expect(find.text('482913'), findsOneWidget);
         expect(find.text('105577'), findsOneWidget);
         expect(find.text(s.foundReportIndividual('Sara Test')), findsOneWidget);
@@ -414,7 +404,6 @@ void main() {
         expect(find.text(s.foundReportIndividual('Done Test')), findsNothing);
         expect(find.text(s.foundReportCodeUnavailable), findsOneWidget);
         expect(find.text(s.vFoundReportTitle), findsNWidgets(3));
-        // The QR itself stays available below the report cards (lazy list).
         await t.scrollUntilVisible(
           find.byType(QrImageView),
           300,
@@ -505,13 +494,10 @@ void main() {
     await route(t, AppRoutes.guardian);
     await tapText(t, 'Profile');
     await tapText(t, 'Language');
-    // A bottom sheet with both languages, the current one ticked.
     expect(find.byKey(const ValueKey('language-ar')), findsOneWidget);
     expect(find.byKey(const ValueKey('language-en')), findsOneWidget);
     expect(find.byIcon(Icons.check), findsOneWidget);
     await tapText(t, 'العربية');
-    // Applied in place: still signed in, still on the Guardian Profile --
-    // never bounced through the startup language screen or login.
     expect(find.byType(GuardianHomeScreen), findsOneWidget);
     expect(find.byType(LanguageSelectionScreen), findsNothing);
     expect(auth.active, isTrue);
@@ -546,7 +532,6 @@ void main() {
       }
       await tapText(t, 'QR Code');
       expect(find.byType(GuardianQrScreen), findsOneWidget);
-      // The account-level QR exists even with no active case at all.
       expect(find.byType(QrImageView), findsOneWidget);
       expect(
         find.text(
@@ -554,7 +539,6 @@ void main() {
         ),
         findsOneWidget,
       );
-      // QR is a tab within the Guardian route; exercise Android Back.
       await t.binding.handlePopRoute();
       await t.pumpAndSettle();
       await tapText(t, 'Cases');
@@ -597,7 +581,6 @@ void main() {
     expect(find.byType(GuidedReportScreen), findsOneWidget);
     Navigator.pop(t.element(find.byType(GuidedReportScreen)));
     await t.pumpAndSettle();
-    // The profile now carries the Active Case indicator with the real id.
     expect(find.text('Active Case'), findsWidgets);
     expect(find.textContaining('RD-TEST'), findsWidgets);
   });
@@ -700,9 +683,6 @@ void main() {
       await route(t, AppRoutes.notifications);
       expect(find.byType(NotificationsScreen), findsOneWidget);
       expect(find.text('No notifications yet'), findsOneWidget);
-      // The push payload itself is never trusted for data -- this only
-      // stands in for "a push arrived", exactly like GuardianPushService's
-      // real onMessage listener does; the screen must go re-fetch itself.
       repo.notificationRecords.add(
         GuardianNotification(
           id: 'n1',
@@ -735,8 +715,6 @@ void main() {
     expect(find.byType(CaseStatusScreen), findsOneWidget);
     expect(find.byIcon(Icons.refresh), findsNothing);
     expect(t.takeException(), isNull);
-    // Dispose the screen so its background status-poll timer is cancelled
-    // before the test ends (an outstanding Timer otherwise fails teardown).
     Navigator.pop(t.element(find.byType(CaseStatusScreen)));
     await t.pumpAndSettle();
   });
@@ -758,8 +736,6 @@ void main() {
       await route(t, AppRoutes.caseStatus, arguments: case1.id);
       expect(find.byType(CaseStatusScreen), findsOneWidget);
       expect(find.text('Report Received'), findsWidgets);
-      // The Guardian never taps refresh here -- this mutation stands in for
-      // a Volunteer selecting "Start Search" from their own device.
       repo.caseRecords
         ..removeWhere((c) => c.id == case1.id)
         ..add(
@@ -943,9 +919,6 @@ void main() {
     await t.pumpAndSettle();
     Navigator.pop(t.element(find.byType(GuidedReportScreen)));
     await t.pumpAndSettle();
-    // Locked: no Edit action; Delete disabled; explicit notice shown.
-    // (find.text alone can't prove absence on a lazily-built list -- scroll
-    // to a known-present anchor first so the whole section is realized.)
     await scrollToText(t, 'Delete Individual');
     expect(find.text('Edit'), findsNothing);
     expect(find.text('Report Missing'), findsNothing);
@@ -969,8 +942,6 @@ void main() {
     await scrollToText(t, 'Cancel Report');
     expect(find.text('Resolve Report'), findsWidgets);
     expect(find.text('Cancel Report'), findsWidgets);
-    // Historical closure fixture: the removed Guardian action is not used
-    // to set up the unrelated profile-unlocking regression.
     await repo.resolveCase(repo.caseRecords.single.id);
     GuardianPushRefresh.instance.acceptPush({
       'role': 'guardian', 'case_id': repo.caseRecords.single.id, 'status': 'resolved',
@@ -982,7 +953,6 @@ void main() {
     expect(find.text('Cancel Report'), findsNothing);
     Navigator.pop(t.element(find.byType(CaseStatusScreen)));
     await t.pumpAndSettle();
-    // Unlocked again: profile management resumes on the terminal case.
     expect(find.text('Edit'), findsOneWidget);
     await scrollToText(t, 'Report Missing');
     expect(find.text('Report Missing'), findsWidgets);
@@ -993,9 +963,7 @@ void main() {
     await route(t, AppRoutes.forgotPassword);
     await t.enterText(find.byType(TextFormField).first, 'someone@example.test');
     await tapText(t, 'Send Reset Email');
-    // The request actually reached the authentication service...
     expect(auth.resetRequests, ['someone@example.test']);
-    // ...and the confirmation never reveals whether that email is registered.
     expect(find.text('Check your email'), findsOneWidget);
     expect(
       find.text(
@@ -1035,8 +1003,6 @@ void main() {
       expect(repo.caseRecords, hasLength(1));
       Navigator.pop(t.element(find.byType(GuidedReportScreen)));
       await t.pumpAndSettle();
-      // The card now carries the Active Case chip; the Home "Active Cases"
-      // section lists the real case with its id and Track Status action.
       expect(find.text('Report Missing'), findsNothing);
       expect(find.text('Active Case'), findsWidgets);
       await scrollToText(t, 'Track Status');
@@ -1109,8 +1075,6 @@ void main() {
         ),
         findsOneWidget,
       );
-      // The fallback the Guardian reads out is the case's 6-digit code; the
-      // RD-… id stays a reference chip, never the value shown to type.
       await tapText(t, 'Show Verification Code');
       expect(find.text('ACTIVE CASE VERIFICATION CODE'), findsOneWidget);
       expect(find.text(case1.verificationCode!), findsOneWidget);

@@ -166,7 +166,6 @@ void main() {
         await press(tester, s.vOpenCamera);
         await press(tester, s.vPreviewCapture);
         await tester.pumpAndSettle();
-        // Options first; the search starts only when the Volunteer picks AI.
         await tester.tap(find.text(s.vFindWithAi));
         await tester.pump(const Duration(seconds: 2));
         await tester.pumpAndSettle();

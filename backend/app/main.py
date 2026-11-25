@@ -13,7 +13,6 @@ from .service import GuardianService
 
 @asynccontextmanager
 async def lifespan(app):
-    # Execute before yielding: requests cannot be served if enabled AI fails.
     if os.getenv('RADD_FACE_MATCHING', 'off').lower() == 'on':
         from . import face_matching
         try:
@@ -38,7 +37,6 @@ app = FastAPI(title="Radd Shared API", version="0.1.0", lifespan=lifespan)
 
 @app.middleware("http")
 async def limits(request: Request, call_next):
-    # Bounds JSON/base64 uploads before parsing and avoids PII in validation errors.
     length = request.headers.get("content-length")
     if length and (not length.isdigit() or int(length) > 11_300_000):
         return JSONResponse(status_code=413, content={"detail": "request_too_large"})
@@ -66,7 +64,6 @@ async def invalid(request, error):
 
 @app.exception_handler(Exception)
 async def unavailable(request, error):
-    # No PII/tokens in the response; the traceback is server-side only, never returned to the client.
     logging.getLogger("uvicorn.error").error("Radd API: unhandled exception", exc_info=error)
     return JSONResponse(status_code=503, content={"detail": "service_unavailable"})
 
@@ -75,7 +72,7 @@ def service(token=Depends(identity)):
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}  # Liveness only; does not claim Firebase connectivity.
+    return {"status": "ok"}
 
 @app.get("/v1/session")
 def session(s=Depends(service)):
@@ -83,8 +80,6 @@ def session(s=Depends(service)):
 
 @app.get("/v1/event")
 def current_event(s=Depends(service)):
-    # The Active event as Guardian and Volunteer see it -- name, location,
-    # dates, hours, status -- read from the same record the Admin manages.
     return s.current_event()
 
 @app.get("/v1/guardian")
@@ -101,16 +96,10 @@ def account_verification(s=Depends(service)):
 
 @app.put("/v1/guardian/fcm-registrations")
 def register_fcm_token(value: FcmRegistration, s=Depends(service)):
-    # Idempotent upsert, scoped to the authenticated Guardian's own
-    # subcollection -- no other Guardian's registrations are reachable
-    # through this or any other endpoint.
     return s.register_fcm_token(value.token, value.locale)
 
 @app.post("/v1/guardian/fcm-registrations/unregister")
 def unregister_fcm_token(value: FcmUnregister, s=Depends(service)):
-    # Called at logout so this installation stops being able to receive the
-    # signing-out Guardian's pushes. Idempotent -- deleting an already-absent
-    # registration is a no-op, so a retried/duplicate call is always safe.
     return s.unregister_fcm_token(value.token)
 
 @app.patch("/v1/guardian")
@@ -211,13 +200,6 @@ def guardian_found_reports(s=Depends(service)):
     s.profile()
     from .events import active_event
     event_id = active_event(s.db).id
-    # Only this Guardian's standalone reports at a stage where verification
-    # information may be shown (see guardian_verification_visible): Reunited
-    # and still-identifying reports are excluded by authoritative status.
-    # `verification_code` is the short fallback the Guardian reads out; the
-    # document id is internal. Older active reports are assigned one here.
-    # `individual_name` is the Guardian's own registration name, so the
-    # Guardian can tell which code belongs to which individual.
     result = []
     for doc in s.db.collection('found_reports').where(filter=FieldFilter('guardian_id', '==', s.uid)).stream():
         data = doc.to_dict() or {}

@@ -12,10 +12,6 @@ import 'package:radd/features/onboarding/presentation/screens/language_selection
 
 import 'support/guardian_fakes.dart';
 
-/// The Guardian side of two contracts the Admin module will drive later:
-/// a case closed as Referred to Authority, and a deactivated Guardian
-/// account. Guardian consumes both from authoritative backend state --
-/// nothing here depends on how the Admin module is implemented.
 void main() {
   late TestAuth auth;
   late TestRepository repo;
@@ -87,7 +83,6 @@ void main() {
       auth.active = true;
       final value = await seedCase();
       await route(t, AppRoutes.cases);
-      // The Admin module closed the case on the backend.
       repo.caseRecords
         ..removeWhere((c) => c.id == value.id)
         ..add(

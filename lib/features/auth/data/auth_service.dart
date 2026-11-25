@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 
 import '../../guardian/data/guardian_repository.dart';
 
-/// A Firebase identity snapshot, never an application authorization decision.
 class AuthIdentity {
   const AuthIdentity({
     required this.uid,
@@ -80,8 +79,6 @@ class FirebaseAuthService implements AuthService {
   @override
   Stream<bool> get changes => auth.authStateChanges().map((u) => u != null);
 
-  // Report only operation names and SDK codes. Exception messages, identities,
-  // credentials, tokens and email action links must never enter these logs.
   Future<void> _firebaseStep(
     String operation,
     Future<void> Function() action,
@@ -168,7 +165,6 @@ class FirebaseAuthService implements AuthService {
       if (_user.uid != uid) throw const AppFailure('unauthorized');
       if (_user.emailVerified) return;
       await user.delete();
-      // A different session must never be signed out by this registration.
       if (auth.currentUser != null && auth.currentUser!.uid != uid) {
         throw const AppFailure('unauthorized');
       }

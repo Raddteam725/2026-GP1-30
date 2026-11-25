@@ -76,7 +76,7 @@ void main() {
       await second.initialize();
       expect(platform.requests, 1);
       await second.request();
-      expect(platform.requests, 2); // explicit retry only
+      expect(platform.requests, 2);
       second.dispose();
     },
   );
@@ -165,7 +165,7 @@ void main() {
       platform.positions.addError(TimeoutException('test fix unavailable'));
       await pumpEventQueue();
       expect(location.accessGranted, isTrue);
-      await location.request(askPermission: false); // Next recovery heartbeat.
+      await location.request(askPermission: false);
       platform.positions.add(fix());
       await pumpEventQueue();
       expect(location.coordinates, isNotNull);

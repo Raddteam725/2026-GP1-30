@@ -32,8 +32,6 @@ def matching(uid='one'):
     return guardian, case_id, result
 
 def code_of(db, report_id):
-    """The short fallback code the Guardian reads out for a standalone report
-    (what the Guardian endpoint shows); the document id is never accepted."""
     return db.data['found_reports/' + report_id]['verification_code']
 
 
@@ -168,8 +166,7 @@ def test_qr_uses_existing_guardian_challenge_and_handover_survives_restart(db):
     assert verified['verified']
     assert verified['report']['status'] == 'awaiting_guardian_verification'
     assert 'token_hash' not in verified['report']['verification']
-    assert vol().verify_guardian(report_id, challenge['payload'])['verified']  # lost-response retry
-    # New service instance represents an app restart; receipt is in Firestore.
+    assert vol().verify_guardian(report_id, challenge['payload'])['verified']
     assert vol().found_list()[0]['verification']['method'] == 'qr'
     participation = list(db.data['cases/' + case_id].get('joined_by', []))
     assert vol().list(True)[0]['id'] == case_id
@@ -186,9 +183,6 @@ def test_qr_uses_existing_guardian_challenge_and_handover_survives_restart(db):
     assert any(n['status'] == 'reunited' for n in CaseService(guardian).list_notifications())
 
 def test_account_level_qr_scan_for_one_case_never_affects_a_sibling_case(db):
-    # The QR is Guardian-account-level (one QR for the whole account), not
-    # per-case -- so this is the one property that specifically needs proving:
-    # verifying case A must not also verify, or otherwise touch, case B.
     guardian, person_a = guardian_with_individual('guardian')
     case_a = CaseService(guardian).create(CaseCreate(individual_id=person_a))['id']
     _, person_b = guardian_with_individual('guardian')
@@ -202,18 +196,15 @@ def test_account_level_qr_scan_for_one_case_never_affects_a_sibling_case(db):
     vol().begin_verification(report_b['id'])
     qr = guardian.account_verification()
     assert vol().verify_guardian(report_a['id'], qr['payload'])['verified'] is True
-    # The same (now single-use-consumed) token must not also verify case B.
     assert vol().verify_guardian(report_b['id'], qr['payload'])['verified'] is False
     assert db.data['cases/' + case_b]['status'] == 'awaiting_guardian_verification'
     assert db.data['cases/' + case_b].get('guardian_verification') is None
     with pytest.raises(HTTPException):
         vol().handover_found(report_b['id'])
-    # A fresh account-level token still lets the Guardian verify the sibling case.
     qr2 = guardian.account_verification()
     assert vol().verify_guardian(report_b['id'], qr2['payload'])['verified'] is True
     result_b = vol().handover_found(report_b['id'])
     assert result_b['status'] == 'reunited'
-    # Case A is wholly unaffected by case B's later, separate handover.
     assert db.data['cases/' + case_a]['status'] == 'awaiting_guardian_verification'
 
 @pytest.mark.parametrize('failure', ['expired', 'wrong_guardian', 'wrong_event', 'consumed'])
@@ -321,38 +312,32 @@ def test_admin_provision_command_uses_auth_identity_and_refuses_guardian_overwri
         provision(db, SimpleNamespace(uid='guardian', email='g@example.test'), 'No overwrite', '+966500000001', 'VOL-002')
     assert db.data['users/guardian'] == before
 
-# --- Case Identifier: the case-specific alternative to the Guardian QR -----
 
 def case_code(db, case_id):
-    """The 6-digit value the Guardian's app shows for the case (never the RD-… id)."""
     return db.data['cases/' + case_id]['verification_code']
 
 def test_case_identifier_alternative_verification_is_case_specific_and_recorded(db):
     _, case_id, report = matching()
     report_id = report['id']
     vol().begin_verification(report_id)
-    # A wrong code (e.g. a sibling case's) is rejected: nothing is recorded on
-    # this case and handover stays blocked. The internal id is not a code.
     assert vol().verify_guardian_identifier(report_id, '000000')['verified'] is False
     assert vol().verify_guardian_identifier(report_id, case_id)['verified'] is False
     assert db.data['cases/' + case_id].get('guardian_verification') is None
     with pytest.raises(HTTPException): vol().handover_found(report_id)
-    # The code exactly as the Guardian's app displays it (spacing tolerated).
     result = vol().verify_guardian_identifier(report_id, '# ' + case_code(db, case_id))
     assert result['verified'] is True
     assert result['report']['verification']['method'] == 'case_identifier'
     assert 'token_hash' not in str(result)
-    assert vol().verify_guardian_identifier(report_id, case_code(db, case_id))['verified'] is True  # lost-response retry
+    assert vol().verify_guardian_identifier(report_id, case_code(db, case_id))['verified'] is True
     handed = vol().handover_found(report_id)
     assert handed['status'] == 'reunited'
-    # The handover record keeps saying HOW the Guardian was verified.
     assert db.data['cases/' + case_id]['guardian_verification']['method'] == 'case_identifier'
     assert db.data['cases/' + case_id]['handed_over_by'] == 'one'
 
 def test_case_identifier_verification_requires_the_awaiting_stage_and_the_confirming_volunteer(db):
     _, case_id, report = matching()
     code = case_code(db, case_id)
-    with pytest.raises(HTTPException): vol().verify_guardian_identifier(report['id'], code)  # still match_confirmed
+    with pytest.raises(HTTPException): vol().verify_guardian_identifier(report['id'], code)
     vol().begin_verification(report['id'])
     with pytest.raises(HTTPException): vol('two').verify_guardian_identifier(report['id'], code)
     app.dependency_overrides[identity] = lambda: {'uid': 'one'}
@@ -362,7 +347,6 @@ def test_case_identifier_verification_requires_the_awaiting_stage_and_the_confir
         assert response.status_code == 200 and response.json()['verified'] is True
     app.dependency_overrides.clear()
 
-# --- Guardian is notified of every Volunteer-driven status change ---------
 
 def test_volunteer_driven_stages_write_guardian_notifications_and_push(db, monkeypatch):
     from app import push
@@ -373,12 +357,12 @@ def test_volunteer_driven_stages_write_guardian_notifications_and_push(db, monke
     monkeypatch.setattr(volunteer_module, 'notify_guardian', lambda uid, **kw: sent.append((uid, kw['status'])))
     guardian, case_id = case()
     vol().start_search(case_id)
-    vol('two').start_search(case_id)  # A second join changes nothing the Guardian sees.
+    vol('two').start_search(case_id)
     profile = eligible_profiles(vol())[0]
     report = submit()
     vol().confirm(report['id'], profile['id'])
     vol().begin_verification(report['id'])
-    vol().begin_verification(report['id'])  # idempotent: no duplicate record/push
+    vol().begin_verification(report['id'])
     qr = guardian.account_verification()
     vol().verify_guardian(report['id'], qr['payload'])
     vol().handover_found(report['id'])
@@ -402,8 +386,7 @@ def test_qr_uses_existing_guardian_challenge_and_handover_survives_restart_legac
     assert verified['verified']
     assert verified['report']['status'] == 'awaiting_guardian_verification'
     assert 'token_hash' not in verified['report']['verification']
-    assert vol().verify_guardian(report_id, challenge['payload'])['verified']  # lost-response retry
-    # New service instance represents an app restart; receipt is in Firestore.
+    assert vol().verify_guardian(report_id, challenge['payload'])['verified']
     assert vol().found_list()[0]['verification']['method'] == 'qr'
     result = vol().handover_found(report_id)
     assert result['status'] == 'reunited'
@@ -442,7 +425,6 @@ def test_report_history_remains_readable_after_guardian_deletes_reunited_registr
     assert history['status'] == 'reunited'
     assert history['person']['full_name'] == 'Missing Person'
 
-# Shared contracts introduced by merging Guardian lifecycle work with Volunteer.
 def test_guardian_cancel_does_not_break_volunteer_found_report_feed(db):
     guardian, case_id, report = matching()
     historical_closure(CaseService(guardian), case_id, 'cancelled')
@@ -629,10 +611,7 @@ def test_found_first_links_later_guardian_case_without_search_or_reverification(
     assert len(CaseService(guardian).list()) == 1
 
 
-def test_standalone_expiry_defers_only_deletion_and_reunited_minimizes(db, monkeypatch):
-    from app import cleanup
-    monkeypatch.setattr(cleanup, 'database', lambda: db)
-    monkeypatch.setattr(cleanup, 'bucket', service.bucket)
+def test_standalone_expiry_keeps_registration_stored_and_reunited_minimizes(db):
     guardian, identifier = guardian_with_individual('guardian')
     profile = eligible_profiles(vol())[0]
     report = submit()
@@ -640,7 +619,6 @@ def test_standalone_expiry_defers_only_deletion_and_reunited_minimizes(db, monke
     ref = guardian.get(identifier).reference
     expires = datetime.now(timezone.utc)-timedelta(seconds=1)
     ref.update({'registration_started_at': expires-timedelta(days=3), 'registration_expires_at': expires})
-    cleanup.expire_photos()
     assert ref.get().exists
     assert eligible_profiles(vol()) == []
     assert vol().registration_bytes(ref.get(), report['id']).startswith(b'\xff\xd8')
@@ -653,8 +631,7 @@ def test_standalone_expiry_defers_only_deletion_and_reunited_minimizes(db, monke
     vol().handover_found(report['id'])
     data = db.data['found_reports/'+report['id']]
     assert set(data) == {'origin', 'event_id', 'status', 'created_at', 'updated_at', 'handed_over_at', 'handed_over_by', 'verification_method'}
-    cleanup.expire_photos()
-    assert not ref.get().exists
+    assert ref.get().exists and ref.get().to_dict()['photo_path']
     assert db.collection('users').document('guardian').get().exists
     assert db.collection('users').document('one').get().exists
 
@@ -748,7 +725,6 @@ def test_photo_found_report_is_private_photo_deleted_and_reunites(db, monkeypatc
     with pytest.raises(HTTPException): vol('two').found_owned(report['id'])
     with pytest.raises(HTTPException): vol().handover_found(report['id'])
     vol().begin_verification(report['id'])
-    # Fresh service instances restore the standalone context with no Missing Case.
     restored = vol().public_found(vol().found_owned(report['id']))
     assert restored['status'] == 'awaiting_guardian_verification'
     assert restored['found_status'] == 'awaiting_guardian_verification'
@@ -796,12 +772,10 @@ def test_missing_case_hold_is_not_general_gallery_eligibility(db):
     assert eligible_profiles(vol()) == []
     with pytest.raises(HTTPException): vol().profile_detail(profile['id'])
     with pytest.raises(HTTPException): vol().registration_photo(profile['id'])
-    assert vol().photo(case_id) # Authorized existing case still has its reference.
+    assert vol().photo(case_id)
     assert not any(p.startswith('found_reports/') for p in db.data)
 
 
-# --- Standalone continuation: Confirm Identity on a registration that is
-# already inside an active standalone report must resume, never duplicate --
 
 def identified(uid='one', profile_id=None, request_id='identified-request-00001'):
     report = submit(uid, request_id)
@@ -815,18 +789,15 @@ def test_confirm_identity_again_resumes_own_awaiting_report_without_duplicate_or
     assert first['status'] == 'identity_confirmed' and first['case_id'] is None
     vol().begin_verification(first['id'])
     stored = dict(db.data['found_reports/' + first['id']])
-    # Retrying confirmation of the same report preserves its real stage.
     again = vol().confirm(first['id'], profile['id'])
     assert again['id'] == first['id']
     assert again['status'] == again['found_status'] == 'awaiting_guardian_verification'
     assert again['case_id'] is None and again['verification'] is None
-    assert again['person']['guardian']['phone']  # authorized contact, standalone context
+    assert again['person']['guardian']['phone']
     assert db.data['found_reports/' + first['id']] == stored
     assert len([p for p in db.data if p.startswith('found_reports/')]) == 1
     assert guardian.get(identifier).to_dict()['active_found_report_id'] == first['id']
     assert not any(p.startswith('cases/') for p in db.data)
-    # The resumed report continues exactly where it was: a failed check
-    # blocks handover, a valid one does not itself reunite.
     assert not vol().verify_guardian_identifier(first['id'], 'FR-WRONG')['verified']
     with pytest.raises(HTTPException) as error:
         vol().handover_found(first['id'])
@@ -848,7 +819,7 @@ def test_confirm_identity_on_another_volunteers_active_report_is_refused_clearly
     assert error.value.status_code == 409 and error.value.detail == 'already_matched'
     assert len([p for p in db.data if p.startswith('found_reports/')]) == 2
     assert db.data['found_reports/' + first['id']]['volunteer_uid'] == 'one'
-    with pytest.raises(HTTPException):  # and it stays private to its reporter
+    with pytest.raises(HTTPException):
         vol('two').found_owned(first['id'])
 
 

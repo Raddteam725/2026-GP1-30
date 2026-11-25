@@ -156,7 +156,7 @@ void main() {
     expect(found.status, CaseStatus.matchConfirmed);
     expect(found.matchedPerson!.guardian.phone, '+966500000003');
     expect((await repo.loadReport(found.id)).matchedPerson!.photoBytes, [1, 2, 3]);
-    repo.dispose(); // Restart: only the server-side report carries progress.
+    repo.dispose();
     repo = repository();
     await repo.refresh();
     expect(repo.foundReports.single.caseId, 'RD-real');

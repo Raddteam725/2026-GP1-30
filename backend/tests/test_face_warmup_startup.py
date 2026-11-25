@@ -1,4 +1,3 @@
-"""FastAPI AI startup checks use only synthetic inputs and fake dependencies."""
 import asyncio
 import sys
 from types import SimpleNamespace
@@ -10,7 +9,6 @@ from app.main import app, lifespan
 
 
 def fake_ai(monkeypatch, tmp_path, *, recognition=None, detector_error=None):
-    """Fake onnxruntime and MTCNN so unit tests never load TensorFlow or weights."""
     pytest.importorskip('numpy')
     events = []
     output = ([1.0] + [0.0] * 511) if recognition is None else recognition

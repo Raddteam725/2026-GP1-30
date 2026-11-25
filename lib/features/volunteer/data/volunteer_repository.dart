@@ -2,10 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/volunteer_models.dart';
 
-/// Future FastAPI implementation must authorize every operation on the server.
 abstract class VolunteerRepository extends ChangeNotifier {
-  /// Prototype default for previews/older servers; production reads the shared
-  /// backend's configured radius with the authenticated profile.
   double get proximityRadiusMeters => 500;
   bool get isPreview;
   bool get connected;
@@ -69,7 +66,6 @@ abstract class VolunteerRepository extends ChangeNotifier {
   Future<void> handover(VolunteerAccount account, FoundReport report);
 }
 
-/// No mock data is returned to a real signed-in account.
 class UnconnectedVolunteerRepository extends VolunteerRepository {
   @override
   Future<void> markAllRead(String uid) async => _unavailable();

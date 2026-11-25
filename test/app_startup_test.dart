@@ -46,14 +46,9 @@ void main() {
       final auth = TestAuth();
       await t.pumpWidget(RaddApp(initialize: () => pending.future));
       final splash = t.state(find.byType(SplashScreen));
-      // Well into the animation while startup is still pending (a slow
-      // Firebase init on a cold start): the same splash instance is on
-      // screen -- no second splash, no restart.
       await t.pump(const Duration(milliseconds: 3000));
       expect(find.byType(SplashScreen), findsOneWidget);
       expect(identical(t.state(find.byType(SplashScreen)), splash), isTrue);
-      // Startup finishes after the sequence has already completed: the very
-      // same splash is still there, then navigates exactly once.
       await t.pump(const Duration(milliseconds: 1500));
       expect(identical(t.state(find.byType(SplashScreen)), splash), isTrue);
       expect(find.byType(LanguageSelectionScreen), findsNothing);

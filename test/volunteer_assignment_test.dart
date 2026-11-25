@@ -68,7 +68,7 @@ void main() {
       expect(find.text('$prefix$name'), findsOneWidget);
       expect(find.textContaining('Current event /'), findsNothing);
       assigned =
-          false; // Even a stale server name must not survive assignment loss.
+          false;
       await render();
       expect(repo.account!.eventName, isNull);
       expect(find.text('$prefix$name'), findsNothing);
@@ -82,7 +82,6 @@ void main() {
     final auth = TestAuth()..active = true;
     addTearDown(auth.events.close);
     for (var session = 0; session < 2; session++) {
-      // A fresh API/model per launch; the authenticated session persists.
       expect(await auth.restoreSession(), isTrue);
       final roles = GuardianApi(
         token: () async => 'test-token',

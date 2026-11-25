@@ -50,7 +50,6 @@ void main() {
       await repo.beginVerification(user, report);
       expect(report.status, CaseStatus.awaitingGuardianVerification);
       expect(report.verification, isNull);
-      // A successful transition does not hide an unrelated data error.
       expect(repo.error, isNotNull);
     },
   );

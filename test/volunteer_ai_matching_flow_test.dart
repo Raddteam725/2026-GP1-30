@@ -20,8 +20,6 @@ import 'volunteer_capture_manual_review_test.dart' show CaptureCamera;
 import 'volunteer_location_test.dart' show LocationPlatform;
 import 'volunteer_navigation_test.dart' show harness, press;
 
-/// A mocked backend for one AI identification attempt. `candidates` decides
-/// the matching outcome; requests are counted so tests can assert on them.
 class AiBackend {
   AiBackend(this.candidates);
   Future<http.Response> Function() candidates;
@@ -71,7 +69,6 @@ class AiBackend {
       return http.Response.bytes(png, 200);
     } else if (path.contains('/profiles/')) {
       final id = path.split('/').last;
-      // Before confirmation the server withholds Guardian contact details.
       body = {...person(id, 'Fixture $id'), 'confirmation_available': true};
     }
     return http.Response(jsonEncode(body), 200);
@@ -97,8 +94,6 @@ Future<void> settle(WidgetTester tester, [int rounds = 10]) async {
   }
 }
 
-/// Mounts the workspace, captures a photo through the real camera route and
-/// returns on the identification options screen.
 Future<(AppLocalizations, ApiVolunteerRepository)> startAttempt(
   WidgetTester tester,
   AiBackend backend,
@@ -180,8 +175,6 @@ void main() {
         final (s, repo) = await startAttempt(tester, backend, language);
         expect(backend.aiRequests, 0);
 
-        // Screen 2: processing. Only the scan and a cancel action.
-        // A double tap before the next frame still sends one request.
         await tester.tap(find.text(s.vFindWithAi));
         await tester.tap(find.text(s.vFindWithAi));
         await tester.pump();
@@ -197,7 +190,6 @@ void main() {
         await settle(tester);
         await tester.pumpAndSettle();
 
-        // Screen 3: the backend's order, real scores, reference photos.
         expect(find.byType(FaceScanView), findsNothing);
         final names = ['Fixture A', 'Fixture B', 'Fixture C'];
         final ys = [for (final n in names) tester.getTopLeft(find.text(n)).dy];
@@ -217,7 +209,6 @@ void main() {
           isTrue,
         );
 
-        // Screen 4: side-by-side comparison, no unreleased contact rows.
         await tester.tap(find.text(s.vViewDetails).first);
         await settle(tester);
         await tester.pumpAndSettle();
@@ -227,7 +218,6 @@ void main() {
         expect(find.text(s.vGuardianName), findsNothing);
         expect(find.text(s.vSelectAndContact), findsOneWidget);
 
-        // Back steps: details -> results -> options -> (confirm) leave.
         await backButton(tester);
         expect(find.text('Fixture A'), findsOneWidget);
         await backButton(tester);
@@ -299,7 +289,7 @@ void main() {
           ('server', s.vAiErrorTitle, true),
           ('network', s.vNetworkErrorTitle, true),
         ]) {
-          await backButton(tester); // outcome -> options
+          await backButton(tester);
           outcome = kind;
           await search();
           expect(find.text(title), findsOneWidget, reason: kind);
@@ -311,7 +301,6 @@ void main() {
         expect(seen, hasLength(3));
         expect({s.vAiUnavailable, s.vAiError, s.vAiNetworkError}, hasLength(3));
 
-        // Retry after the connection returns reaches the backend again.
         outcome = 'none';
         final before = backend.aiRequests;
         await press(tester, s.vTryAgain);
@@ -396,7 +385,7 @@ void main() {
       expect(staleIos.existsSync(), isFalse);
       expect(unrelated.existsSync(), isTrue);
       expect(otherType.existsSync(), isTrue);
-      await deleteCaptureFiles(''); // web/test XFile without a path: no-op
+      await deleteCaptureFiles('');
     },
   );
 

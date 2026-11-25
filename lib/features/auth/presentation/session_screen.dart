@@ -11,8 +11,6 @@ import '../../guardian/data/guardian_push_service.dart';
 import '../../guardian/data/guardian_repository.dart';
 import '../data/registration_draft.dart';
 
-/// Resolves identity, then the server-owned role, then the role's profile.
-/// Locale is deliberately not an input to authentication or authorization.
 class SessionScreen extends StatefulWidget {
   const SessionScreen({
     super.key,
@@ -115,7 +113,6 @@ class _SessionScreenState extends State<SessionScreen> {
         if (!await _guardianVerified() || !mounted || revision != _revision) {
           return;
         }
-        // Do not enter a protected destination until its real profile is valid.
         await services.guardian.profile().timeout(const Duration(seconds: 30));
         if (!mounted || revision != _revision) return;
         Navigator.of(context)
@@ -181,10 +178,6 @@ class _SessionScreenState extends State<SessionScreen> {
     final services = AppServices.of(context);
     setState(() => _loading = true);
     try {
-      // Must happen before signing out -- it needs this account's still-valid
-      // ID token to authorize removing this installation's own registration.
-      // A no-op if this was never a Guardian session with push set up; never
-      // throws, so it can't turn a normal sign-out into a failed one.
       await GuardianPushService.handleLogout(services.guardian);
       await services.auth.logout();
       if (mounted) _onboarding();

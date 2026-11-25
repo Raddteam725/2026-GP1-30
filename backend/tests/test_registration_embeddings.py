@@ -1,4 +1,3 @@
-"""Registration AI integration with isolated Firebase and fake engines only."""
 import copy
 import sys
 import pytest
@@ -39,7 +38,7 @@ def test_registration_embeds_normalized_photo_once_before_upload_and_transaction
             state['transaction'] = True
             try:
                 state['attempts'] += 1
-                fn(NoWrites())  # discarded attempt: Firestore may retry the callback
+                fn(NoWrites())
                 state['attempts'] += 1
                 return fn(tx)
             finally:
@@ -142,7 +141,6 @@ def test_unavailable_ai_blocks_startup_or_returns_503_without_side_effects(
     app.dependency_overrides[identity] = lambda: {'uid': 'owner', 'email': 'owner@example.test', 'email_verified': True}
     try:
         if failure == 'missing_dependency':
-            # Enabled AI must fail startup before serving registration requests.
             with pytest.raises(RuntimeError, match='AI startup check failed'):
                 with TestClient(app):
                     pytest.fail('The server must not accept requests without its enabled AI')

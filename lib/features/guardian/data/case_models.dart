@@ -18,9 +18,6 @@ class MissingCase {
   final Map<String, dynamic> stages;
   final Map<String, dynamic>? report;
 
-  /// The 6-digit code the Guardian reads to the Volunteer when the QR cannot
-  /// be scanned. Belongs to this active case only; [id] stays internal and
-  /// is never the value a person types. Null once the case is terminal.
   final String? verificationCode;
   bool get active => !terminalStatuses.contains(status);
   bool get verificationEligible => status == 'awaiting_guardian_verification';
@@ -47,9 +44,6 @@ const caseStages = [
   'awaiting_guardian_verification',
   'reunited',
 ];
-// Reachable from any active case (never sequential); 'reunited' is both the
-// last ordered stage above and a terminal outcome on its own. Guardians
-// cancel/resolve; Volunteers reunite; an Admin refers to the authority.
 const terminalStatuses = {
   'reunited',
   'resolved',
@@ -83,10 +77,6 @@ class GuardianNotification {
       );
 }
 
-/// An active standalone Found Report (no Missing Case) in which this
-/// Guardian's registered individual was identified. [verificationCode] is
-/// the short code the Guardian reads to the Volunteer when the QR cannot be
-/// scanned; [id] is the internal report id and is not shown as that code.
 class GuardianFoundReport {
   const GuardianFoundReport({
     required this.id,
@@ -97,12 +87,8 @@ class GuardianFoundReport {
   });
   final String id, status;
 
-  /// The Guardian's own registration name for the identified individual, so
-  /// each code can be told apart when several reports are active.
   final String? individualId, individualName, verificationCode;
 
-  /// Stages at which Guardian verification information may be shown. The
-  /// backend applies the same rule; this guards against any stale item.
   static const verificationStages = {
     'identity_confirmed',
     'awaiting_guardian_verification',
@@ -118,8 +104,6 @@ class GuardianFoundReport {
       );
 }
 
-/// Account-level: one Guardian verification QR, not one per case. The case
-/// context is supplied by whichever case the Volunteer is currently on.
 class GuardianVerification {
   const GuardianVerification({required this.payload, required this.expiresAt});
   final String payload;

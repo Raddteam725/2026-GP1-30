@@ -1,4 +1,3 @@
-"""Manual backfill safety; all Firebase/model access is mocked."""
 import copy
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone

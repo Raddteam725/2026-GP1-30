@@ -150,7 +150,6 @@ class _AuthScreenState extends State<AuthScreen> {
         'privacy': _privacy,
       });
     } catch (_) {
-      // Keep the in-memory form usable if device storage is unavailable.
     }
   }
 
@@ -196,7 +195,6 @@ class _AuthScreenState extends State<AuthScreen> {
         return;
       }
       _registrationUid = uid;
-      // Restore this UID's non-credential input without overwriting current edits.
       if (_name.text.isEmpty) _name.text = draft['name'] as String? ?? '';
       if (_phone.text.isEmpty) _phone.text = draft['phone'] as String? ?? '';
       _pendingEmail = draft['pendingEmail'] as String?;
@@ -221,7 +219,6 @@ class _AuthScreenState extends State<AuthScreen> {
         }
       }
     } catch (error) {
-      // Re-entering missing profile data is safe; no Auth account is recreated.
       if (mounted && error is AppFailure) setState(() => _error = error);
     } finally {
       if (mounted) setState(() => _restoringDraft = false);
@@ -264,8 +261,6 @@ class _AuthScreenState extends State<AuthScreen> {
       _email.text = identity.email;
     });
     try {
-      // The API independently verifies the refreshed ID token and live Auth user
-      // before writing the existing profile/consent schema. No local flag grants access.
       await services.guardian.createProfile(_name.text, _phone.text);
       try {
         await RegistrationDraft.clear(identity.uid);
@@ -308,7 +303,6 @@ class _AuthScreenState extends State<AuthScreen> {
         return;
       } else if (_register) {
         if (widget.mode == AuthMode.register && !_accountCreated) {
-          // Never adopt or modify an unrelated existing signed-in account.
           if (services.auth.signedIn) {
             if (mounted) {
               Navigator.of(context)
@@ -446,9 +440,6 @@ class _AuthScreenState extends State<AuthScreen> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 32),
-          // Password reset: after the real Firebase request has been made,
-          // the same confirmation is shown whether or not an account exists
-          // for the address (no account enumeration).
           if (reset && _sent)
             Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -567,9 +558,6 @@ class _AuthScreenState extends State<AuthScreen> {
                         helperStyle: Theme.of(context).textTheme.bodySmall,
                         errorMaxLines: _register ? 8 : 3,
                         controller: _password,
-                        // Rebuild to revalidate an already edited confirmation
-                        // when its source password changes, without touching
-                        // any pristine fields.
                         onChanged: (_) => setState(() {}),
                         enabled: !_fieldsLocked,
                         validator: (v) => _register
@@ -703,10 +691,6 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 }
 
-/// The final Privacy Notice, in the app's currently selected language (the
-/// localization system supplies Arabic/RTL or English/LTR -- there is no
-/// language selector here). Read-only; agreement is the separate required
-/// checkbox on the registration form.
 class PrivacyScreen extends StatelessWidget {
   const PrivacyScreen({super.key});
   @override

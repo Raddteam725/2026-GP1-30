@@ -12,9 +12,6 @@ import '../features/guardian/presentation/guardian_notice_host.dart';
 import '../shared/widgets/feature_page.dart';
 import '../shared/widgets/primary_button.dart';
 
-/// Whether application startup (Firebase, preferences, services) is still in
-/// progress. Always present above the navigator, so the splash can wait for
-/// it without the widget tree being rebuilt when services become available.
 class AppStartupScope extends InheritedWidget {
   const AppStartupScope({
     super.key,
@@ -24,10 +21,6 @@ class AppStartupScope extends InheritedWidget {
   });
   final bool pending;
 
-  /// Completes when the splash sequence may start its clock. The production
-  /// app (see main.dart) ties this to the first frame actually being
-  /// rasterized -- the moment Android dismisses its launch window -- so the
-  /// animation never runs unseen behind it; tests and fixtures start at once.
   final Future<void> splashStart;
   static bool pendingOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<AppStartupScope>()?.pending ??
@@ -40,7 +33,6 @@ class AppStartupScope extends InheritedWidget {
       pending != oldWidget.pending;
 }
 
-/// Omit locale to follow the device language, with English as fallback.
 class RaddApp extends StatefulWidget {
   const RaddApp({
     super.key,
@@ -53,9 +45,6 @@ class RaddApp extends StatefulWidget {
   final Future<void> Function(Locale)? onLocaleChanged;
   final Future<AppStartupData> Function()? initialize;
 
-  /// Start the splash sequence only once the first frame has been rasterized
-  /// (the real app); off by default because that engine signal never arrives
-  /// under flutter_test.
   final bool waitForFirstFrame;
   @override
   State<RaddApp> createState() => _RaddAppState();
@@ -64,10 +53,6 @@ class RaddApp extends StatefulWidget {
 class _RaddAppState extends State<RaddApp> {
   late Locale? _locale = widget.locale;
   final _navigatorKey = GlobalKey<NavigatorState>();
-  // The MaterialApp is re-parented under AppServices once startup completes;
-  // this key lets Flutter move the existing element instead of rebuilding
-  // the whole app, so the splash animation that is already playing keeps
-  // playing -- one continuous splash, never a restart.
   final _appKey = GlobalKey();
   late final Future<void> _splashStart = widget.waitForFirstFrame
       ? WidgetsBinding.instance.waitUntilFirstFrameRasterized
@@ -147,9 +132,6 @@ class _RaddAppState extends State<RaddApp> {
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
         theme: AppTheme.light(const Locale('en')),
-        // The navigator's own root Splash is the FIRST branded frame and the
-        // ONLY splash: while startup is pending it simply keeps playing and
-        // waits (see SplashScreen) instead of a second splash replacing it.
         builder: (context, child) => Theme(
           data: AppTheme.light(Localizations.localeOf(context)),
           child:
@@ -167,8 +149,6 @@ class _RaddAppState extends State<RaddApp> {
                     ),
                   ],
                 )
-              // One transient-notice host above every route: Guardian
-              // foreground updates surface here as a top banner.
               : GuardianNoticeHost(navigatorKey: _navigatorKey, child: child!),
         ),
         navigatorObservers: [GuardianNoticeHost.routeObserver],
