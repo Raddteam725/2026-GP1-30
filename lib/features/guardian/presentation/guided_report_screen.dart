@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:geolocator/geolocator.dart';
 
 import '../../../app/app_services.dart';
 import '../../../core/localization/generated/app_localizations.dart';
@@ -99,43 +98,12 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
     try {
       if (step == 0) {
         next['same_location'] = choice;
-        if (choice == true) {
-          try {
-            // Real current location, only with the Guardian's permission --
-            // never invented, and never captured at all when they answer No.
-            if (!await Geolocator.isLocationServiceEnabled()) {
-              throw const AppFailure('locationRequired');
-            }
-            var permission = await Geolocator.checkPermission();
-            if (permission == LocationPermission.denied) {
-              permission = await Geolocator.requestPermission();
-            }
-            if (permission == LocationPermission.denied ||
-                permission == LocationPermission.deniedForever) {
-              throw const AppFailure('locationRequired');
-            }
-            final position = await Geolocator.getCurrentPosition(
-              locationSettings: const LocationSettings(
-                accuracy: LocationAccuracy.high,
-                timeLimit: Duration(seconds: 15),
-              ),
-            );
-            next['latitude'] = position.latitude;
-            next['longitude'] = position.longitude;
-          } catch (_) {
-            // Consent to using this last-seen location does not guarantee the
-            // device can provide coordinates. Continue with a general alert.
-            next['latitude'] = null;
-            next['longitude'] = null;
-            if (mounted) {
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(SnackBar(content: Text(s.locationNotRecorded)));
-            }
-          }
-        } else {
-          next['latitude'] = null;
-          next['longitude'] = null;
-        }
+        // Release 1 records the Yes/No answer only. Acquiring the Guardian's
+        // device location for the last-seen position (and the proximity
+        // prioritization it feeds) is deferred to Release 2; no permission
+        // request, no coordinates, and no success or failure message here.
+        next['latitude'] = null;
+        next['longitude'] = null;
       } else if (step == 1) {
         next['clothing'] = _text.text.trim();
       } else if (step == 2) {
@@ -280,10 +248,11 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
                 if (_answers['same_location'] != null)
                   _reply(
                     _answers['same_location'] == true ? s.yes : s.no,
-                    note: _answers['same_location'] == true
-                        ? (_answers['latitude'] != null
-                              ? s.locationReady
-                              : s.locationNotRecorded)
+                    // Only a report saved with coordinates (before location
+                    // acquisition was deferred) carries the captured note.
+                    note: _answers['same_location'] == true &&
+                            _answers['latitude'] != null
+                        ? s.locationReady
                         : null,
                   ),
                 // A report saved before the location question was reduced to

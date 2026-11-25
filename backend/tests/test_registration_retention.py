@@ -4,7 +4,6 @@ import pytest
 from fastapi import HTTPException
 from app.models import IndividualInput
 from app.registration_retention import establish, valid_periods, validate_configuration
-from app.cleanup import expire_photos
 from app.cases import CaseService
 from app.case_models import CaseCreate, TERMINAL_STATUSES
 from test_retention import storage
@@ -51,37 +50,28 @@ def test_capture_age_does_not_expire_valid_registration(storage):
     assert CaseService(guardian).create(CaseCreate(individual_id=identifier))
 
 
-def test_expiry_deletes_identifiable_profile_photo_embedding_not_account(storage):
+def test_expired_registration_blocks_reporting_but_keeps_data_stored(storage):
+    # Release 1: expiry ends eligibility for new reports and matching; automatic
+    # deletion of the stored data (PBI 37) is Release 2 work and never runs.
     db, bucket = storage
     guardian, identifier = guardian_with_individual('owner')
     ref = guardian.get(identifier).reference
-    old_photo = ref.get().to_dict()['photo_path']
-    embedding = f'guardians/owner/individuals/{identifier}/face.bin'
-    bucket.data[embedding] = b'fixture embedding'
-    ref.update({'embedding_path': embedding, 'face_embedding': [1, 2]})
     expire(db, ref)
+    before = dict(ref.get().to_dict())  # the expired record as stored
+    photo_path = before['photo_path']
+    assert guardian.list()[0]['photo_expired'] is True
     with pytest.raises(HTTPException): guardian.photo(identifier)
-    with pytest.raises(HTTPException): CaseService(guardian).create(CaseCreate(individual_id=identifier))
-    expire_photos(); expire_photos()
-    assert not ref.get().exists
-    assert old_photo not in bucket.data and embedding not in bucket.data
+    with pytest.raises(HTTPException) as error: CaseService(guardian).create(CaseCreate(individual_id=identifier))
+    assert error.value.status_code == 409 and error.value.detail == 'photo_expired'
+    from app.cleanup import run_all
+    run_all(); run_all()  # every scheduled maintenance job, twice
+    after = ref.get().to_dict()
+    assert ref.get().exists and 'deleting' not in after
+    assert after['photo_path'] == photo_path and photo_path in bucket.data
+    for field in ('full_name', 'age', 'gender', 'relationship', 'registration_period_id',
+                  'registration_started_at', 'registration_expires_at', 'event_id'):
+        assert after[field] == before[field], field
     assert db.collection('users').document('owner').get().exists
-
-
-@pytest.mark.parametrize('terminal', TERMINAL_STATUSES)
-def test_deletion_deferred_until_terminal(storage, terminal):
-    db, bucket = storage
-    guardian, identifier = guardian_with_individual('owner')
-    case_id = CaseService(guardian).create(CaseCreate(individual_id=identifier))['id']
-    ref = guardian.get(identifier).reference
-    expire(db, ref)
-    expire_photos()
-    assert ref.get().exists and guardian.photo(identifier)
-    db.collection('cases').document(case_id).update({'status': terminal})
-    expire_photos()
-    assert not ref.get().exists
-    assert db.collection('users').document('owner').get().exists
-    assert 'guardian_id' not in db.data['cases/'+case_id]
 
 
 def test_photo_replacement_and_event_extension_do_not_extend_registration(storage):
@@ -195,7 +185,7 @@ def test_retention_edit_keeps_the_existing_profile_restrictions(storage):
     assert error.value.status_code == 404
 
 
-def test_cleanup_deletes_at_the_updated_deadline(storage):
+def test_shortened_period_expires_at_the_updated_deadline_without_deletion(storage):
     db, bucket = storage
     periods(db, ('short', 2), ('long', 72))
     guardian, identifier = guardian_with_individual('owner')
@@ -204,13 +194,12 @@ def test_cleanup_deletes_at_the_updated_deadline(storage):
     started = datetime.now(timezone.utc) - timedelta(hours=1, minutes=30)
     ref.update({'registration_started_at': started, 'registration_expires_at': started + timedelta(hours=72)})
     guardian.save(input(registration_period_id='short'), identifier)
-    expire_photos()
-    assert ref.get().exists  # not yet due
+    assert guardian.list()[0]['photo_expired'] is False  # not yet due
     ref.update({'registration_started_at': started - timedelta(hours=1)})  # simulate time passing
     ref.update({'registration_expires_at': ref.get().to_dict()['registration_started_at'] + timedelta(hours=2)})
     assert guardian.list()[0]['photo_expired'] is True
-    expire_photos(); expire_photos()
-    assert not ref.get().exists and not bucket.data
+    with pytest.raises(HTTPException): CaseService(guardian).create(CaseCreate(individual_id=identifier))
+    assert ref.get().exists and bucket.data  # stored data is kept (PBI 37 deferred)
 
 
 def test_unknown_legacy_period_is_not_migrated_or_deleted(storage):
@@ -221,23 +210,8 @@ def test_unknown_legacy_period_is_not_migrated_or_deleted(storage):
         db.data[ref.path].pop(key)
     assert guardian.list()[0]['photo_expired'] is True
     before = dict(db.data[ref.path])
-    expire_photos()
     assert db.data[ref.path] == before
     with pytest.raises(HTTPException): guardian.save(input(photo_base64=photo()), identifier)
-
-
-def test_failed_storage_delete_keeps_reference_and_fence_for_retry(storage):
-    db, bucket = storage
-    guardian, identifier = guardian_with_individual('owner')
-    ref = guardian.get(identifier).reference
-    path = ref.get().to_dict()['photo_path']
-    expire(db, ref)
-    bucket.fail_next_delete(path)
-    expire_photos()
-    assert ref.get().to_dict()['deleting'] is True
-    assert ref.get().to_dict()['photo_path'] == path
-    expire_photos()
-    assert not ref.get().exists
 
 
 def test_missing_event_configuration_cannot_create_registration(storage):
@@ -249,18 +223,6 @@ def test_missing_event_configuration_cannot_create_registration(storage):
         owner.save(input(photo_base64=photo()))
     assert error.value.detail == 'registration_configuration_required'
     assert not owner.list() and not bucket.data
-
-
-def test_cleanup_never_deletes_unrelated_storage_or_case(storage):
-    db, bucket = storage
-    guardian, identifier = guardian_with_individual('owner')
-    ref = guardian.get(identifier).reference
-    expire(db, ref)
-    ref.update({'embedding_path': 'guardians/someone-else/private.bin'})
-    bucket.data['guardians/someone-else/private.bin'] = b'private'
-    expire_photos()
-    assert ref.get().exists
-    assert bucket.data['guardians/someone-else/private.bin'] == b'private'
 
 
 def test_period_endpoint_uses_authenticated_guardian_and_current_event(storage):

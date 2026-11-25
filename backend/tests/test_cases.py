@@ -194,6 +194,20 @@ def test_save_report_is_read_only_once_submitted(storage):
         cs.save_report(case_id, GuidedReport(clothing="different"))
     assert error.value.status_code == 409
 
+def test_guided_report_coordinates_are_never_persisted(storage):
+    # Release 1 keeps the Yes/No answer only; a client that still sends real
+    # coordinates (an older build) must not get them recorded (PBIs 21/26).
+    db, _ = storage
+    s, individual_id = guardian_with_individual("owner")
+    cs = CaseService(s)
+    case_id = cs.create(CaseCreate(individual_id=individual_id))["id"]
+    saved = cs.save_report(case_id, GuidedReport(same_location=True, latitude=24.7, longitude=46.7, clothing="shirt",
+                                                carrying_distinctive=False, completed=True))["guided_report"]
+    assert saved["same_location"] is True and saved["completed"] is True
+    assert saved["latitude"] is None and saved["longitude"] is None
+    stored = db.data[f"cases/{case_id}"]["guided_report"]
+    assert stored["latitude"] is None and stored["longitude"] is None
+
 def test_guided_report_distinctive_description_is_consistent_with_the_flag():
     with pytest.raises(ValidationError):
         GuidedReport(carrying_distinctive=False, distinctive_description="a red bag")

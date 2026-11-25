@@ -788,12 +788,11 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     }
   }
 
-  bool _isNearby(VolunteerCase item) =>
-      item.joinable &&
-      location != null &&
-      item.information?.coordinates != null &&
-      location!.distanceTo(item.information!.coordinates!) <=
-          repo.proximityRadiusMeters;
+  // Proximity-based prioritization (PBI 26) is deferred to Release 2: no case
+  // is classified as nearby, so the Priority Nearby Cases card, the priority
+  // sheet and the Nearby chips never appear. Volunteer location access
+  // (PBI 13) and standard alerts are unaffected.
+  bool _isNearby(VolunteerCase _) => false;
   Future<bool> _confirm(
     String title,
     String message,

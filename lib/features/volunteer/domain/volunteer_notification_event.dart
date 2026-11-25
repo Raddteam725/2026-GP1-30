@@ -36,7 +36,9 @@ class VolunteerNotificationEvent {
 
   static AlertKind? parseKind(dynamic kind, dynamic status) => switch (kind) {
     'general' || 'new_case' => AlertKind.newCase,
-    'priority' => AlertKind.priority,
+    // Historical priority rows are shown as standard case alerts: proximity
+    // prioritization (PBI 26) is deferred and must not be reactivated by them.
+    'priority' => AlertKind.newCase,
     'status_update' => AlertKind.statusUpdate,
     'case_closed' => switch (status) {
       'cancelled' => AlertKind.cancelled,

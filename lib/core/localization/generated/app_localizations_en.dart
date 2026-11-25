@@ -1378,11 +1378,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get photoExpiredError =>
-      'This registration is expired or its retention period is unavailable. Create a new registration with a valid event period.';
+      'This registration period has expired or is unavailable. A new missing-person report cannot be submitted using this registration.';
 
   @override
   String get photoExpiredNotice =>
-      'This registration is not eligible for a new missing-person report. A new photograph alone does not renew its registration period.';
+      'This registration period has expired. A new missing-person report cannot be submitted using this registration. A new photograph alone does not renew its registration period.';
 
   @override
   String get updatePhotoRequired => 'Update Photo';

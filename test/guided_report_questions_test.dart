@@ -105,6 +105,34 @@ void main() {
     expect(find.text('View Status'), findsOneWidget);
   });
 
+  testWidgets('"Yes" to the location question records the answer only: no '
+      'device location is requested, no coordinates are saved, and the report '
+      'continues', (t) async {
+    // No GeolocatorPlatform is installed for this test: any location request
+    // would throw and surface as an exception below.
+    await start(t);
+    auth.active = true;
+    final value = await seedCase();
+    await route(t, AppRoutes.guidedReport, arguments: value.id);
+    await t.tap(find.widgetWithText(FilledButton, 'Yes'));
+    await t.pumpAndSettle();
+    expect(t.takeException(), isNull);
+    expect(find.byType(SnackBar), findsNothing);
+    expect(find.text('Current location captured for this report'), findsNothing);
+    expect(find.textContaining('could not be recorded'), findsNothing);
+    expect(find.textContaining('What clothing'), findsOneWidget);
+    await send(t, 'Blue shirt');
+    await t.tap(find.widgetWithText(OutlinedButton, 'No'));
+    await t.pumpAndSettle();
+    await send(t, 'Near gate 3', last: true);
+    final report = repo.caseRecords.single.report!;
+    expect(report['completed'], isTrue);
+    expect(report['same_location'], isTrue);
+    expect(report['latitude'], isNull);
+    expect(report['longitude'], isNull);
+    expect(find.text('View Status'), findsOneWidget);
+  });
+
   testWidgets('A distinctive item requires its description before moving on', (
     t,
   ) async {

@@ -629,10 +629,7 @@ def test_found_first_links_later_guardian_case_without_search_or_reverification(
     assert len(CaseService(guardian).list()) == 1
 
 
-def test_standalone_expiry_defers_only_deletion_and_reunited_minimizes(db, monkeypatch):
-    from app import cleanup
-    monkeypatch.setattr(cleanup, 'database', lambda: db)
-    monkeypatch.setattr(cleanup, 'bucket', service.bucket)
+def test_standalone_expiry_keeps_registration_stored_and_reunited_minimizes(db):
     guardian, identifier = guardian_with_individual('guardian')
     profile = eligible_profiles(vol())[0]
     report = submit()
@@ -640,7 +637,6 @@ def test_standalone_expiry_defers_only_deletion_and_reunited_minimizes(db, monke
     ref = guardian.get(identifier).reference
     expires = datetime.now(timezone.utc)-timedelta(seconds=1)
     ref.update({'registration_started_at': expires-timedelta(days=3), 'registration_expires_at': expires})
-    cleanup.expire_photos()
     assert ref.get().exists
     assert eligible_profiles(vol()) == []
     assert vol().registration_bytes(ref.get(), report['id']).startswith(b'\xff\xd8')
@@ -653,8 +649,8 @@ def test_standalone_expiry_defers_only_deletion_and_reunited_minimizes(db, monke
     vol().handover_found(report['id'])
     data = db.data['found_reports/'+report['id']]
     assert set(data) == {'origin', 'event_id', 'status', 'created_at', 'updated_at', 'handed_over_at', 'handed_over_by', 'verification_method'}
-    cleanup.expire_photos()
-    assert not ref.get().exists
+    # Expired registration data stays stored: automatic deletion (PBI 37) is Release 2.
+    assert ref.get().exists and ref.get().to_dict()['photo_path']
     assert db.collection('users').document('guardian').get().exists
     assert db.collection('users').document('one').get().exists
 

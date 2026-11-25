@@ -171,7 +171,11 @@ class CaseService:
             # this is not a permanent editable chat session.
             if (data.get("guided_report") or {}).get("completed"):
                 raise HTTPException(409, detail="report_already_submitted")
-            tx.update(doc.reference, {"guided_report": value.model_dump(),
+            # Release 1 stores the last-seen Yes/No answer only: acquiring and
+            # recording the Guardian's coordinates (and the proximity alerts they
+            # feed, PBI 26) is Release 2 work, so coordinates from any client are
+            # dropped here. The accepted request shape and stored fields are unchanged.
+            tx.update(doc.reference, {"guided_report": {**value.model_dump(), "latitude": None, "longitude": None},
                 "updated_at": firestore.SERVER_TIMESTAMP})
         save(self.db.transaction())
         safe_dispatch(self.db, case_id)

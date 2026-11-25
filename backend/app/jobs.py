@@ -33,8 +33,7 @@ def retry_alerts():
 
 # Resolvers, not functions, so each job is looked up at call time and can be monkeypatched.
 RETRY_JOBS = (lambda: retry_alerts, lambda: retry_guardian_alerts)
-CLEANUP_JOBS = (lambda: cleanup.run, lambda: cleanup.expire_photos,
-                lambda: cleanup.scrub_terminal_cases, lambda: cleanup.delete_finished_found_photos,
+CLEANUP_JOBS = (lambda: cleanup.run, lambda: cleanup.delete_finished_found_photos,
                 lambda: cleanup.end_abandoned_found_attempts)
 
 def _run_group(group):

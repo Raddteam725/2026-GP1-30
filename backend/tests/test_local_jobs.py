@@ -15,14 +15,12 @@ def test_local_jobs_are_one_minute_and_failure_does_not_skip_other_jobs(db, monk
         calls.append('queue')
         raise OSError('offline')
     monkeypatch.setattr(cleanup, 'run', broken)
-    monkeypatch.setattr(cleanup, 'expire_photos', lambda: calls.append('photos'))
-    monkeypatch.setattr(cleanup, 'scrub_terminal_cases', lambda: calls.append('cases'))
     monkeypatch.setattr(cleanup, 'delete_finished_found_photos', lambda: calls.append('found'))
     monkeypatch.setattr(cleanup, 'end_abandoned_found_attempts', lambda: calls.append('abandoned'))
     monkeypatch.setattr(jobs, 'retry_alerts', lambda: calls.append('alerts'))
     monkeypatch.setattr(jobs, 'retry_guardian_alerts', lambda: calls.append('guardian'))
     local_jobs.run_once()
-    assert calls == ['queue', 'photos', 'cases', 'found', 'abandoned', 'alerts', 'guardian']
+    assert calls == ['queue', 'found', 'abandoned', 'alerts', 'guardian']
 
 
 def test_finished_photo_retry_does_not_delete_active_attempt_or_change_case(db, monkeypatch, photos):

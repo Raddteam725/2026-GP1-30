@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:radd/features/volunteer/data/mock_volunteer_repository.dart';
 import 'package:radd/features/volunteer/data/volunteer_repository.dart';
 import 'package:radd/features/volunteer/domain/volunteer_models.dart';
+import 'package:radd/features/volunteer/domain/volunteer_notification_event.dart';
 
 void main() {
   const a = MockVolunteerRepository.account;
@@ -201,6 +202,22 @@ void main() {
       await expectLater(live.submitFound(a), throwsStateError);
     },
   );
+  test('Historical priority alert rows parse as standard case alerts', () {
+    // Proximity-based priority alerts (PBI 26) are deferred: a stored
+    // `priority` notification must not reactivate priority handling.
+    expect(
+      VolunteerNotificationEvent.parseKind('priority', null),
+      AlertKind.newCase,
+    );
+    expect(
+      VolunteerNotificationEvent.fromData({
+        'role': 'volunteer',
+        'case_id': 'RD-1',
+        'kind': 'priority',
+      })!.kind,
+      AlertKind.newCase,
+    );
+  });
   test('500 meter distance boundary for nearby cases', () {
     const origin = Coordinates(0, 0);
     expect(origin.distanceTo(origin), 0);
