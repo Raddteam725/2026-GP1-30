@@ -25,8 +25,6 @@ String volunteerAlertMessage(AppLocalizations s, AlertKind kind) =>
       AlertKind.reunited => s.vReunitedAlertMessage,
     };
 
-/// Used in the root overlay, so camera/QR routes receive the same notice as
-/// Home, Cases and Profile. Does not consume touches outside the card.
 class VolunteerNotificationBanner extends StatelessWidget {
   const VolunteerNotificationBanner({
     super.key,
@@ -40,8 +38,6 @@ class VolunteerNotificationBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
     final priority = event.kind == AlertKind.priority;
-    // Same shared card the Guardian workspace uses (NoticeBanner); only the
-    // Volunteer wording, key and action differ.
     return NoticeBanner(
       materialKey: ValueKey('volunteer-notice-${event.id}'),
       title: volunteerAlertTitle(s, event.kind),

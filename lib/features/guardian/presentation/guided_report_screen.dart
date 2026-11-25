@@ -11,11 +11,6 @@ import 'case_widgets.dart';
 import 'guardian_components.dart';
 import 'individual_widgets.dart';
 
-/// The Reporting Assistant: a structured, one-time guided case-details
-/// workflow presented as a conversation (per the approved design) -- not a
-/// general chatbot and not a permanent chat. It opens automatically after a
-/// case is created and must be completed before leaving; every answer is
-/// persisted to the real case on the backend as it is given.
 class GuidedReportScreen extends StatefulWidget {
   const GuidedReportScreen({super.key, required this.id});
   final String id;
@@ -34,7 +29,6 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
   bool _busy = false;
   Object? _error;
 
-  /// Keeps the newest exchange in view, like a conversation should.
   void _scrollToEnd() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scroll.hasClients) return;
@@ -66,10 +60,6 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
     super.dispose();
   }
 
-  /// The predefined question sequence (Sprint-0 backlog): last-seen location
-  /// Yes/No, clothing, distinctive item Yes/No (+ description when Yes), and
-  /// optional additional information. A "No" to the location question simply
-  /// records no location -- no further location question is asked.
   int get _step {
     if (_answers['same_location'] == null) return 0;
     if ((_answers['clothing'] ?? '').isEmpty) return 1;
@@ -98,10 +88,6 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
     try {
       if (step == 0) {
         next['same_location'] = choice;
-        // Release 1 records the Yes/No answer only. Acquiring the Guardian's
-        // device location for the last-seen position (and the proximity
-        // prioritization it feeds) is deferred to Release 2; no permission
-        // request, no coordinates, and no success or failure message here.
         next['latitude'] = null;
         next['longitude'] = null;
       } else if (step == 1) {
@@ -248,16 +234,11 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
                 if (_answers['same_location'] != null)
                   _reply(
                     _answers['same_location'] == true ? s.yes : s.no,
-                    // Only a report saved with coordinates (before location
-                    // acquisition was deferred) carries the captured note.
                     note: _answers['same_location'] == true &&
                             _answers['latitude'] != null
                         ? s.locationReady
                         : null,
                   ),
-                // A report saved before the location question was reduced to
-                // Yes/No may still carry a textual last-seen answer: keep
-                // showing what the Guardian actually said, never ask it again.
                 if ((_answers['last_seen_description'] ?? '').isNotEmpty) ...[
                   _assistant(s.lastSeenDescription),
                   _reply(_answers['last_seen_description'] as String),
@@ -513,9 +494,6 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
     ),
   );
 
-  /// Bottom answer area: Yes/No for the two boolean questions, a rounded
-  /// text field with a send button for the free-text ones, and "View
-  /// Status" once every required answer has been saved.
   Widget _inputBar(AppLocalizations s, int step) {
     final Widget child;
     if (step == 0 || step == 2) {
@@ -593,8 +571,6 @@ class _GuidedReportScreenState extends State<GuidedReportScreen> {
       );
     } else {
       child = FilledButton(
-        // The one-time workflow is over: the assistant is replaced by the
-        // case's status screen rather than lingering on the stack.
         onPressed: () => Navigator.of(context)
             .pushReplacementNamed(AppRoutes.caseStatus, arguments: widget.id),
         child: Text(s.viewStatus),

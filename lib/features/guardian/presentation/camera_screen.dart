@@ -87,7 +87,7 @@ class _CameraScreenState extends State<CameraScreen>
         const Duration(seconds: 20),
       );
       final bytes = await image.readAsBytes();
-      await File(image.path).delete(); // Only this capture's app-cache file.
+      await File(image.path).delete();
       if (bytes.length > 8000000) {
         if (mounted) setState(() => _error = 'size');
         return;

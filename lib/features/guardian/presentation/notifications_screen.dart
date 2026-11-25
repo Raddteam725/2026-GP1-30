@@ -50,9 +50,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
-    // A foreground push is only ever a hint that server state may have
-    // changed -- this always re-fetches from the authenticated backend
-    // rather than trusting anything from the push payload itself.
     GuardianPushRefresh.instance.addListener(_recover);
   }
 
@@ -100,9 +97,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final s = AppLocalizations.of(context)!;
     return FutureBuilder<List<GuardianNotification>>(
       future: _data,
-      // No manual refresh control: the list follows the backend through the
-      // event refetch (_recover) and app resume; only an explicit load
-      // failure offers a retry (below).
       builder: (context, state) => FeaturePage(
         title: s.notifications,
         children: [
@@ -125,8 +119,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               GuardianPanel(
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
-                  // The notification is about a status: its icon takes that
-                  // status's canonical colour, the same as everywhere else.
                   leading: Icon(
                     value.read
                         ? Icons.notifications_none

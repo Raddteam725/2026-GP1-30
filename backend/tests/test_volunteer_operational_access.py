@@ -1,4 +1,3 @@
-"""Organizational onboarding does not create a runtime consent prerequisite."""
 import copy
 import pytest
 from fastapi.testclient import TestClient

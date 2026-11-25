@@ -1,4 +1,3 @@
-"""Isolated shared-document/API tests; no production Firebase calls."""
 from workflow_fixtures import historical_closure
 import sys
 from pathlib import Path
@@ -52,8 +51,6 @@ def db(monkeypatch):
     monkeypatch.setattr(service, 'database', lambda: db)
     monkeypatch.setattr(service, 'bucket', lambda: storage)
     monkeypatch.setattr(volunteer, 'bucket', lambda: storage)
-    # confirm()/handover_found() (app.volunteer_workflow) fire a best-effort
-    # Guardian push via app.push, a separate `database` binding of its own.
     monkeypatch.setattr(push, 'database', lambda: db)
     def transactional(fn):
         def run(tx):
@@ -85,7 +82,7 @@ def test_closed_state_is_minimal_authoritative_and_scoped_to_previous_recipient(
     historical_closure(CaseService(guardian), identifier, outcome)
     assert vol().case_state(identifier) == {'id': identifier, 'status': outcome}
     with pytest.raises(HTTPException):
-        vol().accessible(identifier)  # Status access never unlocks private details.
+        vol().accessible(identifier)
     for note in list(vol('two').user.collection('volunteer_notifications').stream()):
         note.reference.delete()
     with pytest.raises(HTTPException):
@@ -140,7 +137,7 @@ def test_shared_guardian_case_first_second_join_and_isolation(db):
     assert second.list()[0]['id'] == case_id
     assert second.list(True) == []
     second.start_search(case_id)
-    first.start_search(case_id)  # idempotent retry
+    first.start_search(case_id)
     stored = db.data['cases/' + case_id]
     assert stored['joined_by'] == ['one', 'two']
     assert stored['stage_timestamps']['search_in_progress'] == timestamp

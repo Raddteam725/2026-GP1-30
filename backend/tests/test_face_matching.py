@@ -1,4 +1,3 @@
-"""Face matching (PBI 15/16) with a fake engine: no model, no real faces."""
 from workflow_fixtures import eligible_profiles
 import json
 import math
@@ -14,7 +13,7 @@ from test_volunteer import db, vol
 from test_cases import guardian_with_individual, photo
 
 SIZE = face_matching.EMBEDDING_SIZE
-REAL_GET_ENGINE = face_matching.get_engine  # captured before the conftest fixture replaces it
+REAL_GET_ENGINE = face_matching.get_engine
 
 
 def unit(*values):
@@ -58,7 +57,6 @@ def submit():
     return vol().submit_found(FoundInput(request_id='request-00000000001', photo_base64=photo()))
 
 
-# ---------- pure functions ----------
 def test_match_ranks_best_first_applies_threshold_and_limit():
     probe = unit(1, 0)
     gallery = [('far', unit(0, 1)), ('close', unit(1, 0.1)), ('closest', unit(1, 0.01)), ('mid', unit(1, 1))]
@@ -106,7 +104,6 @@ def test_age_rules_can_be_overridden(monkeypatch):
 
 
 def scored(similarity, second=0.0):
-    """Unit probe and embeddings with the given cosine similarities to it."""
     return unit(1, 0, 0), unit(similarity, math.sqrt(1 - similarity ** 2), 0), \
         unit(second, 0, math.sqrt(1 - second ** 2))
 
@@ -118,13 +115,13 @@ def test_search_uses_the_age_threshold():
 
 
 def test_clear_winner_rule_for_young_children():
-    probe, toddler, other = scored(0.50, second=0.30)   # below 0.60, but 0.20 ahead of the next person
+    probe, toddler, other = scored(0.50, second=0.30)
     assert [i for i, _ in face_matching.search(probe, [('t', toddler, 3, False), ('o', other, 9, False)])] == ['t']
-    probe, toddler, other = scored(0.50, second=0.40)   # only 0.10 ahead: not a clear winner
+    probe, toddler, other = scored(0.50, second=0.40)
     assert face_matching.search(probe, [('t', toddler, 3, False), ('o', other, 30, False)]) == [('o', pytest.approx(0.40))]
-    probe, baby, other = scored(0.50, second=0.30)      # babies need a 0.25 gap
+    probe, baby, other = scored(0.50, second=0.30)
     assert face_matching.search(probe, [('b', baby, 1, False), ('o', other, 9, False)]) == []
-    probe, toddler, _ = scored(0.44)                    # below the 0.45 floor
+    probe, toddler, _ = scored(0.44)
     assert face_matching.search(probe, [('t', toddler, 4, False)]) == []
 
 
@@ -136,9 +133,7 @@ def test_open_cases_first_without_hiding_a_better_match():
         return unit(*v)
     gallery = [('open', at(0.70, 1), 30, True), ('higher', at(0.90, 2), 30, False),
                ('lower', at(0.50, 3), 30, False)]
-    # 'lower' passes the adult threshold too, but is hidden behind the open case; 'higher' is not.
     assert [i for i, _ in face_matching.search(probe, gallery)] == ['higher', 'open']
-    # Without an open case shown, everyone eligible who passes is shown, best first.
     gallery[0] = ('open', at(0.10, 1), 30, True)
     assert [i for i, _ in face_matching.search(probe, gallery)] == ['higher', 'lower']
 
@@ -159,7 +154,6 @@ def test_matching_can_be_switched_off(monkeypatch):
 
 @pytest.fixture
 def ai_modules(monkeypatch, tmp_path):
-    """Fake onnxruntime and MTCNN modules and a fake model file; no real AI package or weights."""
     state = SimpleNamespace(output=[3.0] + [0.0] * (SIZE - 1), faces=[], inputs=[], detector_error=None,
                             session_error=None, detected=[])
 
@@ -260,7 +254,6 @@ def test_alignment_maps_landmarks_onto_the_template():
     assert np.allclose(points @ m[:, :2].T + m[:, 2], template, atol=1e-6)
 
 
-# ---------- candidates endpoint ----------
 def test_returns_ranked_candidates_without_exposing_embeddings(db, monkeypatch):
     register(db, 'guardian-a', unit(1, 0.05))
     register(db, 'guardian-b', unit(0, 1))
@@ -268,7 +261,7 @@ def test_returns_ranked_candidates_without_exposing_embeddings(db, monkeypatch):
     report = submit()
     result = vol().candidates(report['id'])
     assert result['state'] == 'candidates'
-    assert len(result['candidates']) == 1  # the unrelated person is below the threshold
+    assert len(result['candidates']) == 1
     top = result['candidates'][0]
     assert 0 <= top['similarity'] <= 1 and top['similarity'] > 0.99
     assert top['person']['id'] in {p['id'] for p in eligible_profiles(vol())}
@@ -278,7 +271,7 @@ def test_returns_ranked_candidates_without_exposing_embeddings(db, monkeypatch):
 
 @pytest.mark.parametrize('score,shown', [(0.35, False), (0.40, True)])
 def test_candidates_follow_the_registered_age_rule(db, monkeypatch, score, shown):
-    register(db, 'guardian-a', unit(score, math.sqrt(1 - score ** 2)))  # registered age 7: threshold 0.38
+    register(db, 'guardian-a', unit(score, math.sqrt(1 - score ** 2)))
     use_engine(monkeypatch, unit(1, 0))
     result = vol().candidates(submit()['id'])
     assert result['state'] == ('candidates' if shown else 'no_reliable_candidate')
@@ -286,7 +279,7 @@ def test_candidates_follow_the_registered_age_rule(db, monkeypatch, score, shown
 
 def test_previous_model_embeddings_are_never_compared(db, monkeypatch):
     path = register(db, 'guardian-a', None)
-    db.data[path]['face_embedding'] = unit(1, 0)  # a Facenet512-era field
+    db.data[path]['face_embedding'] = unit(1, 0)
     use_engine(monkeypatch, unit(1, 0))
     assert vol().candidates(submit()['id']) == {'state': 'no_reliable_candidate', 'candidates': []}
 
@@ -306,10 +299,10 @@ def test_no_face_in_found_photo_is_reported_as_no_reliable_candidate(db, monkeyp
 
 
 def test_registrations_without_embedding_are_not_ai_candidates_but_stay_listed(db, monkeypatch):
-    register(db, 'guardian-a', None)  # e.g. no face detected at registration
+    register(db, 'guardian-a', None)
     use_engine(monkeypatch, unit(1))
     assert vol().candidates(submit()['id'])['state'] == 'no_reliable_candidate'
-    assert len(eligible_profiles(vol())) == 1  # registration remains eligible for shared retrieval
+    assert len(eligible_profiles(vol())) == 1
 
 
 def test_registration_with_explicit_null_embedding_is_not_an_ai_candidate_but_stays_listed(db, monkeypatch):
@@ -348,7 +341,6 @@ def test_candidates_endpoint_unavailable_when_disabled_or_dependencies_missing(
     else:
         monkeypatch.delenv('RADD_FACE_MATCHING', raising=False)
     if enabled:
-        # Enabled AI that cannot load must now fail before accepting requests.
         with pytest.raises(RuntimeError, match='AI startup check failed'):
             with TestClient(app):
                 pass
@@ -382,7 +374,6 @@ def test_ranked_ai_candidate_confirms_and_reunites(db, monkeypatch, with_case, p
     from app.cases import CaseService
     from app.case_models import CaseCreate
     path = register(db, 'guardian-a', unit(1))
-    # Use the same authenticated Guardian service that owns the registration.
     from app.service import GuardianService
     owner = GuardianService({'uid': 'guardian-a', 'email': 'guardian-a@example.test', 'email_verified': True})
     if with_case:

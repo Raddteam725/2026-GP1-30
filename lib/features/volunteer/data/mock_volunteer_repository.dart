@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import '../domain/volunteer_models.dart';
 import 'volunteer_repository.dart';
 
-/// In-memory design fixtures ONLY. Never writes to Firebase or sends notifications.
 class MockVolunteerRepository extends VolunteerRepository {
   MockVolunteerRepository({DateTime? now}) : _now = now ?? DateTime.now() {
     _cases = [
@@ -140,7 +139,6 @@ class MockVolunteerRepository extends VolunteerRepository {
         phone: '+966 50 345 6789',
       ),
     ),
-    // The same registered profile can be identified without a missing-person report.
     RegisteredPerson(
       id: 'unreported',
       name: LocalizedData('Omar Khalid', 'عمر خالد'),
@@ -196,7 +194,6 @@ class MockVolunteerRepository extends VolunteerRepository {
     notifyListeners();
   }
 
-  /// Controlled fixture update for initial/updated report verification, not a volunteer action.
   void receiveGuardianDetails(String id, CaseInformation information) {
     final c = caseById(id)!;
     c.information = information;
@@ -288,9 +285,6 @@ class MockVolunteerRepository extends VolunteerRepository {
   String identifierFor(FoundReport report) =>
       caseForPerson(report.matchedPerson!.id)?.id ?? report.id;
 
-  /// What the Guardian's device shows for this report's reunification
-  /// context in preview mode: the linked case's code, or a fixed 6-digit
-  /// code for a standalone Found Report.
   String verificationCodeFor(FoundReport report) =>
       caseForPerson(report.matchedPerson!.id)?.verificationCode ??
       previewFoundCode(report.id);
@@ -328,8 +322,6 @@ class MockVolunteerRepository extends VolunteerRepository {
       throw StateError('verification-not-ready');
     }
     final id = identifierFor(report);
-    // The Volunteer types the 6-digit code the Guardian reads out (the linked
-    // case's code, or the standalone report's own), never the RD-/FR- id.
     final valid = method == VerificationMethod.caseIdentifier
         ? authenticatedAccountShown &&
               value.trim() == verificationCodeFor(report)

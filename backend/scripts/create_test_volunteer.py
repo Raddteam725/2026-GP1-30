@@ -99,7 +99,6 @@ def main():
     except ValueError as error:
         parser.exit(1, str(error) + '\n')
     except Exception as error:
-        # SDK exceptions may include request details: never print their payloads.
         parser.exit(1, 'Provisioning stopped (' + type(error).__name__ + '). Check ADC/IAM or Firebase setup; no automatic rollback.\n')
 
 

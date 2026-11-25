@@ -51,7 +51,6 @@ def test_abandoned_attempt_is_ended_and_its_photo_deleted(db, monkeypatch, photo
     created = old_ref.get().to_dict()['created_at']
     old_path = old_ref.get().to_dict()['photo_path']
     case_before = dict(db.data['cases/' + identifier])
-    # Not yet past the backstop age: nothing changes.
     cleanup.end_abandoned_found_attempts(now=created + cleanup.ABANDONED_ATTEMPT_AGE - timedelta(seconds=1))
     assert vol().found_photo(old['id'])
     later = created + cleanup.ABANDONED_ATTEMPT_AGE + timedelta(seconds=1)
@@ -62,7 +61,6 @@ def test_abandoned_attempt_is_ended_and_its_photo_deleted(db, monkeypatch, photo
     assert data['ended'] is True and 'photo_path' not in data
     assert not service.bucket().blob(old_path).exists()
     assert old['id'] not in [r['id'] for r in vol().found_list()]
-    # A recent attempt and the Missing Case are untouched.
     assert vol().found_photo(fresh['id'])
     assert db.data['cases/' + identifier] == case_before
 

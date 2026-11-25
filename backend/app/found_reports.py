@@ -1,4 +1,3 @@
-"""Dedicated Found Report lifecycle and shared reunification context helpers."""
 import secrets
 import unicodedata
 
@@ -14,11 +13,6 @@ def found_status(data):
     return data.get('status') or (IDENTIFIED if data.get('matched_profile_id') else IDENTIFYING)
 
 
-# Short Guardian-readable fallback for ONE active standalone Found Report. The
-# document id stays the authoritative internal identifier and is never shown
-# as, nor accepted as, the manual verification value. The code is written once
-# at identity confirmation, kept unchanged for the report's whole active life
-# and dropped by the Reunited allowlist (`minimal_completed`).
 VERIFICATION_CODE_LENGTH = 6
 
 
@@ -27,8 +21,6 @@ def new_verification_code():
 
 
 def normalize_code(value):
-    """Tolerate separators (spaces, '#', dashes) and Arabic-Indic numerals;
-    anything else stays and therefore fails the comparison."""
     out = []
     for ch in str(value or ''):
         if ch.isspace() or ch in '#-':
@@ -38,12 +30,6 @@ def normalize_code(value):
 
 
 def guardian_verification_visible(data):
-    """The one rule for Guardian-facing verification information on a
-    standalone Found Report: identity confirmed against a registration
-    (`identity_confirmed` or `awaiting_guardian_verification`), no Missing
-    Case behind it, not ended, not handed over. Reunited/terminal and
-    still-identifying reports never qualify, whatever legacy fields (a stale
-    code, a matched profile, a Guardian link) they may still carry."""
     return (found_status(data) in IDENTIFIED_ACTIVE and bool(data.get('matched_profile_id'))
             and not data.get('case_id') and not data.get('ended') and not data.get('handed_over_at'))
 
@@ -53,8 +39,6 @@ def code_eligible(data):
 
 
 def ensure_verification_code(db, doc):
-    """Return the report's code, assigning one (once) to an active standalone
-    report created before short codes existed. Ineligible reports get none."""
     from firebase_admin import firestore
     data = doc.to_dict() or {}
     if data.get('verification_code'):
@@ -76,7 +60,6 @@ def ensure_verification_code(db, doc):
 
 
 def minimal_completed(data):
-    """Approved allowlist: no person/Guardian links, snapshots or QR secrets."""
     proof = data.get('guardian_verification') or {}
     return {'origin': 'volunteer_found', 'event_id': data['event_id'],
             'status': REUNITED, 'created_at': data.get('created_at'),
@@ -105,11 +88,6 @@ def identified_report(db, registration, tx=None):
 
 
 def monitoring(db, event_id, *, active_only=True):
-    """Internal trusted Admin service contract; no public/admin UI endpoint.
-
-    The future Admin API must authorize its caller before invoking this function.
-    Never returns photo paths, contact information or verification secrets.
-    """
     from google.cloud.firestore_v1.base_query import FieldFilter
     fields = ('event_id', 'volunteer_uid', 'created_at', 'updated_at',
               'matched_profile_id', 'handed_over_at', 'handed_over_by', 'verification_method')

@@ -100,8 +100,6 @@ void main() {
         t.widget<VolunteerBell>(find.byType(VolunteerBell)).hasAlerts,
         isFalse,
       );
-      // A second Volunteer confirms a case this Volunteer joined: a real new
-      // notification through the preview repository's existing workflow.
       const other = VolunteerAccount(
         uid: 'other-volunteer',
         name: LocalizedData('Other', 'آخر'),

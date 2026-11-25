@@ -6,8 +6,6 @@ import '../data/registration_draft.dart';
 import 'email_verification_screen.dart';
 import 'session_screen.dart';
 
-/// Prevent deep links from presenting remaining onboarding to an unverified
-/// account. The API independently enforces verification before profile writes.
 class VerifiedEmailGate extends StatefulWidget {
   const VerifiedEmailGate({super.key, required this.child});
   final Widget child;

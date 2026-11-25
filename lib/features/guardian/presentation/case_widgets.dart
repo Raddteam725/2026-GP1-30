@@ -23,8 +23,6 @@ String caseStatusLabel(String status, AppLocalizations s) => switch (status) {
   _ => s.unknownCaseStatus,
 };
 
-/// What the Guardian is told at each stage of the reunification path -- the
-/// wording under the emphasized (current) step of the progress timeline.
 String caseStageDescription(String status, AppLocalizations s) =>
     switch (status) {
       'report_received' => s.reportReceivedDescription,
@@ -41,18 +39,10 @@ String caseDate(BuildContext context, DateTime? date) => date == null
           .add_jm()
           .format(date.toLocal());
 
-/// Case identifiers are always presented with a leading '#', as in the
-/// approved design ("#RD-…"); the raw id is what the backend actually uses.
 String caseDisplayId(String id) => '#$id';
 
-/// The identifier for use INSIDE mixed-direction rich text (Arabic label +
-/// Latin id): Unicode isolates keep "#RD-…" reading left-to-right as a unit
-/// without affecting the surrounding paragraph. Widgets that show the id on
-/// its own use `textDirection: TextDirection.ltr` instead.
 String caseDisplayIdIsolated(String id) => '\u2066${caseDisplayId(id)}\u2069';
 
-/// 1-based position on the five-stage reunification path, or null for a
-/// terminal outcome that is not itself a stage (resolved/cancelled/...).
 int? caseStageNumber(String status) {
   final index = caseStages.indexOf(status);
   return index < 0 ? null : index + 1;
@@ -61,13 +51,6 @@ int? caseStageNumber(String status) {
 const mutedText = Color(0xFF718096);
 const _greyBackground = Color(0xFFEDF2F7);
 
-/// The ONE semantic colour per canonical backend case status, used by every
-/// Guardian status chip, badge, card border/accent, icon and timeline
-/// indicator -- on every screen, in both languages. Keyed on the backend
-/// identifier, never on a translated label, and never on whether a case is
-/// merely "active" (that is not a status). Reunited and Resolved share the
-/// same green on purpose. "Report Missing" is an action, not a status: see
-/// [reportMissingColor].
 const caseStatusColors = <String, Color>{
   'report_received': Color(0xFF2563EB),
   'search_in_progress': Color(0xFFF59E0B),
@@ -80,15 +63,11 @@ const caseStatusColors = <String, Color>{
 };
 Color caseStatusColor(String status) => caseStatusColors[status] ?? mutedText;
 
-/// Light tint of a status colour for chip/badge backgrounds.
 Color caseStatusTint(String status) =>
     caseStatusColor(status).withValues(alpha: .12);
 
-/// "Report Missing" is an ACTION, not a status: always this red.
 const reportMissingColor = Color(0xFFDC2626);
 
-/// The one status vocabulary used on every screen, coloured by
-/// [caseStatusColor] from the canonical status.
 class StatusChip extends StatelessWidget {
   const StatusChip({
     super.key,
@@ -137,7 +116,6 @@ class StatusChip extends StatelessWidget {
   }
 }
 
-/// Small navy-on-light identifier chip ("#RD-…"), as on Case Status.
 class CaseIdChip extends StatelessWidget {
   const CaseIdChip({super.key, required this.id});
   final String id;
@@ -162,12 +140,8 @@ class CaseIdChip extends StatelessWidget {
 }
 
 enum CaseCardStyle {
-  /// Home "Active Cases": outline in the case's canonical status colour,
-  /// "Track Status" action.
   home,
 
-  /// Cases list: accent bar on the leading edge in the case's canonical
-  /// status colour, "View Status" action.
   list,
 }
 
@@ -187,9 +161,6 @@ class CaseCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
     final home = style == CaseCardStyle.home;
-    // The outline (Home) and the leading accent bar (Cases list) both
-    // communicate the case's state, so they take the canonical status colour
-    // -- the same one the chip inside the card shows.
     final statusColor = caseStatusColor(value.status);
     return Container(
       decoration: BoxDecoration(
@@ -215,8 +186,6 @@ class CaseCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          // IntrinsicHeight: the accent bar stretches to the content's height
-          // even though the card sits in a list with unbounded height.
           child: IntrinsicHeight(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -264,7 +233,6 @@ class CaseCard extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 10),
-                        // Full width: real identifiers are long (RD-…12 hex).
                         Text.rich(
                           TextSpan(
                             text: '${s.caseId}: ',
@@ -340,12 +308,6 @@ class CaseCard extends StatelessWidget {
   }
 }
 
-/// The ONE Report Missing flow, shared by every entry point (Home, My
-/// Individuals, Individual Profile): confirmation -> real case creation on the
-/// backend (which is what triggers the initial Volunteer alert) -> the
-/// required Guided Assistant opens automatically. Returns true once a case
-/// exists for this individual so the caller can refresh its own state.
-/// Backend failures propagate to the caller, which surfaces them in place.
 Future<bool> startReportMissing(
   BuildContext context,
   Individual individual, {
@@ -360,13 +322,10 @@ Future<bool> startReportMissing(
     icon: Icons.person_search_outlined,
   );
   if (confirmed != true || !context.mounted) return false;
-  // Busy only from here: the confirmation itself is not "in progress".
   onBusy?.call(true);
   try {
     final value = await AppServices.of(context).guardian
         .reportMissing(individual.id);
-    // The Guardian just did this and is about to see the case: its own
-    // push must refresh screens, not raise a transient banner.
     GuardianPushRefresh.instance.markOwnAction(value.id, value.status);
     if (!context.mounted) return true;
     await Navigator.of(context)
@@ -378,13 +337,10 @@ Future<bool> startReportMissing(
 }
 
 enum ReportMissingVariant {
-  /// My Individuals card: compact red button / amber "Active Case" row.
   list,
 
-  /// Individual Profile: large full-width red button.
   profile,
 
-  /// Home grid card: a single small chip-style control.
   chip,
 }
 
@@ -422,7 +378,6 @@ class _ReportMissingActionState extends State<ReportMissingAction> {
     } catch (e) {
       if (!mounted) return;
       if (widget.variant == ReportMissingVariant.chip) {
-        // No room for an inline notice on the compact Home card.
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(failureMessage(e, AppLocalizations.of(context)!)),
@@ -586,8 +541,6 @@ class _ReportMissingActionState extends State<ReportMissingAction> {
   }
 }
 
-/// "Active Case" indicator on an individual's card, coloured by that case's
-/// canonical status (navy when the status is not loaded on this screen).
 class _ActiveCaseChip extends StatelessWidget {
   const _ActiveCaseChip({required this.label, this.status});
   final String label;

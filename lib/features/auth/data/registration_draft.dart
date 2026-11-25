@@ -2,8 +2,6 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Device-local onboarding convenience only. Never stores credentials or grants
-/// access; Firebase and the API independently authorize every protected action.
 class RegistrationDraft {
   static String _key(String uid) => 'radd.registration.$uid';
 

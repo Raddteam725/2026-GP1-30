@@ -4,11 +4,6 @@ import 'package:radd/core/localization/generated/app_localizations.dart';
 import 'package:radd/features/auth/presentation/form_validation.dart';
 import 'package:radd/shared/saudi_phone.dart';
 
-/// Sprint-0 scope: the current release supports Saudi Arabian phone numbers.
-/// Any common way of writing one is accepted and normalized to the canonical
-/// international form, identically to the backend (normalize_saudi_phone).
-/// The password policy is the documented one: 8+ characters with upper,
-/// lower, digit and symbol.
 void main() {
   final s = lookupAppLocalizations(const Locale('en'));
   test('Saudi numbers in any common form normalize to one canonical form', () {
@@ -17,7 +12,7 @@ void main() {
       '0501234567': '+966501234567',
       '00966 50 123 4567': '+966501234567',
       '966-50-123-4567': '+966501234567',
-      '٠٥٠١٢٣٤٥٦٧': '+966501234567', // Arabic-Indic digits
+      '٠٥٠١٢٣٤٥٦٧': '+966501234567',
       ' (05) 012.345-67 ': '+966501234567',
       '+٩٦٦٥٠١٢٣٤٥٦٧': '+966501234567',
     }.entries) {
@@ -32,10 +27,10 @@ void main() {
       '٠٤١٢٣٤٥٦٧٨',
       '966612345678',
       '٠٥١٢٣٤٥٦٧٨٩',
-      '+201234567890', // another country
-      '+9665123456789', // too long
-      '05123', // too short
-      '+96601234567', // national number cannot start with 0
+      '+201234567890',
+      '+9665123456789',
+      '05123',
+      '+96601234567',
       'abc',
       '',
     ]) {
@@ -52,9 +47,9 @@ void main() {
 
   test('Password policy: at least 8 with upper, lower, number and symbol', () {
     expect(FormValidation.password('ValidPass1#', s), isNull);
-    expect(FormValidation.password('Short1#A', s), isNull); // exactly 8
+    expect(FormValidation.password('Short1#A', s), isNull);
     for (final weak in [
-      'Sh1#abc', // 7 characters
+      'Sh1#abc',
       'nouppercase1#',
       'NOLOWERCASE1#',
       'NoNumber##',

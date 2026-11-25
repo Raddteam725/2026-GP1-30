@@ -6,10 +6,6 @@ import 'package:http/testing.dart';
 import 'package:radd/features/guardian/data/guardian_api.dart';
 import 'package:radd/features/guardian/data/guardian_repository.dart';
 
-/// Arabic must survive the round trip to the backend unchanged. FastAPI
-/// answers `application/json` WITHOUT a charset parameter; package:http then
-/// decodes `Response.body` as Latin-1, which is exactly how "the assistant
-/// does not accept Arabic" looked: the saved answer came back as mojibake.
 void main() {
   const arabicName = 'سارة الأحمد';
   const arabicAnswer = 'عباءة سوداء وحقيبة زرقاء';
@@ -30,7 +26,6 @@ void main() {
         : {'completed': false, 'clothing': clothing},
   };
 
-  // A server that speaks UTF-8 but, like FastAPI, never says so.
   http.Response utf8Json(Object body) => http.Response.bytes(
     utf8.encode(jsonEncode(body)),
     200,
@@ -80,7 +75,6 @@ void main() {
         client: MockClient((request) async {
           expect(request.method, 'PUT');
           expect(request.url.path, '/v1/cases/RD-1/guided-report');
-          // What the server actually sees on the wire.
           received = jsonDecode(utf8.decode(request.bodyBytes));
           return utf8Json(caseJson(clothing: received!['clothing'] as String));
         }),

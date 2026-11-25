@@ -80,7 +80,6 @@ void main() {
       await expectLater(repo.beginVerification(a, report), throwsStateError);
       await repo.confirmMatch(a, report, item.person);
       await repo.beginVerification(a, report);
-      // The Guardian reads the case's 6-digit code; the RD-… id is not it.
       expect(
         await repo.verify(
           a,
@@ -88,7 +87,7 @@ void main() {
           VerificationMethod.caseIdentifier,
           item.verificationCode!,
         ),
-        isFalse, // authenticated account not confirmed as shown
+        isFalse,
       );
       expect(
         await repo.verify(
@@ -105,7 +104,7 @@ void main() {
           a,
           report,
           VerificationMethod.caseIdentifier,
-          '804900', // another case's code
+          '804900',
           authenticatedAccountShown: true,
         ),
         isFalse,
@@ -203,8 +202,6 @@ void main() {
     },
   );
   test('Historical priority alert rows parse as standard case alerts', () {
-    // Proximity-based priority alerts (PBI 26) are deferred: a stored
-    // `priority` notification must not reactivate priority handling.
     expect(
       VolunteerNotificationEvent.parseKind('priority', null),
       AlertKind.newCase,

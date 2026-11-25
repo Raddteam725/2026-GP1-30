@@ -1,9 +1,3 @@
-"""Delivery of the shared alert intents to authenticated, enabled Volunteers.
-
-FCM is a delivery channel; per-user notification records are durable history.
-Location is available during authorized participation; estimates expire after 60 seconds.
-FCM registration eligibility expires with the verified Firebase ID token.
-"""
 import logging
 import time
 from datetime import datetime, timedelta, timezone
@@ -49,8 +43,6 @@ def _send_registration(db, user, case, kind, ref, registration):
     history = ref.get().to_dict() or {}
     registered_at = rd.get('created_at')
     event_at = history.get('created_at')
-    # Token rotation/re-login must not deliver historical events to a new
-    # registration. Existing failed deliveries remain retryable on their device.
     if history.get('read_at') or (isinstance(registered_at, datetime) and
             isinstance(event_at, datetime) and registered_at > event_at):
         return
@@ -95,7 +87,7 @@ def _send_registration(db, user, case, kind, ref, registration):
     except Exception as error:
         logging.getLogger("uvicorn.error").warning("Radd event %s FCM failed (%s)", ref.id, type(error).__name__)
         receipt.delete()
-        return  # Pending delivery remains retryable; never claim delivery.
+        return
 
 def dispatch(db, case_id, *, matched=False, recipient=None):
     case = db.collection('cases').document(case_id).get()
@@ -105,7 +97,7 @@ def dispatch(db, case_id, *, matched=False, recipient=None):
     closed_at = cd.get('closed_at')
     if cd.get('scrubbed_at') or (terminal and isinstance(closed_at, datetime) and
             datetime.now(timezone.utc) - closed_at >= timedelta(hours=24)):
-        return  # Never recreate history after the existing retention deadline.
+        return
     if not terminal and status not in (STAGES[2:] if matched else STAGES[:2]):
         return
     now = datetime.now(timezone.utc)
@@ -124,7 +116,6 @@ def dispatch(db, case_id, *, matched=False, recipient=None):
         registrations = [r for r in user.reference.collection('fcm_registrations').stream()
                          if r.to_dict().get('event_id') == cd.get('event_id') and r.to_dict().get('session_expires_at', 0) > now.timestamp()]
         logging.getLogger("uvicorn.error").info("Radd event %s eligibility active_devices=%d epoch_ms=%d", case.id, len(registrations), time.time()*1000)
-        # History is durable even with notifications denied or no current device.
         delivery(db, user, case, status if terminal else 'status_update' if matched else 'general', registrations)
 
 def safe_dispatch(db, case_id, *, matched=False, recipient=None):
@@ -132,4 +123,3 @@ def safe_dispatch(db, case_id, *, matched=False, recipient=None):
         dispatch(db, case_id, matched=matched, recipient=recipient)
     except Exception as error:
         logging.getLogger(__name__).warning('Volunteer delivery pending retry (%s)', type(error).__name__)
-        # Never roll back an already committed Guardian operation.

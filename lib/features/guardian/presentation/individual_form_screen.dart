@@ -35,16 +35,10 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
   Uint8List? _photo;
   bool _busy = false, _photoError = false;
   Object? _error;
-  // Retention choices: for a new registration, the event's currently valid
-  // options (deadline previewed from now); for an existing one, the backend's
-  // options counted from the original registration, with the current choice.
   List<RetentionChoice>? _choices;
   String? _periodId, _currentPeriodId;
   bool _requestedPeriods = false, _periodError = false;
-  // Edit mode: the backend says whether retention may change (no active case).
   bool _retentionEditable = true;
-  // The Active event this registration is automatically associated with --
-  // read from the backend's authoritative event record, never assumed.
   ActiveEvent? _event;
   @override
   void didChangeDependencies() {
@@ -97,8 +91,6 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
       final event = await guardian.activeEvent();
       if (mounted) setState(() => _event = event);
     } catch (_) {
-      // No Active event: the periods panel already explains registration is
-      // unavailable and saving stays disabled; nothing is invented here.
       if (mounted) setState(() => _event = null);
     }
   }
@@ -151,8 +143,6 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
     try {
       await AppServices.of(context).guardian.saveIndividual(
         IndividualInput(
-          // Edit: only a CHANGED retention choice is sent -- any other edit
-          // (including a new photograph) leaves the deadline untouched.
           registrationPeriodId: widget.individual == null
               ? _periodId
               : (_periodId != _currentPeriodId ? _periodId : null),
@@ -438,9 +428,6 @@ class _IndividualFormScreenState extends State<IndividualFormScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          // Retention: chosen at registration, changeable from Edit while no
-          // case locks the profile (the backend enforces both). A failed
-          // options load is shown with a retry in BOTH modes -- never hidden.
           if (_periodError && (!editing || _retentionEditable))
             GuardianPanel(
               child: Column(

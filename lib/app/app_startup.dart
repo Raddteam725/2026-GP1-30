@@ -22,7 +22,6 @@ class AppStartupData {
   final Future<void> Function(Locale) saveLocale;
 }
 
-/// Called after the first Flutter frame, never before runApp.
 Future<AppStartupData> initializeApp() async {
   Future<T> step<T>(String name, Future<T> Function() action) async {
     debugPrint('Radd startup: $name begin');
@@ -31,7 +30,6 @@ Future<AppStartupData> initializeApp() async {
       debugPrint('Radd startup: $name ready');
       return result;
     } catch (error) {
-      // No account identifiers, passwords, tokens or error payloads.
       debugPrint('Radd startup: $name failed (${error.runtimeType})');
       rethrow;
     }

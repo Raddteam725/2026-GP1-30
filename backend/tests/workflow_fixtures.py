@@ -1,4 +1,3 @@
-"""Fixture data only; no removed Release 2 service is recreated in production."""
 from datetime import datetime, timezone
 
 def eligible_profiles(workflow):

@@ -7,8 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/volunteer_models.dart';
 
-/// Location permission/services are independent of the availability of a fix.
-/// Background continuation must be explicitly authorized by event participation.
 class VolunteerLocation extends ChangeNotifier with WidgetsBindingObserver {
   VolunteerLocation() {
     WidgetsBinding.instance.addObserver(this);
@@ -91,9 +89,6 @@ class VolunteerLocation extends ChangeNotifier with WidgetsBindingObserver {
 
   bool _allowed = false, _disposed = false;
 
-  /// Call only after authoritative event-assignment authorization. No UI action
-  /// or local account flag should grant this authorization. The workspace calls
-  /// this only after the shared API confirms the current event assignment.
   Future<void> authorizeBackgroundParticipation({
     required String title,
     required String description,
@@ -125,7 +120,6 @@ class VolunteerLocation extends ChangeNotifier with WidgetsBindingObserver {
     await _cancelling;
   }
 
-  /// Stops before asynchronous logout/network cleanup; late fixes are ignored.
   Future<void> stop() async {
     _stopped = true;
     _allowed = false;
@@ -213,7 +207,6 @@ class VolunteerLocation extends ChangeNotifier with WidgetsBindingObserver {
                           AppLifecycleState.resumed)) {
                 return;
               }
-              // Avoid presenting city-level approximate location as a 500 m priority signal.
               coordinates =
                   p.accuracy.isFinite &&
                       p.accuracy >= 0 &&
@@ -243,8 +236,6 @@ class VolunteerLocation extends ChangeNotifier with WidgetsBindingObserver {
           );
     } catch (error) {
       if (kDebugMode) debugPrint('Radd position stream: ${error.runtimeType}');
-      // Permission was checked independently. A plugin/GPS failure cannot
-      // turn a valid permission into denial; recovery retries on the heartbeat.
       coordinates = null;
       unavailable = true;
     }

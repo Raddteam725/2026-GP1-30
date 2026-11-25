@@ -49,7 +49,6 @@ def list_cases(db):
         print(f"{case_id}  {status:32}  {name}")
 
 def advance(db, case_id, target):
-    """Moves `case_id` to the NEXT stage only (never skips, never reverses)."""
     from app.case_models import STAGES
     from app.push import notify_guardian
     event = development_event(db)
@@ -69,8 +68,6 @@ def advance(db, case_id, target):
         if target == "match_confirmed":
             update["confirmed_by"] = DEV_ACTOR
         if target == "reunited":
-            # Mirrors VolunteerWorkflow.handover_found, with the verification
-            # proof explicitly labelled as development-only.
             update.update(handed_over_at=now, handed_over_by=DEV_ACTOR, guardian_verification={
                 "method": "development", "volunteer_uid": DEV_ACTOR, "guardian_id": data["guardian_id"],
                 "case_id": case_id, "verified_at": now})

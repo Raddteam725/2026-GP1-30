@@ -34,13 +34,8 @@ class Individual {
   final String id, fullName, gender, relationship;
   final int age;
 
-  /// Server-computed registration eligibility (with active-case deferral), never derived
-  /// from this device's clock. When true, Report Missing is unavailable
-  /// (the backend enforces this independently; this only drives the UI).
   final bool photoExpired;
 
-  /// The retention the Guardian chose for this individual's data and the
-  /// authoritative deletion deadline it produces (server timestamps).
   final String? registrationPeriodId;
   final DateTime? registrationExpiresAt;
   factory Individual.fromJson(Map<String, dynamic> j) => Individual(
@@ -59,8 +54,6 @@ class Individual {
   );
 }
 
-/// A retention period this registration may switch to, with the deletion
-/// deadline it would produce (counted from the original registration).
 class RetentionOption {
   const RetentionOption(
     this.id,
@@ -73,14 +66,10 @@ class RetentionOption {
   final int hours;
   final DateTime expiresAt;
 
-  /// False when the backend says this choice cannot be saved: its deadline
-  /// has already passed ('deadline_passed') or lies after the event ends
-  /// ('beyond_event'). The UI disables it; the backend still decides.
   final bool available;
   final String? reason;
 }
 
-/// What the Guardian may change an existing registration's retention to.
 class RetentionOptions {
   const RetentionOptions({
     required this.currentPeriodId,
@@ -91,7 +80,6 @@ class RetentionOptions {
   final String? currentPeriodId;
   final DateTime? expiresAt;
 
-  /// False while the individual has an active case (edits are locked).
   final bool editable;
   final List<RetentionOption> options;
   factory RetentionOptions.fromJson(Map<String, dynamic> j) => RetentionOptions(
@@ -148,9 +136,6 @@ class RegistrationPeriod {
   final int hours;
 }
 
-/// The one Active event, exactly as the backend (and the Admin who manages
-/// it) describes it. Never constructed from a constant in the app: when no
-/// event is Active the backend fails closed and the UI says so.
 class ActiveEvent {
   const ActiveEvent({
     required this.id,
@@ -174,11 +159,9 @@ class ActiveEvent {
 }
 
 abstract class GuardianRepository {
-  /// The Active event (name, location, dates) from the authoritative record.
   Future<ActiveEvent> activeEvent();
   Future<List<RegistrationPeriod>> registrationPeriods();
 
-  /// Server-owned role, resolved without assuming a Guardian profile.
   Future<String> accountRole();
   Future<GuardianProfile> profile();
   Future<GuardianProfile> createProfile(String name, String phone);
@@ -192,7 +175,6 @@ abstract class GuardianRepository {
   });
   Future<void> deleteIndividual(String id);
 
-  /// Retention periods an existing registration may be changed to.
   Future<RetentionOptions> retentionOptions(String id);
   Future<Uint8List> photo(String id);
 
@@ -204,24 +186,11 @@ abstract class GuardianRepository {
   Future<void> readNotification(String id);
   Future<void> readAllNotifications();
 
-  /// Account-level: one Guardian QR, not one per case.
   Future<GuardianVerification> accountVerification();
 
-  /// Active standalone Found Reports naming this Guardian's individuals,
-  /// each with the short verification code the Guardian reads out.
   Future<List<GuardianFoundReport>> activeFoundReports();
 
-  /// Registers (or refreshes) this installation's FCM registration for the
-  /// authenticated Guardian. Idempotent -- safe to call again with the same
-  /// token, and safe to call once per installation for a different one.
-  /// [locale] is this installation's own current in-app language ('en'/'ar'
-  /// -- see Localizations.localeOf), used only to pick which of two fixed,
-  /// pre-translated strings the visible push notification is sent in.
   Future<void> registerFcmToken(String token, String locale);
 
-  /// Removes this installation's FCM registration -- called at logout so it
-  /// stops being able to receive the signing-out Guardian's pushes. Scoped
-  /// to the caller's own registrations only; idempotent (a repeat call, or
-  /// one for an already-removed token, succeeds as a no-op).
   Future<void> unregisterFcmToken(String token);
 }

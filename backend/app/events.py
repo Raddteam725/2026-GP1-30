@@ -1,20 +1,3 @@
-"""The authoritative event record: one Active event per deployment.
-
-`events/{eventId}` is the single source of truth every actor reads:
-Guardian registration and reporting (GET /v1/event, /v1/registration-periods),
-Volunteer participation, and -- when its module is implemented -- the Admin
-Portal that manages it. Fields (Sprint-0 event configuration):
-
-    name, location, starts_at, ends_at, operating_hours, registration_periods
-    active (bool)      -- exactly one event may be True; the query key
-    activated_at, closed_at, created_at, updated_at, updated_by, environment
-
-Status is derived, never stored twice: `active` -> "active"; `closed_at`
-set -> "closed"; otherwise "upcoming". Event management (create, configure,
-activate, close) belongs to the Admin module; this module only reads the
-record and provides the controlled development bootstrap. Bootstrap is
-explicit setup, never an API side effect.
-"""
 import re
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
@@ -35,7 +18,6 @@ def event_status(data):
     return "upcoming"
 
 def event_summary(doc):
-    """Non-sensitive event description shared by Guardian, Volunteer and Admin."""
     data = doc.to_dict() or {}
     return {"id": doc.id, "status": event_status(data), **{k: data.get(k) for k in SUMMARY_FIELDS}}
 
@@ -48,9 +30,6 @@ def active_event(db, transaction=None):
     return docs[0]
 
 def validated(current, proposed):
-    """Full event configuration check: details plus the retention contract
-    (registration_retention.validate_configuration). Used by the bootstrap
-    below and reusable by the Admin module's management operations."""
     from .registration_retention import validate_configuration
     name = proposed.get("name")
     if not isinstance(name, str) or not name.strip() or len(name) > 120:
@@ -67,9 +46,6 @@ def validated(current, proposed):
     return {k: proposed.get(k) for k in ("name", "location", "starts_at", "ends_at", "operating_hours", "registration_periods")}
 
 def development_configuration(now=None):
-    """The controlled bootstrap record's configuration -- the REAL event schema
-    with development-only values, so nothing in Guardian logic ever depends on
-    a fake event. An Admin-managed event replaces it by data alone."""
     now = now or datetime.now(timezone.utc)
     return {"name": "Radd Sprint 0 Development", "location": "Development environment",
             "starts_at": now - timedelta(hours=1), "ends_at": now + timedelta(days=30),
@@ -79,11 +55,6 @@ def development_configuration(now=None):
                                      {"id": "7d", "duration_hours": 168}]}
 
 def bootstrap_development_event(db):
-    """Creates ONE fully configured development event if none is Active.
-
-    Idempotent: an existing Active event (development or Admin-managed) is
-    left exactly as it is -- this never edits or replaces event data.
-    """
     lock = db.collection("configuration").document("event_bootstrap")
     ref = db.collection("events").document()
     config = validated({}, development_configuration())

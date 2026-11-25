@@ -1,9 +1,3 @@
-"""Approved local-only maintenance loop, one worker per development server.
-
-No separate backend or Firebase project. Every job retries on the next minute;
-a failure in one job does not stop the others. Deployment must not enable this
-in multiple Uvicorn workers without a shared scheduler/lease.
-"""
 import threading
 from . import jobs
 

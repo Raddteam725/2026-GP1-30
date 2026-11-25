@@ -141,7 +141,6 @@ void main() {
     final text = t.widget<Text>(error);
     final style = DefaultTextStyle.of(t.element(error)).style.merge(text.style);
     expect(style.color, AppColors.error);
-    // Inspect the resolved painted border, including Flutter's theme fallback.
     final paints = t.widgetList<CustomPaint>(
       find.descendant(of: field, matching: find.byType(CustomPaint)),
     );
@@ -180,7 +179,6 @@ void main() {
     await t.ensureVisible(button);
     await t.pumpAndSettle();
     await t.tap(button);
-    // Pending requests deliberately remain unresolved in the failure tests.
     await t.pump();
   }
 
@@ -412,7 +410,7 @@ void main() {
           t,
           phone,
           s.invalidPhone,
-        ); // Unfocused border is also red.
+        );
         await edit(t, phone, '0501234567');
         expect(find.text(s.invalidPhone), findsNothing);
         expect(find.text(s.phoneHelp), findsOneWidget);
@@ -420,7 +418,7 @@ void main() {
         expect(
           find.text(s.passwordHelp),
           findsOneWidget,
-        ); // Error, not a duplicate helper.
+        );
         expectRedError(t, password, s.passwordHelp);
         await t.tap(fields.first);
         await t.pumpAndSettle();
@@ -490,7 +488,7 @@ void main() {
         for (final email in [
           'guardian@independent.example',
           'guardian+tag@another.example',
-          'guardian@gnail.com', // A syntax-valid typo does not prove ownership.
+          'guardian@gnail.com',
         ]) {
           await edit(t, fields.at(1), email);
           expect(

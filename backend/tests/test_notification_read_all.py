@@ -1,4 +1,3 @@
-"""Bulk read endpoints operate only on the authenticated role's own inbox."""
 from datetime import datetime, timezone
 import pytest
 from fastapi.testclient import TestClient

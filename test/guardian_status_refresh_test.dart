@@ -15,10 +15,6 @@ import 'package:radd/shared/widgets/feature_page.dart';
 
 import 'support/guardian_fakes.dart';
 
-/// Guardian screens keep themselves current through the reviewed real-time
-/// path (validated FCM signal -> coalesced authoritative refetch, app-resume
-/// recovery, slow fallback poll) -- so no manual refresh control is needed
-/// on Cases or QR, and only an explicit load failure offers a retry.
 void main() {
   late TestAuth auth;
   late TestRepository repo;
@@ -113,8 +109,7 @@ void main() {
     await route(t, AppRoutes.cases);
     expect(find.byIcon(Icons.refresh), findsNothing);
     expect(find.text('Report Received'), findsWidgets);
-    expect(find.text('CASE HISTORY'), findsNothing); // SectionLabel uppercases
-    // The Guardian resolved it from another screen/device.
+    expect(find.text('CASE HISTORY'), findsNothing);
     await repo.resolveCase(value.id);
     expect(channel.acceptPush(push(value.id, 'resolved')), isTrue);
     await t.pumpAndSettle();
@@ -147,7 +142,6 @@ void main() {
       await scrollToText(t, label);
       expect(find.text(label), findsWidgets, reason: status);
     }
-    // Reunited is terminal: it is history now.
     expect(find.text('No active cases right now.'), findsOneWidget);
   });
 
@@ -161,12 +155,9 @@ void main() {
     expect(channel.acceptPush(push(value.id, 'search_in_progress')), isTrue);
     await t.pumpAndSettle();
     expect(repo.caseListFetches, before + 1);
-    // Same case + status again (FCM retry / reconciliation re-send).
     expect(channel.acceptPush(push(value.id, 'search_in_progress')), isFalse);
     await t.pumpAndSettle();
     expect(repo.caseListFetches, before + 1);
-    // Three signals landing together: one request in flight plus at most
-    // one follow-up -- never one request per signal.
     channel.acceptPush(push(value.id, 'match_confirmed'));
     channel.didChangeAppLifecycleState(AppLifecycleState.resumed);
     channel.ping();
@@ -179,7 +170,7 @@ void main() {
     auth.active = true;
     final value = await seedCase();
     await route(t, AppRoutes.cases);
-    advance(value, 'search_in_progress'); // changed while the app was away
+    advance(value, 'search_in_progress');
     final before = repo.caseListFetches;
     channel.didChangeAppLifecycleState(AppLifecycleState.resumed);
     await t.pumpAndSettle();
@@ -243,8 +234,6 @@ void main() {
     advance(value, 'search_in_progress');
     channel.acceptPush(push(value.id, 'search_in_progress'));
     await t.pumpAndSettle();
-    // Updated in place: the list stayed mounted (no loading flash), so the
-    // card is still where the Guardian was looking.
     expect(find.byType(CaseCard), findsOneWidget);
     final updated = t.widget<Container>(
       find
@@ -272,11 +261,8 @@ void main() {
     expect(find.byType(QrImageView), findsOneWidget);
     expect(repo.verificationRequests, 1);
     expect(find.textContaining('Valid until'), findsOneWidget);
-    // Nothing happens before expiry (5 minutes, issued by the backend)...
     await t.pump(const Duration(minutes: 4));
     expect(repo.verificationRequests, 1);
-    // ...and a fresh single-use credential is requested right at expiry --
-    // the same backend mechanism, just without a button.
     await t.pump(const Duration(minutes: 1, seconds: 1));
     await t.pumpAndSettle();
     expect(repo.verificationRequests, 2);

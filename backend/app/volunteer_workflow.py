@@ -1,4 +1,3 @@
-"""Persistent, event-scoped Volunteer workflow on shared Guardian registrations/cases."""
 import hashlib
 import secrets
 import logging
@@ -33,8 +32,6 @@ class VerifyInput(BaseModel):
 
 class IdentifierVerifyInput(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
-    # The real reunification identifier displayed by the signed-in Guardian.
-    # Preserve the case_id input alias for existing Missing Case clients.
     case_id: str = Field(min_length=1, max_length=128, pattern=r'^[^/]+$', validation_alias=AliasChoices('identifier', 'case_id'))
 
 def key(doc):
@@ -63,7 +60,6 @@ class VolunteerWorkflow:
     def registrations(self):
         self.profile(require_active=True)
         event = self.participation_event()
-        # Reuses existing registration subcollections; no copied registry/index.
         for guardian in self.db.collection('users').where(filter=FieldFilter('role', '==', 'guardian')).stream():
             for person in guardian.reference.collection('individuals').where(filter=FieldFilter('event_id', '==', event.id)).stream():
                 data = person.to_dict()
@@ -107,7 +103,6 @@ class VolunteerWorkflow:
             report = self.found_owned(found_report_id).to_dict()
             if report.get('ended') or report.get('matched_profile_id'):
                 raise HTTPException(409, detail='identification_unavailable')
-            # Selection is comparison only; contact follows explicit confirmation.
         if case_id:
             case = self.accessible(valid_id(case_id)).to_dict()
             data = doc.to_dict()
@@ -116,7 +111,6 @@ class VolunteerWorkflow:
                     or case.get('guardian_id') != data.get('guardian_id')
                     or case.get('individual_id') != doc.id):
                 raise HTTPException(404, detail='not_found')
-            # Case browsing does not establish confirmed identity.
         return {**self.public_registration(doc, contact=contact),
                 'confirmation_available': bool(found_report_id)}
 
@@ -188,7 +182,6 @@ class VolunteerWorkflow:
                 continue
             case_id = data.get('case_id')
             if case_id and not self.visible(self.cases.document(case_id).get().to_dict() or {}):
-                # Guardian closure/retention must not make the entire Volunteer feed fail.
                 continue
             result.append(self.public_found(doc))
         return sorted(result, key=lambda d: str(d['created_at']), reverse=True)
@@ -241,8 +234,6 @@ class VolunteerWorkflow:
         return image
 
     def delete_found_photo(self, report_id):
-        # State is recorded first, so concurrent readers cannot serve the photo.
-        # A failed Storage delete returns an error; retry repeats this idempotent step.
         doc = self.found_owned(report_id)
         path = doc.to_dict().get('photo_path')
         if not path:
@@ -252,7 +243,6 @@ class VolunteerWorkflow:
         except NotFound:
             pass
         except Exception:
-            # Reuse the existing durable cleanup queue if the caller cannot retry.
             self.db.collection('photo_cleanup').document(hashlib.sha256(path.encode()).hexdigest()).set({
                 'path': path, 'created_at': firestore.SERVER_TIMESTAMP})
             raise HTTPException(503, detail='photo_deletion_pending') from None
@@ -276,8 +266,6 @@ class VolunteerWorkflow:
             raise HTTPException(409, detail='identification_ended')
         if not data.get('photo_path'):
             raise HTTPException(409, detail='capture_required')
-        # Ranked candidates for human review (PBI 15/16); never automatic confirmation.
-        # Embeddings stay server-side: only registration DTOs and scores are returned.
         engine = face_matching.get_engine()
         if engine is None:
             return {'state': 'unavailable', 'candidates': []}
@@ -287,8 +275,6 @@ class VolunteerWorkflow:
             return {'state': 'unavailable', 'candidates': []}
         if probe is None:
             return {'state': 'no_reliable_candidate', 'candidates': [], 'reason': 'no_face_detected'}
-        # Eligible registrations with an active case are in an open stage (see eligible()),
-        # so active_case_id marks the people searched first.
         gallery = [(doc, data.get(face_matching.EMBEDDING_FIELD), data.get('age'), bool(data.get('active_case_id')))
                    for doc in self.registrations() if self.eligible(doc)
                    for data in (doc.to_dict(),)]
@@ -339,8 +325,6 @@ class VolunteerWorkflow:
                         'updated_at': firestore.SERVER_TIMESTAMP}
             if not case_id:
                 tx.update(person.reference, {'active_found_report_id': report_id})
-                # Standalone only: the short Guardian-readable fallback code,
-                # fixed for this report's whole active life.
                 tx.update(report.reference, {**identity, 'verification_code': rd.get('verification_code') or found_lifecycle.new_verification_code()})
                 found_push.update(self.found_notification(tx, report_id, found_lifecycle.IDENTIFIED,
                     pd['guardian_id'], rd['event_id'], pd['full_name']))
@@ -368,8 +352,6 @@ class VolunteerWorkflow:
         self.delete_found_photo(report_id)
         if push:
             safe_dispatch(self.db, push['case_id'], matched=True)
-            # Guardian and Volunteer delivery share the existing Firebase app;
-            # their role-specific notification records remain ownership-scoped.
             try:
                 notify_guardian(push['guardian_id'], kind='status_update', status='match_confirmed',
                     case_id=push['case_id'], event_id=push['event_id'])
@@ -408,8 +390,6 @@ class VolunteerWorkflow:
             if case.reference.path.startswith('found_reports/'):
                 return
             tx.update(self.db.collection('found_reports').document(report_id), {'status': found_lifecycle.VERIFYING, 'updated_at': now})
-            # The Guardian must know to open their QR now: same notification
-            # record shape as every other Guardian status update.
             tx.set(self.db.collection('users').document(cd['guardian_id']).collection('notifications').document(case.id + '-awaiting_guardian_verification'),
                 {'case_id': case.id, 'event_id': cd['event_id'], 'kind': 'status_update', 'status': 'awaiting_guardian_verification', 'created_at': now, 'read_at': None})
             push.update(guardian_id=cd['guardian_id'], case_id=case.id, event_id=cd['event_id'])
@@ -424,26 +404,15 @@ class VolunteerWorkflow:
         return self.public_found(self.found_owned(report_id))
 
     def verify_guardian_identifier(self, report_id, case_id):
-        # Compare the identifier from the authenticated Guardian's account with
-        # this authorized context: a real Missing Case or standalone Found Report.
-        # The distinct method/context receipt is required by handover.
         @firestore.transactional
         def verify(tx):
             case = self.reunification_context(report_id, tx)
             cd = case.to_dict()
             if cd['status'] != 'awaiting_guardian_verification':
                 raise HTTPException(409, detail='invalid_transition')
-            # Missing Case or standalone Found Report alike: the 6-digit code
-            # stored on THIS workflow's record only -- never the RD-/FR-
-            # document id, never a lookup across other cases or reports. The
-            # context (this Volunteer's current report) chooses the record;
-            # the code never chooses the context.
             expected = str(cd.get('verification_code') or '')
             presented_code = found_lifecycle.normalize_code(case_id)
             matched = bool(expected) and secrets.compare_digest(presented_code, expected)
-            # Safe diagnostic (development log): which record was compared,
-            # its stage, whether it holds a code and the SHAPE of the typed
-            # value -- never the code, the id beyond a prefix, or any PII.
             logging.getLogger('uvicorn.error').info(
                 'Radd verify-identifier context=%s record=%s… status=%s stored_code=%s presented_len=%d presented_digits=%s matched=%s',
                 'found_report' if case.reference.path.startswith('found_reports/') else 'missing_case', case.id[:9], cd.get('status'),
@@ -461,11 +430,6 @@ class VolunteerWorkflow:
         return {'verified': verify(self.db.transaction()), 'report': self.public_found(self.found_owned(report_id))}
 
     def verify_guardian(self, report_id, payload):
-        # The QR is Guardian-account-level, not per-case: the payload names WHICH
-        # guardian, and this Volunteer's authorized reunification context supplies
-        # the case or Found Report association. A scan only proves "this account", so the association
-        # to the case is re-checked here (case.guardian_id must equal the scanned
-        # guardian_id) before the challenge is even looked up.
         @firestore.transactional
         def verify(tx):
             case = self.reunification_context(report_id, tx)
@@ -515,8 +479,6 @@ class VolunteerWorkflow:
             proof = cd.get('guardian_verification') or {}
             if cd['status'] == 'reunited' and cd.get('handed_over_by') == self.uid:
                 return
-            # Either verification method authorizes handover; the recorded
-            # method itself is retained on the case for the handover record.
             if cd['status'] != 'awaiting_guardian_verification' or proof.get('method') not in ('qr', 'case_identifier', 'found_identifier') or proof.get('volunteer_uid') != self.uid or found_lifecycle.proof_context(proof) != case.id or proof.get('guardian_id') != cd['guardian_id']:
                 raise HTTPException(409, detail='guardian_verification_required')
             now = firestore.SERVER_TIMESTAMP
@@ -555,14 +517,10 @@ class VolunteerWorkflow:
         event = self.participation_event()
         collection = self.user.collection('volunteer_notifications')
         existing = {doc.id for doc in collection.stream()}
-        # Materialize actual event case notifications lazily, using stable IDs and
-        # transactional create-if-absent. No fake records, no Guardian changes.
         for case in self.cases.where(filter=FieldFilter('event_id', '==', event.id)).stream():
             if case.to_dict().get('status') not in STAGES[:2]:
                 continue
             ref = collection.document(case.id + '-new')
-            # Polling must not open a transaction for every historical alert.
-            # Missing alerts still use the authoritative transactional checks.
             if ref.id in existing:
                 continue
             @firestore.transactional
@@ -593,7 +551,6 @@ class VolunteerWorkflow:
         mark(self.db.transaction())
 
     def notifications_read_all(self):
-        # Listing also materializes eligible new-case alerts for this caller.
         self.notifications_list()
         event = self.participation_event()
         mark_all_read(self.db, self.user.collection('volunteer_notifications'), event_id=event.id)

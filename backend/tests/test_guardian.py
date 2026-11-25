@@ -38,11 +38,11 @@ def test_individual_validation():
 def test_other_relationship_requires_a_custom_description():
     valid = dict(full_name="Person", age=5, gender="female", relationship="child")
     with pytest.raises(ValidationError):
-        IndividualInput(**(valid | {"relationship": "other"}))  # other with no text
+        IndividualInput(**(valid | {"relationship": "other"}))
     with pytest.raises(ValidationError):
         IndividualInput(**(valid | {"relationship": "other", "relationship_other": "   "}))
     with pytest.raises(ValidationError):
-        IndividualInput(**(valid | {"relationship_other": "Neighbor"}))  # not "other" but text given
+        IndividualInput(**(valid | {"relationship_other": "Neighbor"}))
     saved = IndividualInput(**(valid | {"relationship": "other", "relationship_other": "Neighbor"}))
     assert saved.relationship_other == "Neighbor"
 
@@ -79,10 +79,6 @@ def test_identity_allows_ten_seconds_clock_skew(monkeypatch):
 
 
 def test_identity_retries_a_transient_network_failure_then_succeeds(monkeypatch):
-    # check_revoked=True makes a network round-trip on every request; a single
-    # dropped connection there must not surface as "service unavailable" for
-    # an otherwise-healthy token (this is the root cause behind Cancel/Resolve
-    # intermittently failing with a generic error against real Firestore).
     calls = {"n": 0}
     def flaky(token, app, check_revoked, clock_skew_seconds):
         calls["n"] += 1
@@ -115,7 +111,7 @@ def test_identity_does_not_retry_a_genuinely_invalid_token(monkeypatch):
     with pytest.raises(HTTPException) as error:
         firebase_module.identity(creds)
     assert error.value.status_code == 401
-    assert calls["n"] == 1  # no wasted retries for a token that is actually invalid
+    assert calls["n"] == 1
 
 def test_photo_validation_and_metadata_removal():
     with pytest.raises(HTTPException):

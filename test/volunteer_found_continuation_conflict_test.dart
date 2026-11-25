@@ -14,7 +14,6 @@ import 'volunteer_navigation_test.dart' show harness, press;
 import 'volunteer_location_test.dart' show LocationPlatform;
 import 'volunteer_manual_only_test.dart' show CaptureCamera;
 
-/// Existing found reports continue through the surviving report list.
 void main() {
   Future<ApiVolunteerRepository> workspace(
     WidgetTester tester,
@@ -116,9 +115,6 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text(s.vContinueReport));
     await tester.pumpAndSettle();
-    // Bounded pumping: a refusal triggers a background state refresh whose
-    // location request never resolves in the test fakes, so pumpAndSettle
-    // would wait on its progress indicator forever.
     for (var i = 0; i < 12; i++) {
       await tester.runAsync(() => Future<void>.delayed(Duration.zero));
       await tester.pump(const Duration(milliseconds: 100));
@@ -160,8 +156,6 @@ void main() {
           ),
         );
         final s = await resumeExistingReport(tester);
-        // Straight to Guardian Verification -- not Manual Review, not
-        // Guardian Contact, no second identification.
         expect(find.text(s.vScanInstruction), findsOneWidget);
         expect(find.text(s.vActionFailed), findsNothing);
         expect(find.text(s.vManualReview), findsNothing);
@@ -265,20 +259,16 @@ void main() {
         await useIdentifier(tester, s);
         expect(find.text(s.vFoundReportIdentifier), findsOneWidget);
         expect(find.text(s.vFoundIdentifierHelp), findsOneWidget);
-        // The old label/help asking to compare the full identifier is gone.
         expect(find.text('Found Report Identifier'), findsNothing);
         final field = tester.widget<TextField>(find.byType(TextField));
         expect(field.keyboardType, TextInputType.number);
-        expect(field.controller!.text, isEmpty); // never prefilled with the id
-        // Too short / not a code: refused locally, nothing sent.
+        expect(field.controller!.text, isEmpty);
         await submitCode(tester, s, 'FR-existing');
         expect(find.text(s.vVerificationCodeFormat), findsOneWidget);
         expect(bodies, isEmpty);
-        // A wrong 6-digit code goes to the server and fails there.
         await submitCode(tester, s, '000000');
         expect(bodies.single, {'identifier': '000000'});
         expect(find.text(s.vVerificationFailed), findsWidgets);
-        // Read aloud with spacing and Arabic-Indic digits: normalized.
         await useIdentifier(tester, s);
         await submitCode(tester, s, '٤٨٢ 91-3');
         expect(bodies.last, {'identifier': '482913'});

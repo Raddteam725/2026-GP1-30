@@ -104,7 +104,6 @@ void main() {
           Directionality.of(tester.element(find.byType(VolunteerPolicyScreen))),
           language == 'ar' ? TextDirection.rtl : TextDirection.ltr,
         );
-        // Inspect the complete localized document, including off-screen content.
         for (final internal in [
           'draft',
           'draft-2026-09',
@@ -126,14 +125,12 @@ void main() {
         expect(platform.permission, LocationPermission.denied);
         expect(find.text(s.vLocationPrivacyTitle), findsOneWidget);
         expect(platform.streams, 0);
-        // Continue did not invent a permission grant or write any consent.
         expect(writes.where((path) => path.contains('consent')), isEmpty);
         platform.response = LocationPermission.whileInUse;
         await tester.tap(find.text(s.continueLabel));
         await settle();
         expect(platform.requests, 2);
         expect(find.text(s.vLocationPrivacyTitle), findsNothing);
-        // No estimate has arrived: ordinary participation still works.
         await tester.tap(find.byKey(const ValueKey('radd-tab-2')));
         await tester.pumpAndSettle();
         expect(find.text(s.vOpenCamera), findsOneWidget);
@@ -149,7 +146,6 @@ void main() {
         platform.services.add(ServiceStatus.enabled);
         await tester.pumpAndSettle();
         expect(find.text(s.vLocationPrivacyTitle), findsNothing);
-        // Existing notice presentation cannot bypass revoked permission on resume.
         platform.permission = LocationPermission.denied;
         tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
         tester.binding.handleAppLifecycleStateChanged(

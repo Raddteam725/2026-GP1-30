@@ -1,7 +1,5 @@
 import 'dart:async';
 
-/// Renewal belongs to the same signed-in account. A sign-out, account switch,
-/// or failed auth stream ends this binding; a new login creates a new binding.
 StreamSubscription<String?> bindVolunteerSession(
   Stream<String?> sessions, {
   required String uid,

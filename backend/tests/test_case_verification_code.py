@@ -1,11 +1,3 @@
-"""6-digit Guardian verification code for Missing Cases.
-
-The RD-… document id stays the case's internal identity (references, logs,
-relationships, APIs). The value a Guardian reads to a Volunteer, and the value
-the Volunteer types, is the case's own `verification_code`: 6 secure digits,
-unique among the event's active cases, persisted once on the case record,
-stable for the workflow, removed at every terminal outcome.
-"""
 from workflow_fixtures import eligible_profiles, historical_closure
 import sys
 from pathlib import Path
@@ -39,10 +31,8 @@ def test_case_gets_a_secure_six_digit_code_distinct_from_its_id(db):
     shown = CaseService(guardian).get(case_id)
     assert shown['id'] == case_id and shown['verification_code'] == code
     assert [c['verification_code'] for c in CaseService(guardian).list()] == [code]
-    # Not on the individual profile; only on this active case record.
     individual = guardian.user.collection('individuals').document(shown['individual_id']).get().to_dict()
     assert 'verification_code' not in individual
-    # Never in the Volunteer's view of the case.
     listed = vol().list()
     assert listed and all('verification_code' not in c for c in listed)
     assert 'verification_code' not in str(vol().case_state(case_id))
@@ -54,14 +44,13 @@ def test_code_is_stable_across_reads_and_correct_wrong_other_case(db):
     for _ in range(3):
         assert CaseService(guardian).get(case_id)['verification_code'] == code
     vol().begin_verification(report['id'])
-    assert not vol().verify_guardian_identifier(report['id'], case_id)['verified']          # RD-… id refused
+    assert not vol().verify_guardian_identifier(report['id'], case_id)['verified']
     assert not vol().verify_guardian_identifier(report['id'], '#' + case_id.lower())['verified']
     wrong = str((int(code) + 1) % 10**6).zfill(6)
     assert not vol().verify_guardian_identifier(report['id'], wrong)['verified']
     assert stored(db, case_id).get('guardian_verification') is None
     with pytest.raises(HTTPException):
         vol().handover_found(report['id'])
-    # Another Guardian's active case code never verifies this case.
     other_guardian, other_id = guardian_with_individual('other')
     other = CaseService(other_guardian).create(CaseCreate(individual_id=other_id))
     other_code = other['verification_code']
@@ -70,8 +59,8 @@ def test_code_is_stable_across_reads_and_correct_wrong_other_case(db):
     assert not vol().verify_guardian_identifier(report['id'], other_code)['verified']
     result = vol().verify_guardian_identifier(report['id'], ' ' + code[:3] + '-' + code[3:] + ' ')
     assert result['verified'] and result['report']['verification']['method'] == 'case_identifier'
-    assert result['report']['verification']['case_id'] == case_id  # receipt keeps the internal id
-    assert vol().verify_guardian_identifier(report['id'], code)['verified']  # lost-response retry
+    assert result['report']['verification']['case_id'] == case_id
+    assert vol().verify_guardian_identifier(report['id'], code)['verified']
     assert stored(db, case_id)['verification_code'] == code
     assert vol().handover_found(report['id'])['status'] == 'reunited'
     assert 'verification_code' not in stored(db, case_id)
@@ -87,20 +76,20 @@ def test_guardian_terminal_outcomes_remove_the_code_and_never_backfill(db, outco
     historical_closure(CaseService(guardian), case_id, 'cancelled' if outcome == 'cancel' else 'resolved')
     assert 'verification_code' not in stored(db, case_id)
     assert CaseService(guardian).get(case_id)['verification_code'] is None
-    assert 'verification_code' not in stored(db, case_id)  # a read never backfills a terminal case
+    assert 'verification_code' not in stored(db, case_id)
     assert [c['verification_code'] for c in CaseService(guardian).list()] == [None]
 
 
 def test_legacy_active_case_without_code_is_backfilled_once_on_first_read(db):
     guardian, case_id = case()
     before = dict(stored(db, case_id))
-    del stored(db, case_id)['verification_code']  # a case created before short codes
+    del stored(db, case_id)['verification_code']
     first = CaseService(guardian).list()[0]
     code = first['verification_code']
     assert len(code) == 6 and code.isdigit()
     assert first['id'] == case_id and first['status'] == before['status']
     assert stored(db, case_id) == {**before, 'verification_code': code}
-    assert CaseService(guardian).get(case_id)['verification_code'] == code  # stable, not regenerated
+    assert CaseService(guardian).get(case_id)['verification_code'] == code
     assert len([p for p in db.data if p.startswith('cases/')]) == 1
     app.dependency_overrides[identity] = lambda: {'uid': 'guardian', 'email': 'g@example.test', 'exp': 9999999999, 'auth_time': 1}
     try:
@@ -112,20 +101,17 @@ def test_legacy_active_case_without_code_is_backfilled_once_on_first_read(db):
 def test_collision_within_active_scope_retries_and_terminal_codes_do_not_block(db, monkeypatch):
     guardian, first_id = case()
     first_code = stored(db, first_id)['verification_code']
-    # Force the generator to produce the taken code first, then a fresh one.
     sequence = iter([first_code, first_code, '000001'])
     monkeypatch.setattr(cases_module, 'new_verification_code', lambda: next(sequence))
     _, second_person = guardian_with_individual('guardian')
     second = CaseService(guardian).create(CaseCreate(individual_id=second_person))
     assert second['verification_code'] == '000001'
     assert second['id'] != first_id
-    # A terminal case's old code is out of scope: it may be reused.
     historical_closure(CaseService(guardian), second['id'], 'cancelled')
     sequence = iter(['000001'])
     _, third_person = guardian_with_individual('guardian')
     third = CaseService(guardian).create(CaseCreate(individual_id=third_person))
     assert third['verification_code'] == '000001'
-    # Exhausting attempts fails closed rather than issuing a duplicate.
     sequence = iter([first_code] * 30)
     _, fourth_person = guardian_with_individual('guardian')
     with pytest.raises(HTTPException) as error:
@@ -135,8 +121,6 @@ def test_collision_within_active_scope_retries_and_terminal_codes_do_not_block(d
 
 
 def test_code_read_through_guardian_http_api_verifies_through_volunteer_http_api(db):
-    """End to end over HTTP: the Guardian's own GET returns the code; the
-    Volunteer posts THAT value for the SAME case and gets verified=true."""
     from fastapi.testclient import TestClient
     guardian, case_id, report = matching()
     vol().begin_verification(report['id'])
@@ -161,8 +145,7 @@ def test_code_read_through_guardian_http_api_verifies_through_volunteer_http_api
             wrong = client.post(url, json={'case_id': str((int(code) + 1) % 10**6).zfill(6)}).json()
             assert wrong['verified'] is False
             assert client.post(url, json={'case_id': other_code}).json()['verified'] is False
-            assert client.post(url, json={'case_id': case_id}).json()['verified'] is False  # RD id is not the code
-            # Exactly the value the Guardian API returned, in both accepted body shapes.
+            assert client.post(url, json={'case_id': case_id}).json()['verified'] is False
             good = client.post(url, json={'case_id': code})
             assert good.status_code == 200 and good.json()['verified'] is True
             assert good.json()['report']['verification']['method'] == 'case_identifier'
@@ -177,7 +160,6 @@ def test_qr_verification_and_found_report_codes_are_unchanged(db):
     vol().begin_verification(report['id'])
     assert vol().verify_guardian(report['id'], guardian.account_verification()['payload'])['verified']
     assert stored(db, case_id)['guardian_verification']['method'] == 'qr'
-    # Standalone Found Report: still its own 6-digit code, still FR id hidden.
     other, identifier = guardian_with_individual('other-guardian')
     wanted = volunteer_workflow.key(other.get(identifier))
     profile = next(p for p in eligible_profiles(vol('two')) if p['id'] == wanted)
@@ -188,4 +170,4 @@ def test_qr_verification_and_found_report_codes_are_unchanged(db):
     vol('two').begin_verification(found['id'])
     assert not vol('two').verify_guardian_identifier(found['id'], found['id'])['verified']
     assert vol('two').verify_guardian_identifier(found['id'], found_code)['verified']
-    assert len([p for p in db.data if p.startswith('cases/')]) == 1  # no case created for the standalone report
+    assert len([p for p in db.data if p.startswith('cases/')]) == 1

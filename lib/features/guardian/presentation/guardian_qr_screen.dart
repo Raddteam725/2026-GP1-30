@@ -16,10 +16,6 @@ import 'case_widgets.dart';
 import 'guardian_components.dart';
 import 'individual_widgets.dart';
 
-/// Verification Code: the case-specific alternative when the QR cannot be
-/// displayed or scanned. The Guardian reads the 6-digit code of THIS active
-/// case to the Volunteer, who types it into their own current case; the
-/// code alone never proves identity. The internal RD-… id is not shown here.
 Future<void> showCaseIdentifier(BuildContext context, MissingCase value) async {
   final s = AppLocalizations.of(context)!;
   final code = value.verificationCode;
@@ -132,14 +128,6 @@ Future<void> showCaseIdentifier(BuildContext context, MissingCase value) async {
   );
 }
 
-/// One Guardian-ACCOUNT verification QR (not one per case): the Volunteer's
-/// own current case supplies the case context when they scan it, and the
-/// backend checks that this Guardian is the one associated with that case.
-/// The active-case selector on this screen only chooses which case's
-/// context card and Case Identifier are shown -- it never changes the QR,
-/// and the QR is shown even when the Guardian has no active case at all.
-/// The credential is short-lived and single-use; it is regenerated
-/// automatically at expiry while this screen stays open.
 class GuardianQrScreen extends StatefulWidget {
   const GuardianQrScreen({super.key, this.embedded = false});
   final bool embedded;
@@ -189,8 +177,6 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
     _foundReports = AppServices.of(context).guardian.activeFoundReports();
     final generation = ++_caseRequest;
     final all = await AppServices.of(context).guardian.cases();
-    // Most relevant first: the case currently awaiting this Guardian's
-    // verification, then the furthest-progressed, then the most recent.
     final active = all.where((c) => c.active).toList()
       ..sort((a, b) {
         final stage = caseStages
@@ -237,8 +223,6 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
       final code = await AppServices.of(context).guardian.accountVerification();
       if (!mounted || request != _request) return;
       setState(() => _code = code);
-      // Automatic regeneration at expiry: the Guardian never has to notice
-      // an expired code while this screen is open.
       final remaining = code.expiresAt.difference(DateTime.now());
       _expiry = Timer(remaining.isNegative ? Duration.zero : remaining, () {
         if (mounted) _generate();
@@ -325,10 +309,6 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
           ? null
           : const GuardianNavigation(selected: 2),
       children: [
-        // No manual refresh control: the credential regenerates itself at
-        // expiry (_generate's timer) and the case context follows case events
-        // / app resume (_recoverCases). Only an explicit load failure offers
-        // a retry (ErrorNotice below / in the QR card).
         Text(
           s.qrCode,
           style: const TextStyle(
@@ -352,8 +332,6 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
                 onRetry: _reload,
               );
             }
-            // Only reports at a verification stage; the backend already
-            // excludes Reunited/terminal ones, this guards a stale item.
             return Column(
               children: [
                 for (final report in state.data ?? <GuardianFoundReport>[])
@@ -428,9 +406,6 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
     );
   }
 
-  /// Standalone Found Report: the short code the Guardian reads to the
-  /// Volunteer when the QR cannot be scanned. The internal report id is
-  /// deliberately not displayed.
   Widget _foundReportCard(AppLocalizations s, GuardianFoundReport report) {
     final code = report.verificationCode;
     final name = report.individualName?.trim();

@@ -12,8 +12,8 @@ def test_slow_delivery_does_not_block_submission_and_duplicate_is_coalesced():
         completed.set()
     try:
         assert worker.submit('event', send)
-        assert started.wait(1)  # Immediate attempt, no maintenance timer.
-        assert not completed.is_set()  # Caller already returned while send waits.
+        assert started.wait(1)
+        assert not completed.is_set()
         assert worker.submit('event', send)
         assert calls == ['send']
     finally:

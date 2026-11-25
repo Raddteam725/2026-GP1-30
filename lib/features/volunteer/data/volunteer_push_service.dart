@@ -12,8 +12,6 @@ import '../domain/volunteer_notification_event.dart';
 import 'api_volunteer_repository.dart';
 import 'volunteer_session_binding.dart';
 
-/// Uses the existing Firebase app and registration collection. Payloads are
-/// navigation hints only; opening a case always rechecks backend permission.
 class VolunteerPushService {
   VolunteerPushService(
     this.repo, {
@@ -45,8 +43,6 @@ class VolunteerPushService {
     repo.closeSession = close;
     try {
       final messaging = FirebaseMessaging.instance;
-      // ID-token renewal is distinct from FCM-token rotation. Rebind the
-      // existing installation through the authenticated API on either event.
       _subscriptions.add(
         bindVolunteerSession(
           FirebaseAuth.instance.idTokenChanges().map((user) => user?.uid),
@@ -55,8 +51,6 @@ class VolunteerPushService {
           end: close,
         ),
       );
-      // Subscribe before any permission/token/backend round trip. Catch-up
-      // dispatch during registration can otherwise arrive before the listener.
       _subscriptions.add(
         FirebaseMessaging.onMessage.listen((message) {
           if (!_closed &&
@@ -149,16 +143,11 @@ class VolunteerPushService {
   }
 
   Future<void> _syncLatest() async {
-    // Location updates can arrive faster than a Firestore/FCM round trip.
-    // Coalesce them instead of flooding the shared API with parallel dispatches.
     _syncAgain = false;
     final token = _token!;
     try {
       if (_locationAccess) {
         await repo.registerDevice(token, _locale, _location);
-        // Recheck after the request, including permission loss during flight.
-        // Do not await _syncing from close(): authorization loss can call close
-        // from inside this very request.
         if (_closed || !_locationAccess) await repo.unregisterDevice(token);
       } else {
         await repo.unregisterDevice(token);
@@ -185,7 +174,6 @@ class VolunteerPushService {
       try {
         await repo.unregisterDevice(token).timeout(const Duration(seconds: 5));
       } catch (_) {}
-      // Removing the installation token also prevents delivery after offline logout.
       try {
         await FirebaseMessaging.instance.deleteToken();
       } catch (_) {}

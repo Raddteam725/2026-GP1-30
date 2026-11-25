@@ -11,12 +11,6 @@ import 'package:radd/features/onboarding/presentation/screens/language_selection
 
 import 'support/guardian_fakes.dart';
 
-/// The Guided Assistant asks exactly the documented predefined questions:
-/// last-seen location Yes/No, clothing, distinctive item Yes/No (+ its
-/// description when Yes), then optional additional information. Answering
-/// "No" to the location question records no location and asks nothing more
-/// about it. Registration shows the Active event it is associated with,
-/// read from the backend -- never a hard-coded event.
 void main() {
   late TestAuth auth;
   late TestRepository repo;
@@ -61,8 +55,6 @@ void main() {
     return repo.reportMissing('test-id');
   }
 
-  // The send/save control is the round FilledButton in the input bar (reply
-  // bubbles and the auto-save badge carry check icons of their own).
   Finder sendButton({bool last = false}) => find.ancestor(
     of: find.byIcon(last ? Icons.check : Icons.send),
     matching: find.byType(FilledButton),
@@ -84,8 +76,6 @@ void main() {
     expect(find.textContaining('same as where'), findsOneWidget);
     await t.tap(find.widgetWithText(OutlinedButton, 'No'));
     await t.pumpAndSettle();
-    // The retired free-text "Where was the individual last seen?" question is
-    // never asked; clothing is next.
     expect(find.text('Where was the individual last seen?'), findsNothing);
     expect(find.textContaining('What clothing'), findsOneWidget);
     await send(t, 'Blue shirt');
@@ -108,8 +98,6 @@ void main() {
   testWidgets('"Yes" to the location question records the answer only: no '
       'device location is requested, no coordinates are saved, and the report '
       'continues', (t) async {
-    // No GeolocatorPlatform is installed for this test: any location request
-    // would throw and surface as an exception below.
     await start(t);
     auth.active = true;
     final value = await seedCase();
@@ -145,7 +133,6 @@ void main() {
     await send(t, 'Red jacket');
     await t.tap(find.widgetWithText(FilledButton, 'Yes'));
     await t.pumpAndSettle();
-    // Empty description is refused (the answer is required when Yes).
     await t.tap(sendButton());
     await t.pumpAndSettle();
     expect(find.text('Please complete this answer.'), findsOneWidget);

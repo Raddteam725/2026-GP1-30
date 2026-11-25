@@ -10,7 +10,6 @@ import '../data/api_volunteer_repository.dart';
 import 'volunteer_components.dart';
 import 'volunteer_workspace.dart';
 
-/// Protected Volunteer destination; login/reset/logout use the shared auth stack.
 class VolunteerEntry extends StatefulWidget {
   const VolunteerEntry({super.key});
   @override
@@ -41,8 +40,6 @@ class _VolunteerEntryState extends State<VolunteerEntry> {
       token: () async {
         final user = FirebaseAuth.instance.currentUser;
         sessionUid ??= user?.uid;
-        // A late callback from a previous workspace must never authenticate
-        // using a different account that subsequently signed in.
         if (user == null || user.uid != sessionUid) return null;
         try {
           return await user.getIdToken();
@@ -53,9 +50,9 @@ class _VolunteerEntryState extends State<VolunteerEntry> {
             'invalid-user-token',
             'user-not-found',
           }.contains(error.code)) {
-            return null; // Repository clears protected state and uses shared logout.
+            return null;
           }
-          rethrow; // A network error is not proof that the session was revoked.
+          rethrow;
         }
       },
       onAccessLost: (reason) => _leave(reason: reason),

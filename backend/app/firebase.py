@@ -8,11 +8,9 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 @lru_cache
 def firebase_app():
-    # Application Default Credentials; never load keys from the repository.
     return firebase_admin.initialize_app(options={
         "projectId": os.getenv("FIREBASE_PROJECT_ID", "radd-32eb6"),
         "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET", "radd-32eb6.firebasestorage.app"),
-        # Explicit per-attempt bound; SDK retries are separate from this value.
         "httpTimeout": 5,
     }, name="radd-backend")
 
@@ -25,12 +23,6 @@ def bucket():
 bearer = HTTPBearer(auto_error=False)
 
 def require_verified_email(token):
-    """Require both a refreshed signed claim and the current Auth record.
-
-    Never cache this across requests: a formerly verified token must not grant
-    access after an email change, revocation, deletion or account disablement.
-    Volunteer authorization deliberately does not call this Guardian gate.
-    """
     if token.get('email_verified') is not True or not token.get('email'):
         raise HTTPException(403, detail='email_verification_required')
     try:
@@ -48,9 +40,6 @@ def require_verified_email(token):
 def identity(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)):
     if credentials is None:
         raise HTTPException(401, detail="unauthorized")
-    # check_revoked=True makes a network round-trip on every request (beyond
-    # local JWT verification); a transient connection blip there must not
-    # surface as "unavailable" to the Guardian on an otherwise-healthy token.
     attempts = 3
     started = time.monotonic()
     for attempt in range(attempts):
@@ -61,8 +50,6 @@ def identity(credentials: HTTPAuthorizationCredentials | None = Depends(bearer))
         except (auth.InvalidIdTokenError, auth.ExpiredIdTokenError, auth.RevokedIdTokenError, ValueError):
             raise HTTPException(401, detail="unauthorized") from None
         except Exception:
-            # Do not multiply a slow SDK attempt by our outer recovery loop.
-            # This bounds additional retries, not an in-flight SDK operation.
             if attempt == attempts - 1 or time.monotonic() - started >= 8:
                 raise HTTPException(503, detail="service_unavailable") from None
             time.sleep(0.3 * (attempt + 1))

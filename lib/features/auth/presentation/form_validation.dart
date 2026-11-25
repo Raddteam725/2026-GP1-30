@@ -12,8 +12,6 @@ abstract final class FormValidation {
           ? s.invalidEmail
           : null);
 
-  /// Saudi Arabian phone numbers in any common form (see
-  /// lib/shared/saudi_phone.dart); the API sends the canonical form.
   static String? phone(String? v, AppLocalizations s) =>
       required(v, s) ??
       (normalizeSaudiPhone(v) == null ? s.invalidPhone : null);

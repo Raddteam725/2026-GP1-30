@@ -1,9 +1,3 @@
-"""Immediate local dispatch; durable Firestore records remain the retry source.
-
-This bounded executor is for the current long-running FastAPI process. A cloud
-deployment must replace this transport with managed execution, not rely on an
-in-process queue surviving instance termination.
-"""
 import logging
 from queue import Queue, Full
 from threading import Lock, Thread

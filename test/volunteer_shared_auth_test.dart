@@ -63,7 +63,6 @@ void main() {
   ) async {
     final auth = TestAuth();
     addTearDown(auth.events.close);
-    // TestRepository resolves a real backend-role response shape of Guardian.
     await tester.pumpWidget(
       AppServices(
         auth: auth,

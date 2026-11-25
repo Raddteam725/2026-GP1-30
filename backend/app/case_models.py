@@ -1,18 +1,11 @@
-"""Shared case contract used by Guardian, Volunteer and Admin integrations."""
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 STAGES = ("report_received", "search_in_progress", "match_confirmed", "awaiting_guardian_verification", "reunited")
-# Guardian-initiated terminal outcomes, reachable from any non-terminal stage
-# (never sequential, never via validate_transition). "reunited" is both the
-# last ordered stage and a terminal outcome; the others are terminal only.
 GUARDIAN_TERMINAL_OUTCOMES = ("resolved", "cancelled")
-# Admin-initiated terminal outcome: the case leaves Radd's active reunification
-# workflow for handling by the appropriate authority (cases.refer_to_authority).
 ADMIN_TERMINAL_OUTCOME = "referred_to_authority"
 TERMINAL_STATUSES = ("reunited", "resolved", "cancelled", ADMIN_TERMINAL_OUTCOME)
 
 def age_group(age):
-    """Coarse bucket retained for Admin statistics without the exact age."""
     if age <= 5: return "0-5"
     if age <= 17: return "6-17"
     if age <= 59: return "18-59"
@@ -23,14 +16,6 @@ class CaseCreate(BaseModel):
     individual_id: str = Field(min_length=1, max_length=128, pattern=r"^[^/]+$")
 
 class GuidedReport(BaseModel):
-    """The Guided Assistant's predefined questions, and nothing more.
-
-    Required before completion: the last-seen location question (Yes/No),
-    clothing, the distinctive-item question (Yes/No, with a description only
-    when Yes). `additional_information` and `last_seen_description` are
-    optional free text -- a "No" to the location question records no
-    location and never blocks completion.
-    """
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     completed: bool = False
     same_location: bool | None = None

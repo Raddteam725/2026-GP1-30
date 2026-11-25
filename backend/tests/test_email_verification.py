@@ -1,4 +1,3 @@
-"""API authorization tests use the real verification gate, mocked Firebase only."""
 from types import SimpleNamespace
 
 import pytest
@@ -34,8 +33,6 @@ PROFILE = {'full_name': 'Guardian', 'phone': '+966500000001',
 
 def test_every_guardian_route_rejects_unverified_identity(api):
     client, db, token, record = api
-    # Bodies cover every existing protected mobile Guardian endpoint. Keeping
-    # the route inventory assertion makes additions require an explicit audit.
     bodies = {
         ('PUT', '/v1/guardian'): PROFILE,
         ('PATCH', '/v1/guardian'): {'full_name': 'Guardian', 'phone': '+966500000001'},
@@ -61,10 +58,10 @@ def test_every_guardian_route_rejects_unverified_identity(api):
 
 
 @pytest.mark.parametrize('claim,verified,email', [
-    (False, True, 'guardian@example.test'),  # cached unverified token
-    (True, False, 'guardian@example.test'),  # stale formerly verified claim
-    (True, True, 'changed@example.test'),   # old email token after correction
-    (None, True, 'guardian@example.test'),  # legacy/missing claim
+    (False, True, 'guardian@example.test'),
+    (True, False, 'guardian@example.test'),
+    (True, True, 'changed@example.test'),
+    (None, True, 'guardian@example.test'),
 ])
 def test_stale_or_missing_claim_cannot_bypass_live_auth(api, claim, verified, email):
     client, db, token, record = api
@@ -105,7 +102,6 @@ def test_role_resolution_is_minimal_and_volunteers_keep_existing_access(api):
     client, db, token, record = api
     headers = {'Authorization': 'Bearer token'}
     assert client.get('/v1/session', headers=headers).json() == {'role': 'guardian'}
-    # A client-selected/custom role cannot turn a Guardian into a Volunteer.
     token['role'] = 'volunteer'
     assert client.get('/v1/session', headers=headers).status_code == 403
     assert client.get('/v1/volunteer', headers=headers).status_code == 403

@@ -12,8 +12,6 @@ void main() {
     'Root displays the logo then replaces splash after the full 3.8 second sequence',
     (tester) async {
       await tester.pumpWidget(const RaddApp(locale: Locale('en')));
-      // The sequence starts right after the first frame (next frame on a
-      // device); give the fake clock that frame before measuring.
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 3700));
       expect(find.byType(SplashScreen), findsOneWidget);

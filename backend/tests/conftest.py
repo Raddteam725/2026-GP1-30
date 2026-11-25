@@ -1,7 +1,3 @@
-"""Deterministic dispatch for isolated domain tests; production uses workers.
-
-The worker itself is tested separately with real threads and synchronization.
-"""
 import sys
 from pathlib import Path
 import pytest
@@ -11,8 +7,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 @pytest.fixture(autouse=True)
 def no_face_model(monkeypatch):
-    # Domain tests never load the real face model, even when it is installed;
-    # face-matching tests inject a fake engine explicitly.
     from app import face_matching
     monkeypatch.setattr(face_matching, 'get_engine', lambda: None)
 
@@ -23,9 +17,6 @@ def inline_delivery(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def verified_firebase_accounts(monkeypatch):
-    # Domain tests use synthetic established accounts; never reach live Auth.
-    # Security tests override this SDK boundary to exercise unverified, stale,
-    # disabled and unavailable identities with the real authorization helper.
     from app import firebase
     monkeypatch.setattr(firebase, 'firebase_app', lambda: None)
     monkeypatch.setattr(firebase.auth, 'get_user', lambda uid, **kwargs:

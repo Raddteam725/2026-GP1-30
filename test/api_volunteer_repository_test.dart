@@ -121,7 +121,6 @@ void main() {
         photo: '',
       )..caseId = 'RD-real';
       await repo.handover(repo.account!, report);
-      // The successful response updates the local model even before list recovery.
       expect(repo.myCases('server-uid'), isEmpty);
       expect(repo.availableFor('server-uid'), isEmpty);
       for (var i = 0; i < 20 && mineReads < 2; i++) {
@@ -174,9 +173,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(locationPlatform.requests, 0); // Explanation precedes OS dialog.
+    expect(locationPlatform.requests, 0);
     expect(find.text('Manual Review'), findsNothing);
-    // Use the existing Radd action's label independently of button subclass.
     final label = find.text('Continue');
     expect(label, findsOneWidget);
     await tester.tap(label);
@@ -185,7 +183,7 @@ void main() {
     expect(
       find.text('Report Found Individual'),
       findsWidgets,
-    ); // No fix needed.
+    );
     locationPlatform.enabled = false;
     locationPlatform.services.add(ServiceStatus.disabled);
     await tester.pumpAndSettle();
@@ -363,7 +361,6 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        // A background outage preserves cases and does not expose a global error.
         fail = true;
         await expectLater(repo.refresh(), throwsA(isA<http.ClientException>()));
         await tester.pumpAndSettle();
@@ -714,7 +711,7 @@ void main() {
     expect(repo.account!.name.ar, 'اسم حقيقي');
     expect(repo.account!.volunteerId, 'V-42');
     final item = repo.availableFor('server-uid').single;
-    await pumpEventQueue(); // private photos now enrich independently of lists
+    await pumpEventQueue();
     expect(item.person.photoBytes, [1, 2, 3]);
     expect(item.person.photo, isNull);
     expect(item.person.guardian.phone, isNull);

@@ -86,8 +86,6 @@ class _IndividualPhotoState extends State<IndividualPhoto> {
   );
 }
 
-/// Circular photo with the small amber "active case" badge from the approved
-/// My Individuals design.
 class IndividualAvatar extends StatelessWidget {
   const IndividualAvatar({
     super.key,
@@ -98,8 +96,6 @@ class IndividualAvatar extends StatelessWidget {
   });
   final Individual individual;
 
-  /// The individual's active case, when known -- the badge takes that
-  /// case's semantic status colour.
   final MissingCase? activeCase;
   final double size;
   final int revision;
@@ -128,9 +124,6 @@ class IndividualAvatar extends StatelessWidget {
   );
 }
 
-/// My Individuals list card: photo, name, age and a chevron open the profile;
-/// below the divider, the individual's current state -- a filled red Report
-/// Missing action, or the amber Active Case indicator with its real case id.
 class IndividualCard extends StatelessWidget {
   const IndividualCard({
     super.key,
@@ -214,8 +207,6 @@ class IndividualCard extends StatelessWidget {
   }
 }
 
-/// Compact Home grid card: centered photo, name, age chip and one
-/// state-dependent control (Report Missing / Active Case).
 class HomeIndividualCard extends StatelessWidget {
   const HomeIndividualCard({
     super.key,
@@ -297,8 +288,6 @@ String relationshipLabel(String value, AppLocalizations s) => switch (value) {
   _ => s.other,
 };
 
-/// The relationship as shown to the Guardian: the real entered text when
-/// `other` was selected, never just the generic "Other" label.
 String relationshipDisplay(Individual individual, AppLocalizations s) =>
     individual.relationship == 'other' &&
         (individual.relationshipOther ?? '').isNotEmpty

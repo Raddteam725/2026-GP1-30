@@ -29,7 +29,6 @@ def calls(monkeypatch, db):
 
 @pytest.fixture
 def mode(monkeypatch):
-    # setenv first so monkeypatch restores the original (unset) value afterwards.
     monkeypatch.setenv('RADD_DELIVERY_MODE', '')
     monkeypatch.delenv('RADD_DELIVERY_MODE')
 

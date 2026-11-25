@@ -116,7 +116,6 @@ void main() {
   }
   test('Unknown closure never becomes New Case; reunited is preserved', () {
     for (final status in [null, '', 'reunited', 'transferred_to_authority']) {
-      // 'transferred_to_authority' is the retired alias: never a closure kind.
       expect(
         VolunteerNotificationEvent.fromData({
           'role': 'volunteer',

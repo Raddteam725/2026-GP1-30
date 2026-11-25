@@ -7,9 +7,6 @@ import 'package:http/http.dart' as http;
 import '../../../shared/saudi_phone.dart';
 import 'guardian_repository.dart';
 
-/// Maps a backend error `detail` string to the specific AppFailure code the
-/// UI should render. Anything not listed here falls back to the generic
-/// HTTP-status-based mapping in `_request`.
 const _detailFailures = {
   'email_verification_required': 'emailVerification',
   'event_unavailable': 'eventUnavailable',
@@ -98,7 +95,6 @@ class GuardianApi implements GuardianRepository {
       })().timeout(const Duration(seconds: 30));
     } catch (error) {
       if (kDebugMode && path == '/session') {
-        // No token, account identifier, response body or exception payload.
         debugPrint(
           'Radd session GET /v1/session failed: stage=$stage '
           'status=${status ?? "none"} type=${error.runtimeType}',
@@ -111,10 +107,6 @@ class GuardianApi implements GuardianRepository {
     }
   }
 
-  /// The backend answers `application/json` with no charset parameter, and
-  /// package:http then falls back to Latin-1 for `Response.body` -- which
-  /// turns every Arabic name, answer or label into mojibake. JSON is UTF-8
-  /// by definition, so always decode the raw bytes as UTF-8.
   static String _text(http.Response r) => utf8.decode(r.bodyBytes);
   Map<String, dynamic> _json(http.Response r) =>
       jsonDecode(_text(r)) as Map<String, dynamic>;
@@ -276,9 +268,6 @@ class GuardianApi implements GuardianRepository {
       );
   @override
   Future<void> registerFcmToken(String token, String locale) async {
-    // The token itself is the whole point of this request; never logged
-    // (this call goes through the same _request as everything else, which
-    // logs nothing about request bodies).
     await _request(
       'PUT',
       '/guardian/fcm-registrations',

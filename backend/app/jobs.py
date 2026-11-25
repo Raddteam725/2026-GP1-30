@@ -1,11 +1,3 @@
-"""Maintenance jobs, split into a safe retry group and a destructive cleanup group.
-
-Cloud Run Jobs run one group per process: `python -m app.jobs retry` (every 15
-minutes) and `python -m app.jobs cleanup` (hourly). Pushes are sent inline
-because queued background threads die when the job process exits. Local
-development runs both groups through local_jobs.LocalJobs. Cleanup holds an
-expiring Firestore lease so overlapping runs never delete at the same time.
-"""
 import argparse
 import logging
 import os
@@ -31,7 +23,6 @@ def retry_alerts():
                 except Exception as error:
                     logging.getLogger(__name__).warning('Volunteer alert retry failed (%s)', type(error).__name__)
 
-# Resolvers, not functions, so each job is looked up at call time and can be monkeypatched.
 RETRY_JOBS = (lambda: retry_alerts, lambda: retry_guardian_alerts)
 CLEANUP_JOBS = (lambda: cleanup.run, lambda: cleanup.delete_finished_found_photos,
                 lambda: cleanup.end_abandoned_found_attempts)
@@ -51,8 +42,6 @@ def run_retry():
     return _run_group(RETRY_JOBS)
 
 LEASE_COLLECTION, LEASE_DOCUMENT = 'configuration', 'cleanup_lock'
-# The cleanup Cloud Run Job's task timeout must be shorter than this lease
-# (planned: 15 minutes), so a run can never outlive the lease it holds.
 CLEANUP_LEASE_SECONDS = 1200
 
 def _lease(db):
@@ -110,9 +99,6 @@ def main(argv=None):
     elif mode == 'queue':
         sys.exit('RADD_DELIVERY_MODE=queue is not allowed for jobs: queued pushes die when the process exits')
     if not hasattr(delivery_queue, 'delivery_mode'):
-        # This branch has no inline push delivery (that belongs to the paused
-        # hosting work), so a one-shot job could exit before queued pushes are
-        # sent. Locally, maintenance runs only through `run_dev.py --local-jobs`.
         sys.exit('The maintenance CLI needs inline push delivery, which is not part of this branch; use run_dev.py --local-jobs')
     delivery_queue.delivery_mode()
     succeeded = run_retry() if args.group == 'retry' else run_cleanup()

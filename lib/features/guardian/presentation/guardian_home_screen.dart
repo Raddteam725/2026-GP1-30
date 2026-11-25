@@ -73,9 +73,6 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
   }
 
   late int _tab = widget.initialTab;
-  // Keep the Home-area tab underneath Cases/QR, just as when they were
-  // routes. Only the active Cases/QR screen is mounted: entering fetches
-  // fresh data/credentials and leaving QR disposes its expiry timer.
   int? _workspaceTab;
 
   void _selectTab(int tab) {
@@ -88,8 +85,6 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
         _tab = tab;
       }
     });
-    // Preserve authoritative Home data after actions in Cases/QR, without
-    // discarding the visible snapshot or repeating the route's auth gate.
     if (returningHome) _recover();
   }
 
@@ -111,10 +106,6 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
       repo.notifications(),
       repo.cases(),
     ]);
-    // The Active event, from the same authoritative record registration and
-    // reporting use. No event (or an invalid event configuration) is a
-    // normal state here: Home still renders and says so -- never a
-    // placeholder name.
     ActiveEvent? event;
     try {
       event = await repo.activeEvent();
@@ -157,9 +148,6 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
     final navigator = Navigator.of(context);
     setState(() => _loggingOut = true);
     try {
-      // Must happen before signing out -- it needs this Guardian's still-valid
-      // ID token to authorize removing this installation's own registration.
-      // Never throws, so it can't turn a normal logout into a failed one.
       await GuardianPushService.handleLogout(guardian);
       await auth.logout();
       if (navigator.mounted) {
@@ -172,11 +160,6 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
     }
   }
 
-  /// Language switch for a signed-in Guardian: a bottom sheet over the
-  /// Profile tab (same pattern as the Volunteer profile). The new locale is
-  /// applied and persisted by AppLocaleScope in place -- the session and
-  /// this screen stay exactly where they are; the startup language screen
-  /// is never involved.
   Future<void> _chooseLanguage() => showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -220,8 +203,6 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
     },
   );
 
-  /// The greeting shows the Guardian's first name, large -- per the approved
-  /// Home design -- never a fixture or placeholder name.
   static String _firstName(String fullName) {
     final parts = fullName.trim().split(RegExp(r'\s+'));
     return parts.isEmpty ? fullName : parts.first;
@@ -275,10 +256,6 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
               : s.profile,
           showAppBar: false,
           children: [
-            // A spinner only while there is nothing to show yet. An event-
-            // driven or explicit refetch keeps the retained snapshot on
-            // screen until the new one arrives, so Home updates in place --
-            // no loading flash, and the list keeps its scroll position.
             if (state.connectionState != ConnectionState.done && !state.hasData)
               const Center(child: CircularProgressIndicator())
             else if (state.hasError) ...[
@@ -286,8 +263,6 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
                 message: failureMessage(state.error!, s),
                 onRetry: _refresh,
               ),
-              // A profile fetch failure must never leave the Guardian stuck
-              // on this screen with no way back to the sign-in flow.
               const SizedBox(height: 16),
               if (_logoutError != null)
                 ErrorNotice(message: failureMessage(_logoutError!, s)),
@@ -512,10 +487,6 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
     ];
   }
 
-  /// The one place after sign-in that tells the Guardian which event they
-  /// are in (registrations and reports are scoped to it): name, location and
-  /// dates from the backend's event record. Without an Active event the card
-  /// says registration/reporting is unavailable instead of inventing one.
   Widget _eventCard(AppLocalizations s, ActiveEvent? event) {
     final locale = Localizations.localeOf(context).languageCode;
     String day(DateTime value) =>

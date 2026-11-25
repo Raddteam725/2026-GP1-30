@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// A required declaration with field-local interaction and validation state.
 class RequiredCheckbox extends StatelessWidget {
   const RequiredCheckbox({
     super.key,

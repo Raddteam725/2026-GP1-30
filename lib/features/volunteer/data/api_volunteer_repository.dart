@@ -8,9 +8,6 @@ import '../domain/volunteer_models.dart';
 import '../domain/volunteer_notification_event.dart';
 import 'volunteer_repository.dart';
 
-/// Backend workflow refusals (HTTP 409/422 `detail`) that the Volunteer
-/// screens can explain, mapped to the StateError codes they throw. Anything
-/// else stays a generic failure.
 const knownWorkflowFailures = {
   'already_matched': 'already-matched',
   'resume_existing_report': 'resume-existing-report',
@@ -25,13 +22,9 @@ const knownWorkflowFailures = {
   'capture_required': 'capture-required',
 };
 
-/// True when [error] means the server could not be reached at all (no
-/// connection, DNS/socket failure or timeout), as opposed to the server
-/// answering with a failure. The two are shown as different states.
 bool isNetworkFailure(Object error) =>
     error is http.ClientException || error is TimeoutException;
 
-/// Unsupported found/AI/verification operations retain fail-closed behavior.
 class ApiVolunteerRepository extends VolunteerRepository {
   ApiVolunteerRepository({
     required this.token,
@@ -186,7 +179,6 @@ class ApiVolunteerRepository extends VolunteerRepository {
       request.body = jsonEncode(body);
     }
     late http.Response response;
-    // Route templates only: no UID, JWT, FCM token, report body or contact data.
     final route = path.replaceAllMapped(
       RegExp(
         r'/(cases|found-reports|profiles|notifications)/(?!available(?:/|$)|mine(?:/|$)|manual(?:/|$))[^/]+',
@@ -255,8 +247,6 @@ class ApiVolunteerRepository extends VolunteerRepository {
       throw StateError('photo-deletion-pending');
     }
     if (response.statusCode >= 400) {
-      // A known workflow refusal keeps its meaning so the screen can tell
-      // the Volunteer what actually happened (never the backend text itself).
       String? detail;
       if (response.statusCode == 409 || response.statusCode == 422) {
         try {
@@ -327,8 +317,6 @@ class ApiVolunteerRepository extends VolunteerRepository {
     );
   }
 
-  // Events do not queue behind profile/report/photo refreshes. Advancing the
-  // generation prevents an older full refresh from overwriting this response.
   Future<void> refreshEvent({String? caseId}) {
     if (_disposed || _accessLost) return Future.value();
     ++_dataVersion;
@@ -356,8 +344,6 @@ class ApiVolunteerRepository extends VolunteerRepository {
       if (!eventOnly) version = _dataVersion;
       if (!user.eventAuthorized) return;
       if (!current()) return;
-      // Independent resources publish independently. Photos and FCM registration
-      // must never hold case lists or navigation behind their network round trips.
       await Future.wait([
         if (caseId != null)
           attempt(() async {
@@ -368,8 +354,6 @@ class ApiVolunteerRepository extends VolunteerRepository {
                 '/cases/${Uri.encodeComponent(caseId)}/state',
               );
             } on StateError catch (e) {
-              // Expired history or an event outside the current authorization
-              // scope cannot reveal case state. Lists/history still reconcile.
               if (e.message == 'not-found') return;
               rethrow;
             }
@@ -455,8 +439,6 @@ class ApiVolunteerRepository extends VolunteerRepository {
         debugPrint('Radd refresh failed (${e.runtimeType})\n$stack');
       }
       if (current()) error = 'backend-unavailable';
-      // Preserve last successful, current-session data on transient failure.
-      // Authentication loss still clears every protected resource in _request.
       rethrow;
     } finally {
       if (!_disposed) notifyListeners();
@@ -495,7 +477,6 @@ class ApiVolunteerRepository extends VolunteerRepository {
           );
           notifyListeners();
         } catch (_) {
-          // Missing/expired photos never block lists or substitute fixture images.
         }
       }),
     );
@@ -576,7 +557,6 @@ class ApiVolunteerRepository extends VolunteerRepository {
 
   @override
   Future<void> startSearch(VolunteerAccount account, VolunteerCase item) async {
-    // Do not let an older in-flight list response undo a successful join locally.
     ++_dataVersion;
     if (_disposed) throw StateError('backend-unavailable');
     _joining = true;
@@ -588,7 +568,6 @@ class ApiVolunteerRepository extends VolunteerRepository {
         )).body,
       ) as Map<String, dynamic>;
       final updated = _parse(data, this.account!.uid);
-      // Update the object already displayed in Case Details immediately.
       item.status = updated.status;
       item.joinedBy
         ..clear()
@@ -760,7 +739,6 @@ class ApiVolunteerRepository extends VolunteerRepository {
           '/found-reports/${Uri.encodeComponent(id)}/registered-photo',
         )).bodyBytes;
       } catch (_) {
-        /* Registration may have been removed after reunification. */
       }
       result.matchedPerson = _person(
         data['person'] as Map<String, dynamic>,
@@ -873,9 +851,6 @@ class ApiVolunteerRepository extends VolunteerRepository {
         }
         rows.add((row['person'] as Map<String, dynamic>, score.toDouble()));
       }
-      // Registered reference photos (their own retention rules) through the
-      // same authorized endpoint as Manual Review. A missing photo never
-      // hides a candidate; the card falls back to a placeholder.
       final photos = await Future.wait([
         for (final (person, _) in rows) _registeredPhoto(person['id']),
       ]);
@@ -886,8 +861,6 @@ class ApiVolunteerRepository extends VolunteerRepository {
             similarity: rows[i].$2,
           ),
       ];
-      // The backend already returns its prioritized order, best first; a
-      // stable sort keeps that order and only guards against a reordered list.
       mergeSort(
         results,
         compare: (a, b) => b.similarity!.compareTo(a.similarity!),
@@ -962,8 +935,6 @@ class ApiVolunteerRepository extends VolunteerRepository {
     VolunteerAccount account,
     FoundReport report,
   ) async {
-    // This transition is authorized by the server for this report. Unrelated
-    // list/photo refreshes must not prevent navigation after it succeeds.
     final data = jsonDecode(
       (await _request(
         'POST',
