@@ -46,8 +46,24 @@ class ApiVolunteerRepository extends VolunteerRepository {
   final Future<void> Function(String reason)? onAccessLost;
   bool _accessLost = false;
   Future<void> Function()? closeSession;
+  static const casePhotoLimit = 64;
+  final _casePhotos = <String, Uint8List>{};
+  final _casePhotoRequests = <String, Future<void>>{};
+  final _casesWithoutPhoto = <String>{};
+  int _photoEpoch = 0;
+  DateTime? _listsLoadedAt;
+
+  void _forgetCasePhotos() {
+    ++_photoEpoch;
+    _casePhotos.clear();
+    _casePhotoRequests.clear();
+    _casesWithoutPhoto.clear();
+    _listsLoadedAt = null;
+  }
+
   void clearEventData() {
     ++_dataVersion;
+    _forgetCasePhotos();
     for (final report in _reports) {
       report.photoBytes = null;
     }
@@ -64,6 +80,7 @@ class ApiVolunteerRepository extends VolunteerRepository {
   void clearProtectedData() {
     _accessLost = true;
     ++_dataVersion;
+    _forgetCasePhotos();
     for (final report in _reports) {
       report.photoBytes = null;
     }
@@ -309,11 +326,32 @@ class ApiVolunteerRepository extends VolunteerRepository {
     return result;
   }
 
-  Future<void> refresh() {
+  Future<void> refresh({bool profileLoaded = false}) {
     if (_disposed || _joining) return Future.value();
     if (_eventRefresh != null) return _eventRefresh!;
-    return _pendingRefresh ??= _refresh().whenComplete(
-      () => _pendingRefresh = null,
+    return _pendingRefresh ??= _refresh(
+      reuseProfile: profileLoaded && account != null,
+    ).whenComplete(() => _pendingRefresh = null);
+  }
+
+  Future<void> refreshLists({
+    Duration freshness = const Duration(seconds: 10),
+  }) {
+    if (_disposed || _accessLost) return Future.value();
+    if (_eventRefresh != null) return _eventRefresh!;
+    if (_pendingRefresh != null) return _pendingRefresh!;
+    final loadedAt = _listsLoadedAt;
+    if (loadedAt != null && DateTime.now().difference(loadedAt) < freshness) {
+      return Future.value();
+    }
+    return refreshEvent();
+  }
+
+  Future<void> refreshNotifications() async {
+    if (_disposed || _accessLost) return;
+    final version = _dataVersion;
+    await _loadNotifications(
+      () => !_disposed && !_accessLost && version == _dataVersion,
     );
   }
 
@@ -327,7 +365,50 @@ class ApiVolunteerRepository extends VolunteerRepository {
     });
   }
 
-  Future<void> _refresh({bool eventOnly = false, String? caseId}) async {
+  Future<void> _loadNotifications(bool Function() current) async {
+    final response = await _request('GET', '/notifications');
+    final seen = <String>{};
+    final alerts = (jsonDecode(response.body) as List)
+        .where(
+          (row) =>
+              VolunteerNotificationEvent.parseKind(
+                row['kind'],
+                row['status'],
+              ) !=
+              null,
+        )
+        .where(
+          (row) => seen.add(
+            '${row['case_id']}|${VolunteerNotificationEvent.parseKind(row['kind'], row['status'])!.name}',
+          ),
+        )
+        .map(
+          (row) => VolunteerAlert(
+            id: row['id'] as String,
+            caseId: row['case_id'] as String,
+            kind: VolunteerNotificationEvent.parseKind(
+              row['kind'],
+              row['status'],
+            )!,
+            status: _status(row['status'] as String?),
+            at: DateTime.parse(row['created_at'] as String),
+            readAt: row['read_at'] == null
+                ? null
+                : DateTime.parse(row['read_at'] as String),
+          ),
+        )
+        .toList();
+    if (!current()) return;
+    hasLoadedNotifications = true;
+    _alerts = alerts..sort((a, b) => b.at.compareTo(a.at));
+    notifyListeners();
+  }
+
+  Future<void> _refresh({
+    bool eventOnly = false,
+    bool reuseProfile = false,
+    String? caseId,
+  }) async {
     var version = _dataVersion;
     bool current() => !_disposed && !_accessLost && version == _dataVersion;
     Object? failure;
@@ -340,7 +421,7 @@ class ApiVolunteerRepository extends VolunteerRepository {
     }
 
     try {
-      final user = eventOnly ? account! : await loadProfile();
+      final user = eventOnly || reuseProfile ? account! : await loadProfile();
       if (!eventOnly) version = _dataVersion;
       if (!user.eventAuthorized) return;
       if (!current()) return;
@@ -371,17 +452,30 @@ class ApiVolunteerRepository extends VolunteerRepository {
           final withoutPhoto = <String>{};
           for (final response in responses) {
             for (final row in jsonDecode(response.body) as List) {
-              final item = _parse(row as Map<String, dynamic>, user.uid);
+              final data = row as Map<String, dynamic>;
+              final available = data['photo_available'] != false;
+              final item = _parse(
+                data,
+                user.uid,
+                photo: available ? _casePhotos[data['id']] : null,
+              );
               next[item.id] = item;
-              if (row['photo_available'] == false) withoutPhoto.add(item.id);
+              if (!available) withoutPhoto.add(item.id);
             }
           }
           if (!current()) return;
           hasLoadedCases = true;
+          _listsLoadedAt = DateTime.now();
           _cases = next.values.toList()
             ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          _casesWithoutPhoto
+            ..clear()
+            ..addAll(withoutPhoto);
+          _casePhotos.removeWhere(
+            (id, _) => !next.containsKey(id) || withoutPhoto.contains(id),
+          );
           notifyListeners();
-          unawaited(_loadCasePhotos(next, version, withoutPhoto: withoutPhoto));
+          unawaited(_loadCasePhotos(next.values));
         }),
         if (!eventOnly)
           attempt(() async {
@@ -393,44 +487,7 @@ class ApiVolunteerRepository extends VolunteerRepository {
             _reports = reports;
             notifyListeners();
           }),
-        attempt(() async {
-          final response = await _request('GET', '/notifications');
-          final seen = <String>{};
-          final alerts = (jsonDecode(response.body) as List)
-              .where(
-                (row) =>
-                    VolunteerNotificationEvent.parseKind(
-                      row['kind'],
-                      row['status'],
-                    ) !=
-                    null,
-              )
-              .where(
-                (row) => seen.add(
-                  '${row['case_id']}|${VolunteerNotificationEvent.parseKind(row['kind'], row['status'])!.name}',
-                ),
-              )
-              .map(
-                (row) => VolunteerAlert(
-                  id: row['id'] as String,
-                  caseId: row['case_id'] as String,
-                  kind: VolunteerNotificationEvent.parseKind(
-                    row['kind'],
-                    row['status'],
-                  )!,
-                  status: _status(row['status'] as String?),
-                  at: DateTime.parse(row['created_at'] as String),
-                  readAt: row['read_at'] == null
-                      ? null
-                      : DateTime.parse(row['read_at'] as String),
-                ),
-              )
-              .toList();
-          if (!current()) return;
-          hasLoadedNotifications = true;
-          _alerts = alerts..sort((a, b) => b.at.compareTo(a.at));
-          notifyListeners();
-        }),
+        attempt(() => _loadNotifications(current)),
       ]);
       if (failure != null) throw failure!;
       if (current()) error = null;
@@ -445,41 +502,59 @@ class ApiVolunteerRepository extends VolunteerRepository {
     }
   }
 
-  Future<void> _loadCasePhotos(
-    Map<String, VolunteerCase> cases,
-    int version, {
-    Set<String> withoutPhoto = const {},
-  }) async {
-    await Future.wait(
-      cases.values.where((item) => !withoutPhoto.contains(item.id)).map((
-        item,
-      ) async {
-        try {
-          final response = await _request(
-            'GET',
-            '/cases/${Uri.encodeComponent(item.id)}/photo',
-          );
-          if (_disposed ||
-              _accessLost ||
-              version != _dataVersion ||
-              !identical(caseById(item.id), item)) {
-            return;
-          }
-          final person = item.person;
-          item.person = RegisteredPerson(
-            id: person.id,
-            name: person.name,
-            age: person.age,
-            gender: person.gender,
-            guardian: person.guardian,
-            information: person.information,
-            photoBytes: response.bodyBytes,
-          );
-          notifyListeners();
-        } catch (_) {
-        }
-      }),
-    );
+  Future<void> _loadCasePhotos(Iterable<VolunteerCase> cases) => Future.wait([
+    for (final item in cases)
+      if (item.person.photoBytes == null &&
+          !_casesWithoutPhoto.contains(item.id))
+        _requestCasePhoto(item.id),
+  ]);
+
+  Future<void> _requestCasePhoto(String id) {
+    final pending = _casePhotoRequests[id];
+    if (pending != null) return pending;
+    late final Future<void> request;
+    request = _fetchCasePhoto(id, _photoEpoch).whenComplete(() {
+      if (identical(_casePhotoRequests[id], request)) {
+        _casePhotoRequests.remove(id);
+      }
+    });
+    _casePhotoRequests[id] = request;
+    return request;
+  }
+
+  Future<void> _fetchCasePhoto(String id, int epoch) async {
+    try {
+      final response = await _request(
+        'GET',
+        '/cases/${Uri.encodeComponent(id)}/photo',
+      );
+      if (_disposed ||
+          _accessLost ||
+          epoch != _photoEpoch ||
+          _casesWithoutPhoto.contains(id)) {
+        return;
+      }
+      final item = caseById(id);
+      if (item == null) return;
+      final bytes = response.bodyBytes;
+      _casePhotos
+        ..remove(id)
+        ..[id] = bytes;
+      while (_casePhotos.length > casePhotoLimit) {
+        _casePhotos.remove(_casePhotos.keys.first);
+      }
+      final person = item.person;
+      item.person = RegisteredPerson(
+        id: person.id,
+        name: person.name,
+        age: person.age,
+        gender: person.gender,
+        guardian: person.guardian,
+        information: person.information,
+        photoBytes: bytes,
+      );
+      notifyListeners();
+    } catch (_) {}
   }
 
   void _refreshAfterAction() {
@@ -718,23 +793,28 @@ class ApiVolunteerRepository extends VolunteerRepository {
     if (!_disposed && !_accessLost) notifyListeners();
   }
 
-  Future<FoundReport> loadReport(String id) async {
+  Future<FoundReport> loadReport(String id, {FoundReport? previous}) async {
     final data = jsonDecode(
       (await _request('GET', '/found-reports/${Uri.encodeComponent(id)}')).body,
     ) as Map<String, dynamic>;
     if (data['ended'] == true) throw StateError('identification-ended');
+    final known = previous != null && previous.id == id ? previous : null;
     final photo =
         data['photo_available'] == false || data['matched_profile_id'] != null
         ? null
-        : (await _request(
-            'GET',
-            '/found-reports/${Uri.encodeComponent(id)}/photo',
-          )).bodyBytes;
+        : known?.photoBytes ??
+              (await _request(
+                'GET',
+                '/found-reports/${Uri.encodeComponent(id)}/photo',
+              )).bodyBytes;
     final result = _found(data, photo: photo);
     if (data['person'] != null) {
-      Uint8List? registered;
+      final person = data['person'] as Map<String, dynamic>;
+      Uint8List? registered = known?.matchedPerson?.id == person['id']
+          ? known?.matchedPerson?.photoBytes
+          : null;
       try {
-        registered = (await _request(
+        registered ??= (await _request(
           'GET',
           '/found-reports/${Uri.encodeComponent(id)}/registered-photo',
         )).bodyBytes;
@@ -790,7 +870,7 @@ class ApiVolunteerRepository extends VolunteerRepository {
         listedIds.contains(alert.id) ? alert.withReadAt(now) : alert,
     ];
     notifyListeners();
-    await refreshEvent();
+    await refreshNotifications();
   }
 
   Future<VolunteerCase> loadCase(String id) async {
@@ -798,13 +878,22 @@ class ApiVolunteerRepository extends VolunteerRepository {
       (await _request('GET', '/cases/${Uri.encodeComponent(id)}')).body,
     ) as Map<String, dynamic>;
     if (_disposed || _accessLost) throw StateError('unauthorized');
-    final item = _parse(row, account!.uid);
-    final version = ++_dataVersion;
+    final available = row['photo_available'] != false;
+    final item = _parse(
+      row,
+      account!.uid,
+      photo: available ? _casePhotos[id] : null,
+    );
+    ++_dataVersion;
+    if (available) {
+      _casesWithoutPhoto.remove(id);
+    } else {
+      _casesWithoutPhoto.add(id);
+      _casePhotos.remove(id);
+    }
     _cases = [item, ..._cases.where((value) => value.id != id)];
     notifyListeners();
-    if (row['photo_available'] != false) {
-      unawaited(_loadCasePhotos({id: item}, version));
-    }
+    if (available) unawaited(_loadCasePhotos([item]));
     _refreshAfterAction();
     return item;
   }
@@ -985,6 +1074,7 @@ class ApiVolunteerRepository extends VolunteerRepository {
   @override
   void dispose() {
     _disposed = true;
+    _forgetCasePhotos();
     caseStates.clear();
     _client.close();
     _cases = [];

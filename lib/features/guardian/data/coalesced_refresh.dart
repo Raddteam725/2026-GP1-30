@@ -2,6 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'guardian_repository.dart';
+
+Duration guardianRevisitFreshness = const Duration(seconds: 15);
+
+bool guardianAccessLost(Object error) =>
+    error is AppFailure &&
+    const {'unauthorized', 'role', 'accountInactive'}.contains(error.code);
+
 class CoalescedRefresh {
   Future<void>? _running;
   bool _again = false;

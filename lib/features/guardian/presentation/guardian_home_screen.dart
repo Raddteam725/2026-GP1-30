@@ -24,6 +24,15 @@ typedef _HomeData = ({
   ActiveEvent? event,
 });
 
+enum _HomePart { profile, people, notifications, cases, event }
+
+const _afterIndividual = {
+  _HomePart.people,
+  _HomePart.notifications,
+  _HomePart.cases,
+};
+const _afterNotifications = {_HomePart.notifications, _HomePart.cases};
+
 class GuardianHomeScreen extends StatefulWidget {
   const GuardianHomeScreen({super.key, this.initialTab = 0});
   final int initialTab;
@@ -44,93 +53,155 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
     super.dispose();
   }
 
-  int _eventGeneration = 0;
   final _eventRefresh = CoalescedRefresh();
   Future<void> _recover() => _eventRefresh.run(_recoverOnce);
   Future<void> _recoverOnce() async {
     if (!mounted) return;
-    final generation = ++_eventGeneration;
-    try {
-      final data = await _load();
-      if (!mounted || generation != _eventGeneration) return;
-      setState(() {
-        _data = Future.value(data);
-      });
-      assert(() {
-        debugPrint(
-          'Radd Guardian authoritative refresh T8/T9 ${DateTime.now().toUtc().toIso8601String()}',
-        );
-        return true;
-      }());
-    } catch (error) {
-      assert(() {
-        debugPrint(
-          'Radd Guardian background refresh failed (${error.runtimeType})',
-        );
-        return true;
-      }());
-    }
+    final loaded = await _load(_HomePart.values.toSet(), silent: true);
+    assert(() {
+      debugPrint(
+        loaded
+            ? 'Radd Guardian authoritative refresh T8/T9 ${DateTime.now().toUtc().toIso8601String()}'
+            : 'Radd Guardian background refresh failed',
+      );
+      return true;
+    }());
   }
 
   late int _tab = widget.initialTab;
   int? _workspaceTab;
+  final _visitedTabs = <int>{};
 
   void _selectTab(int tab) {
     final returningHome = _workspaceTab != null && tab != 2 && tab != 3;
     setState(() {
       if (tab == 2 || tab == 3) {
         _workspaceTab = tab;
+        _visitedTabs.add(tab);
       } else {
         _workspaceTab = null;
         _tab = tab;
       }
     });
-    if (returningHome) _recover();
+    if (returningHome && !_isFresh) {
+      _load(const {
+        _HomePart.people,
+        _HomePart.notifications,
+        _HomePart.cases,
+      }, silent: true);
+    }
   }
 
   int _revision = 0;
-  Future<_HomeData>? _data;
+  _HomeData? _home;
+  Object? _homeError;
+  bool _started = false;
+  int _loadSequence = 0, _successSequence = 0;
+  final _appliedSequence = <_HomePart, int>{};
+  DateTime? _loadedAt;
   bool _loggingOut = false;
   Object? _logoutError;
+
+  bool get _isFresh =>
+      _loadedAt != null &&
+      DateTime.now().difference(_loadedAt!) < guardianRevisitFreshness;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _data ??= _load();
+    if (_started) return;
+    _started = true;
+    _load(_HomePart.values.toSet());
   }
 
-  Future<_HomeData> _load() async {
+  Future<bool> _load(Set<_HomePart> requested, {bool silent = false}) async {
+    final parts = _home == null ? _HomePart.values.toSet() : requested;
+    final sequence = ++_loadSequence;
     final repo = AppServices.of(context).guardian;
-    final values = await Future.wait<Object>([
-      repo.profile(),
-      repo.individuals(),
-      repo.notifications(),
-      repo.cases(),
-    ]);
-    ActiveEvent? event;
+    Future<Object?> fetch(_HomePart part, Future<Object?> Function() load) =>
+        parts.contains(part) ? load() : Future<Object?>.value();
     try {
-      event = await repo.activeEvent();
-    } catch (_) {
-      event = null;
+      final values = await Future.wait<Object?>([
+        fetch(_HomePart.profile, repo.profile),
+        fetch(_HomePart.people, repo.individuals),
+        fetch(_HomePart.notifications, repo.notifications),
+        fetch(_HomePart.cases, repo.cases),
+        fetch(
+          _HomePart.event,
+          () => repo.activeEvent().then<ActiveEvent?>(
+            (event) => event,
+            onError: (Object _) => null,
+          ),
+        ),
+      ]);
+      if (!mounted) return false;
+      bool take(_HomePart part) {
+        if (!parts.contains(part)) return false;
+        if ((_appliedSequence[part] ?? 0) > sequence) return false;
+        _appliedSequence[part] = sequence;
+        return true;
+      }
+
+      final current = _home;
+      final notifications = values[2] as List<GuardianNotification>?;
+      setState(() {
+        _home = (
+          profile: take(_HomePart.profile)
+              ? values[0] as GuardianProfile
+              : current!.profile,
+          people: take(_HomePart.people)
+              ? values[1] as List<Individual>
+              : current!.people,
+          hasUnread: take(_HomePart.notifications)
+              ? notifications!.any((n) => !n.read)
+              : current!.hasUnread,
+          cases: take(_HomePart.cases)
+              ? values[3] as List<MissingCase>
+              : current!.cases,
+          event: take(_HomePart.event)
+              ? values[4] as ActiveEvent?
+              : current!.event,
+        );
+        if (sequence > _successSequence) _successSequence = sequence;
+        _homeError = null;
+        if (parts.contains(_HomePart.people) &&
+            parts.contains(_HomePart.cases)) {
+          _loadedAt = DateTime.now();
+        }
+      });
+      return true;
+    } catch (error) {
+      if (!mounted) return false;
+      final accessLost = guardianAccessLost(error);
+      if (accessLost || (!silent && sequence > _successSequence)) {
+        setState(() {
+          _homeError = error;
+          if (accessLost) _home = null;
+        });
+      }
+      return false;
     }
-    final notifications = values[2] as List<GuardianNotification>;
-    return (
-      profile: values[0] as GuardianProfile,
-      people: values[1] as List<Individual>,
-      hasUnread: notifications.any((n) => !n.read),
-      cases: values[3] as List<MissingCase>,
-      event: event,
-    );
   }
 
-  void _refresh() => setState(() {
-    ++_eventGeneration;
-    _revision++;
-    _data = _load();
-  });
+  void _refresh() {
+    setState(() {
+      _revision++;
+      _homeError = null;
+    });
+    _load(_HomePart.values.toSet());
+  }
 
-  Future<void> _open(String route, {Object? arguments}) async {
-    await Navigator.of(context).pushNamed(route, arguments: arguments);
-    if (mounted) _refresh();
+  Future<void> _open(
+    String route, {
+    Object? arguments,
+    required Set<_HomePart> refresh,
+    bool onlyIfChanged = false,
+  }) async {
+    final result = await Navigator.of(context)
+        .pushNamed(route, arguments: arguments);
+    if (!mounted || (onlyIfChanged && result != true)) return;
+    if (refresh.contains(_HomePart.people)) setState(() => _revision++);
+    _load(refresh);
   }
 
   Future<void> _logout() async {
@@ -222,13 +293,33 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
           enabled: !_loggingOut,
         ),
         body: IndexedStack(
-          index: _workspaceTab == null ? 0 : 1,
+          index: switch (_workspaceTab) {
+            3 => 1,
+            2 => 2,
+            _ => 0,
+          },
           children: [
-            _buildHome(context),
-            if (_workspaceTab == 2)
-              const GuardianQrScreen(embedded: true)
-            else if (_workspaceTab == 3)
-              const CasesScreen(embedded: true),
+            TickerMode(
+              enabled: _workspaceTab == null,
+              child: _buildHome(context),
+            ),
+            if (_visitedTabs.contains(3))
+              TickerMode(
+                enabled: _workspaceTab == 3,
+                child: CasesScreen(embedded: true, active: _workspaceTab == 3),
+              )
+            else
+              const SizedBox.shrink(),
+            if (_visitedTabs.contains(2))
+              TickerMode(
+                enabled: _workspaceTab == 2,
+                child: GuardianQrScreen(
+                  embedded: true,
+                  active: _workspaceTab == 2,
+                ),
+              )
+            else
+              const SizedBox.shrink(),
           ],
         ),
       ),
@@ -237,53 +328,56 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
 
   Widget _buildHome(BuildContext context) {
     final s = AppLocalizations.of(context)!;
-    return FutureBuilder<_HomeData>(
-      future: _data,
-      builder: (context, state) {
-        final profile = state.data?.profile, people = state.data?.people ?? [];
-        final hasUnread = state.data?.hasUnread ?? false;
-        final cases = state.data?.cases ?? const <MissingCase>[];
-        final event = state.data?.event;
-        final activeCases = cases.where((c) => c.active).toList();
-        final caseByIndividual = {
-          for (final c in activeCases) c.individualId: c,
-        };
-        return FeaturePage(
-          title: _tab == 0
-              ? s.home
-              : _tab == 1
-              ? s.myIndividuals
-              : s.profile,
-          showAppBar: false,
-          children: [
-            if (state.connectionState != ConnectionState.done && !state.hasData)
-              const Center(child: CircularProgressIndicator())
-            else if (state.hasError) ...[
-              ErrorNotice(
-                message: failureMessage(state.error!, s),
-                onRetry: _refresh,
-              ),
-              const SizedBox(height: 16),
-              if (_logoutError != null)
-                ErrorNotice(message: failureMessage(_logoutError!, s)),
-              _logoutButton(s),
-            ] else if (_tab == 4 && profile != null)
-              ..._profileTab(s, profile)
-            else if (_tab == 0 && profile != null)
-              ..._homeTab(
-                s,
-                profile,
-                people,
-                hasUnread,
-                caseByIndividual,
-                activeCases,
-                event,
-              )
-            else
-              ..._individualsTab(s, people, caseByIndividual),
+    final data = _home;
+    final profile = data?.profile, people = data?.people ?? [];
+    final hasUnread = data?.hasUnread ?? false;
+    final cases = data?.cases ?? const <MissingCase>[];
+    final event = data?.event;
+    final activeCases = cases.where((c) => c.active).toList();
+    final caseByIndividual = {for (final c in activeCases) c.individualId: c};
+    return FeaturePage(
+      title: _tab == 0
+          ? s.home
+          : _tab == 1
+          ? s.myIndividuals
+          : s.profile,
+      showAppBar: false,
+      children: [
+        if (data == null && _homeError == null)
+          const Center(child: CircularProgressIndicator())
+        else if (data == null) ...[
+          ErrorNotice(
+            message: failureMessage(_homeError!, s),
+            onRetry: _refresh,
+          ),
+          const SizedBox(height: 16),
+          if (_logoutError != null)
+            ErrorNotice(message: failureMessage(_logoutError!, s)),
+          _logoutButton(s),
+        ] else ...[
+          if (_homeError != null) ...[
+            ErrorNotice(
+              message: failureMessage(_homeError!, s),
+              onRetry: _refresh,
+            ),
+            const SizedBox(height: 16),
           ],
-        );
-      },
+          if (_tab == 4 && profile != null)
+            ..._profileTab(s, profile)
+          else if (_tab == 0 && profile != null)
+            ..._homeTab(
+              s,
+              profile,
+              people,
+              hasUnread,
+              caseByIndividual,
+              activeCases,
+              event,
+            )
+          else
+            ..._individualsTab(s, people, caseByIndividual),
+        ],
+      ],
     );
   }
 
@@ -300,7 +394,11 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
       individual: person,
       revision: _revision,
       activeCase: caseByIndividual[person.id],
-      onTap: () => _open(AppRoutes.individual, arguments: person.id),
+      onTap: () => _open(
+        AppRoutes.individual,
+        arguments: person.id,
+        refresh: _afterIndividual,
+      ),
       onChanged: _refresh,
     );
     return [
@@ -339,7 +437,10 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
               children: [
                 IconButton(
                   tooltip: s.notifications,
-                  onPressed: () => _open(AppRoutes.notifications),
+                  onPressed: () => _open(
+                    AppRoutes.notifications,
+                    refresh: _afterNotifications,
+                  ),
                   icon: const Icon(
                     Icons.notifications_none,
                     color: AppColors.primary,
@@ -370,7 +471,11 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
         button: true,
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
-          onTap: () => _open(AppRoutes.addIndividual),
+          onTap: () => _open(
+            AppRoutes.addIndividual,
+            refresh: _afterIndividual,
+            onlyIfChanged: true,
+          ),
           child: GuardianPanel(
             child: Row(
               children: [
@@ -479,7 +584,11 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
             value: value,
             style: CaseCardStyle.home,
             actionLabel: s.trackStatus,
-            onTap: () => _open(AppRoutes.caseStatus, arguments: value.id),
+            onTap: () => _open(
+              AppRoutes.caseStatus,
+              arguments: value.id,
+              refresh: _afterIndividual,
+            ),
           ),
           const SizedBox(height: 16),
         ],
@@ -583,7 +692,11 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
             foregroundColor: AppColors.primary,
             shape: const StadiumBorder(),
           ),
-          onPressed: () => _open(AppRoutes.addIndividual),
+          onPressed: () => _open(
+            AppRoutes.addIndividual,
+            refresh: _afterIndividual,
+            onlyIfChanged: true,
+          ),
           icon: const Icon(Icons.add, size: 18, color: AppColors.accent),
           label: Text(
             s.add,
@@ -601,7 +714,11 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
         individual: person,
         revision: _revision,
         activeCase: caseByIndividual[person.id],
-        onTap: () => _open(AppRoutes.individual, arguments: person.id),
+        onTap: () => _open(
+          AppRoutes.individual,
+          arguments: person.id,
+          refresh: _afterIndividual,
+        ),
         onChanged: _refresh,
       ),
       const SizedBox(height: 16),
@@ -622,8 +739,12 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
           ),
         ),
         TextButton(
-          onPressed: () =>
-              _open(AppRoutes.editGuardianProfile, arguments: profile),
+          onPressed: () => _open(
+            AppRoutes.editGuardianProfile,
+            arguments: profile,
+            refresh: const {_HomePart.profile},
+            onlyIfChanged: true,
+          ),
           child: Text(s.edit),
         ),
       ],
@@ -681,7 +802,30 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
     if (_logoutError != null)
       ErrorNotice(message: failureMessage(_logoutError!, s)),
     _logoutButton(s),
+    const SizedBox(height: 12),
+    OutlinedButton.icon(
+      key: const ValueKey('guardian-delete-account'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.error,
+        side: const BorderSide(color: AppColors.error),
+      ),
+      onPressed: _loggingOut ? null : _deleteAccount,
+      icon: const Icon(Icons.delete_outline),
+      label: Text(s.deleteAccount),
+    ),
   ];
+
+  Future<void> _deleteAccount() async {
+    final s = AppLocalizations.of(context)!;
+    await guardianConfirmation(
+      context,
+      title: s.deleteAccount,
+      confirm: s.deleteAccount,
+      message: s.deleteAccountConfirm,
+      icon: Icons.delete_outline,
+      onConfirm: () {},
+    );
+  }
 
   Widget _logoutButton(AppLocalizations s) => OutlinedButton.icon(
     style: OutlinedButton.styleFrom(

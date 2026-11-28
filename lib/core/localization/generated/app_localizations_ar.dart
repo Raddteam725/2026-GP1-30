@@ -395,6 +395,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get logoutMessage => 'هل أنت متأكد من رغبتك في تسجيل الخروج من حسابك؟';
 
   @override
+  String get deleteAccount => 'حذف الحساب';
+
+  @override
+  String get deleteAccountConfirm => 'هل أنت متأكد من رغبتك في حذف حسابك؟';
+
+  @override
   String get editProfile => 'تعديل الملف الشخصي';
 
   @override

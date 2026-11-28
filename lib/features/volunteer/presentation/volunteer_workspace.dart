@@ -280,7 +280,7 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
       if (!mounted) return;
       _syncParticipation();
       if (_canParticipate) {
-        await (repo as ApiVolunteerRepository).refresh();
+        await (repo as ApiVolunteerRepository).refresh(profileLoaded: true);
         final previous = _report;
         final refreshView = view;
         if (previous != null &&
@@ -300,6 +300,7 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
             }.contains(view)) {
           final current = await (repo as ApiVolunteerRepository).loadReport(
             previous.id,
+            previous: previous,
           );
           if (mounted &&
               identical(_report, previous) &&
@@ -528,7 +529,7 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
     final repository = repo;
     if (!_canParticipate || repository is! ApiVolunteerRepository) return;
     try {
-      await repository.refreshEvent();
+      await repository.refreshLists();
     } catch (error) {
       if (kDebugMode) debugPrint('Radd case-list refresh failed: $error');
     }
@@ -887,7 +888,10 @@ class _VolunteerWorkspaceState extends State<VolunteerWorkspace>
                   !_refreshing &&
                   (repo as ApiVolunteerRepository).error != null)
                 TextButton(onPressed: _loadRemote, child: Text(s.vLoadFailed)),
-              if (_busy || _refreshing)
+              if (_busy ||
+                  (_refreshing &&
+                      repo is ApiVolunteerRepository &&
+                      !(repo as ApiVolunteerRepository).hasLoadedCases))
                 const LinearProgressIndicator(minHeight: 2),
               Expanded(
                 child: Align(

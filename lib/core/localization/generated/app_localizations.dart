@@ -818,6 +818,18 @@ abstract class AppLocalizations {
   /// **'Are you sure you want to log out of your account?'**
   String get logoutMessage;
 
+  /// No description provided for @deleteAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete Account'**
+  String get deleteAccount;
+
+  /// No description provided for @deleteAccountConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to delete your account?'**
+  String get deleteAccountConfirm;
+
   /// No description provided for @editProfile.
   ///
   /// In en, this message translates to:

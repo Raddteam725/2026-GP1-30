@@ -22,31 +22,50 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> _recover() => _eventRefresh.run(_recoverOnce);
   Future<void> _recoverOnce() async {
     if (!mounted) return;
-    final generation = ++_eventGeneration;
-    try {
-      final data = await AppServices.of(context).guardian.notifications();
-      if (!mounted || generation != _eventGeneration) return;
-      setState(() {
-        _data = Future.value(data);
-      });
-      assert(() {
-        debugPrint(
-          'Radd Guardian authoritative refresh T8/T9 ${DateTime.now().toUtc().toIso8601String()}',
-        );
-        return true;
-      }());
-    } catch (error) {
-      assert(() {
-        debugPrint(
-          'Radd Guardian background refresh failed (${error.runtimeType})',
-        );
-        return true;
-      }());
-    }
+    final loaded = await _fetch(
+      AppServices.of(context).guardian.notifications,
+      silent: true,
+    );
+    assert(() {
+      debugPrint(
+        loaded
+            ? 'Radd Guardian authoritative refresh T8/T9 ${DateTime.now().toUtc().toIso8601String()}'
+            : 'Radd Guardian background refresh failed',
+      );
+      return true;
+    }());
   }
 
-  Future<List<GuardianNotification>>? _data;
+  List<GuardianNotification>? _items;
+  Object? _loadError;
+  bool _started = false;
   Object? _error;
+
+  Future<bool> _fetch(
+    Future<List<GuardianNotification>> Function() load, {
+    bool silent = false,
+  }) async {
+    final generation = ++_eventGeneration;
+    try {
+      final data = await load();
+      if (!mounted || generation != _eventGeneration) return false;
+      setState(() {
+        _items = data;
+        _loadError = null;
+      });
+      return true;
+    } catch (error) {
+      if (!mounted || generation != _eventGeneration) return false;
+      final accessLost = guardianAccessLost(error);
+      if (accessLost || !silent || _items == null) {
+        setState(() {
+          _loadError = error;
+          if (accessLost) _items = null;
+        });
+      }
+      return false;
+    }
+  }
   @override
   void initState() {
     super.initState();
@@ -62,7 +81,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _data ??= _viewNotifications();
+    if (_started) return;
+    _started = true;
+    _fetch(_viewNotifications);
   }
 
   Future<List<GuardianNotification>> _viewNotifications() async {
@@ -71,22 +92,31 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return repo.notifications();
   }
 
+  Future<List<GuardianNotification>> _revisitNotifications() async {
+    final repo = AppServices.of(context).guardian;
+    final current = await repo.notifications();
+    if (current.every((n) => n.read)) return current;
+    await repo.readAllNotifications();
+    return repo.notifications();
+  }
+
   void _reload() {
     if (!mounted) return;
-    setState(() {
-      _data = _viewNotifications();
-    });
+    setState(() => _loadError = null);
+    _fetch(_viewNotifications);
   }
 
   Future<void> _open(GuardianNotification value) async {
     try {
-      await AppServices.of(context).guardian.readNotification(value.id);
+      if (!value.read) {
+        await AppServices.of(context).guardian.readNotification(value.id);
+      }
       if (!mounted) return;
       await Navigator.of(context).pushNamed(
         value.foundReportId != null ? AppRoutes.qrCode : AppRoutes.caseStatus,
         arguments: value.caseId,
       );
-      if (mounted) _reload();
+      if (mounted) _fetch(_revisitNotifications);
     } catch (e) {
       if (mounted) setState(() => _error = e);
     }
@@ -95,27 +125,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
-    return FutureBuilder<List<GuardianNotification>>(
-      future: _data,
-      builder: (context, state) => FeaturePage(
+    final items = _items;
+    return Builder(
+      builder: (context) => FeaturePage(
         title: s.notifications,
         children: [
           if (_error != null) ErrorNotice(message: failureMessage(_error!, s)),
-          if (state.hasError)
+          if (_loadError != null)
             ErrorNotice(
-              message: failureMessage(state.error!, s),
+              message: failureMessage(_loadError!, s),
               onRetry: _reload,
-            )
-          else if (!state.hasData)
-            const Center(child: CircularProgressIndicator())
-          else if (state.data!.isEmpty) ...[
+            ),
+          if (items == null) ...[
+            if (_loadError == null)
+              const Center(child: CircularProgressIndicator()),
+          ] else if (items.isEmpty) ...[
             const Icon(Icons.notifications_none, size: 48),
             const SizedBox(height: 24),
             Text(s.noNotifications, textAlign: TextAlign.center),
             const SizedBox(height: 8),
             Text(s.notificationHint, textAlign: TextAlign.center),
           ] else
-            for (final value in state.data!) ...[
+            for (final value in items) ...[
               GuardianPanel(
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,

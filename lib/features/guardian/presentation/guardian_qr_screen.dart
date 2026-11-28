@@ -129,8 +129,9 @@ Future<void> showCaseIdentifier(BuildContext context, MissingCase value) async {
 }
 
 class GuardianQrScreen extends StatefulWidget {
-  const GuardianQrScreen({super.key, this.embedded = false});
+  const GuardianQrScreen({super.key, this.embedded = false, this.active = true});
   final bool embedded;
+  final bool active;
   @override
   State<GuardianQrScreen> createState() => _GuardianQrScreenState();
 }
@@ -166,17 +167,43 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
     }
   }
 
+  DateTime? _casesLoadedAt;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _cases ??= _loadCases();
-    if (_code == null && _codeError == null && !_busy) _generate();
+    if (widget.active && _code == null && _codeError == null && !_busy) {
+      _generate();
+    }
+  }
+
+  @override
+  void didUpdateWidget(GuardianQrScreen old) {
+    super.didUpdateWidget(old);
+    if (old.active == widget.active) return;
+    if (!widget.active) {
+      ++_request;
+      _expiry?.cancel();
+      _expiry = null;
+      _code = null;
+      _codeError = null;
+      _busy = false;
+      return;
+    }
+    _generate();
+    final loadedAt = _casesLoadedAt;
+    if (loadedAt == null ||
+        DateTime.now().difference(loadedAt) >= guardianRevisitFreshness) {
+      _recoverCases();
+    }
   }
 
   Future<List<MissingCase>> _loadCases() async {
     _foundReports = AppServices.of(context).guardian.activeFoundReports();
     final generation = ++_caseRequest;
     final all = await AppServices.of(context).guardian.cases();
+    _casesLoadedAt = DateTime.now();
     final active = all.where((c) => c.active).toList()
       ..sort((a, b) {
         final stage = caseStages
@@ -225,7 +252,7 @@ class _GuardianQrScreenState extends State<GuardianQrScreen> {
       setState(() => _code = code);
       final remaining = code.expiresAt.difference(DateTime.now());
       _expiry = Timer(remaining.isNegative ? Duration.zero : remaining, () {
-        if (mounted) _generate();
+        if (mounted && widget.active) _generate();
       });
     } catch (e) {
       if (mounted && request == _request) {

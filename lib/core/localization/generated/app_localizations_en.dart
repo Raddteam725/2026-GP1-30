@@ -404,6 +404,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Are you sure you want to log out of your account?';
 
   @override
+  String get deleteAccount => 'Delete Account';
+
+  @override
+  String get deleteAccountConfirm =>
+      'Are you sure you want to delete your account?';
+
+  @override
   String get editProfile => 'Edit Profile';
 
   @override
