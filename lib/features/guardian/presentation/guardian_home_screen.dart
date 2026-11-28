@@ -802,7 +802,30 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
     if (_logoutError != null)
       ErrorNotice(message: failureMessage(_logoutError!, s)),
     _logoutButton(s),
+    const SizedBox(height: 12),
+    OutlinedButton.icon(
+      key: const ValueKey('guardian-delete-account'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.error,
+        side: const BorderSide(color: AppColors.error),
+      ),
+      onPressed: _loggingOut ? null : _deleteAccount,
+      icon: const Icon(Icons.delete_outline),
+      label: Text(s.deleteAccount),
+    ),
   ];
+
+  Future<void> _deleteAccount() async {
+    final s = AppLocalizations.of(context)!;
+    await guardianConfirmation(
+      context,
+      title: s.deleteAccount,
+      confirm: s.deleteAccount,
+      message: s.deleteAccountConfirm,
+      icon: Icons.delete_outline,
+      onConfirm: () {},
+    );
+  }
 
   Widget _logoutButton(AppLocalizations s) => OutlinedButton.icon(
     style: OutlinedButton.styleFrom(

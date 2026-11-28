@@ -128,6 +128,8 @@
   "logout": "Log Out",
   "logoutTitle": "Log Out?",
   "logoutMessage": "Are you sure you want to log out of your account?",
+  "deleteAccount": "Delete Account",
+  "deleteAccountConfirm": "Are you sure you want to delete your account?",
   "editProfile": "Edit Profile",
   "volunteerUnavailable": "Volunteer access is not available in this build yet.",
   "sessionExpired": "Please log in to continue.",

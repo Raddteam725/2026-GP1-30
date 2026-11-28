@@ -128,6 +128,8 @@
   "logout": "تسجيل الخروج",
   "logoutTitle": "تسجيل الخروج؟",
   "logoutMessage": "هل أنت متأكد من رغبتك في تسجيل الخروج من حسابك؟",
+  "deleteAccount": "حذف الحساب",
+  "deleteAccountConfirm": "هل أنت متأكد من رغبتك في حذف حسابك؟",
   "editProfile": "تعديل الملف الشخصي",
   "volunteerUnavailable": "دخول المتطوع غير متاح في هذا الإصدار بعد.",
   "sessionExpired": "يرجى تسجيل الدخول للمتابعة.",
