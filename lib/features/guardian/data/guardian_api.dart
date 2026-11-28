@@ -23,8 +23,12 @@ const _detailFailures = {
 };
 
 class GuardianApi implements GuardianRepository {
-  GuardianApi({required this.token, http.Client? client, String? baseUrl})
-    : _client = client ?? http.Client(),
+  GuardianApi({
+    required this.token,
+    this.account,
+    http.Client? client,
+    String? baseUrl,
+  }) : _client = client ?? http.Client(),
       _base =
           baseUrl ??
           const String.fromEnvironment(
@@ -32,9 +36,59 @@ class GuardianApi implements GuardianRepository {
             defaultValue: kDebugMode ? 'http://10.0.2.2:8000' : '',
           );
   final Future<String?> Function() token;
+  final String? Function()? account;
   final http.Client _client;
   final String _base;
   int _sequence = 0;
+
+  static const photoCacheLimit = 48;
+  final _photos = <String, Future<Uint8List>>{};
+  final _reads = <String, Future<dynamic>>{};
+  String? _cacheOwner;
+
+  void clearSessionCache() {
+    _photos.clear();
+    _reads.clear();
+  }
+
+  void _bindAccount() {
+    final current = account?.call();
+    if (current == _cacheOwner) return;
+    _cacheOwner = current;
+    clearSessionCache();
+  }
+
+  Future<T> _shared<T>(String key, Future<T> Function() load) {
+    _bindAccount();
+    final pending = _reads[key];
+    if (pending != null) return pending as Future<T>;
+    final future = load();
+    _reads[key] = future;
+    unawaited(
+      future.then<void>((_) {}, onError: (Object _) {}).whenComplete(() {
+        if (identical(_reads[key], future)) _reads.remove(key);
+      }),
+    );
+    return future;
+  }
+
+  Future<T> _mutation<T>(Future<T> Function() action) async {
+    _bindAccount();
+    _reads.clear();
+    try {
+      return await action();
+    } finally {
+      _reads.clear();
+    }
+  }
+
+  void _retainPhotos(List<Individual> people) {
+    final usable = {
+      for (final person in people)
+        if (!person.photoExpired) person.id,
+    };
+    _photos.removeWhere((id, _) => !usable.contains(id));
+  }
   Future<http.Response> _request(
     String method,
     String path, {
@@ -73,6 +127,9 @@ class GuardianApi implements GuardianRepository {
         );
         status = response.statusCode;
         if (response.statusCode >= 400) {
+          if (response.statusCode == 401 || response.statusCode == 403) {
+            clearSessionCache();
+          }
           Object? decoded;
           try {
             decoded = jsonDecode(_text(response));
@@ -115,41 +172,50 @@ class GuardianApi implements GuardianRepository {
   Future<String> accountRole() async =>
       _json(await _request('GET', '/session'))['role'] as String;
   @override
-  Future<GuardianProfile> profile() async =>
-      GuardianProfile.fromJson(_json(await _request('GET', '/guardian')));
+  Future<GuardianProfile> profile() => _shared(
+    'profile',
+    () async =>
+        GuardianProfile.fromJson(_json(await _request('GET', '/guardian'))),
+  );
   @override
-  Future<GuardianProfile> createProfile(String name, String phone) async =>
-      GuardianProfile.fromJson(
-        _json(
-          await _request(
-            'PUT',
-            '/guardian',
-            body: {
-              'full_name': name.trim(),
-              'phone': normalizeSaudiPhone(phone) ?? phone.trim(),
-              'age_confirmed': true,
-              'privacy_accepted': true,
-            },
+  Future<GuardianProfile> createProfile(String name, String phone) =>
+      _mutation(
+        () async => GuardianProfile.fromJson(
+          _json(
+            await _request(
+              'PUT',
+              '/guardian',
+              body: {
+                'full_name': name.trim(),
+                'phone': normalizeSaudiPhone(phone) ?? phone.trim(),
+                'age_confirmed': true,
+                'privacy_accepted': true,
+              },
+            ),
           ),
         ),
       );
   @override
-  Future<GuardianProfile> updateProfile(String name, String phone) async =>
-      GuardianProfile.fromJson(
-        _json(
-          await _request(
-            'PATCH',
-            '/guardian',
-            body: {
-              'full_name': name.trim(),
-              'phone': normalizeSaudiPhone(phone) ?? phone.trim(),
-            },
+  Future<GuardianProfile> updateProfile(String name, String phone) =>
+      _mutation(
+        () async => GuardianProfile.fromJson(
+          _json(
+            await _request(
+              'PATCH',
+              '/guardian',
+              body: {
+                'full_name': name.trim(),
+                'phone': normalizeSaudiPhone(phone) ?? phone.trim(),
+              },
+            ),
           ),
         ),
       );
   @override
-  Future<ActiveEvent> activeEvent() async =>
-      ActiveEvent.fromJson(_json(await _request('GET', '/event')));
+  Future<ActiveEvent> activeEvent() => _shared(
+    'event',
+    () async => ActiveEvent.fromJson(_json(await _request('GET', '/event'))),
+  );
   @override
   Future<List<RegistrationPeriod>> registrationPeriods() async {
     final data = jsonDecode(
@@ -164,35 +230,52 @@ class GuardianApi implements GuardianRepository {
   }
 
   @override
-  Future<List<Individual>> individuals() async =>
-      _list(await _request('GET', '/individuals'))
-          .map((e) => Individual.fromJson(e as Map<String, dynamic>))
-          .toList();
+  Future<List<Individual>> individuals() => _shared('individuals', () async {
+    final people = _list(await _request('GET', '/individuals'))
+        .map((e) => Individual.fromJson(e as Map<String, dynamic>))
+        .toList();
+    _retainPhotos(people);
+    return people;
+  });
   String _path(String id) => '/individuals/${Uri.encodeComponent(id)}';
   @override
-  Future<Individual> individual(String id) async =>
-      Individual.fromJson(_json(await _request('GET', _path(id))));
+  Future<Individual> individual(String id) async {
+    final person = Individual.fromJson(_json(await _request('GET', _path(id))));
+    if (person.photoExpired) _photos.remove(id);
+    return person;
+  }
+
   @override
   Future<Individual> saveIndividual(
     IndividualInput input, {
     String? id,
     Uint8List? photo,
-  }) async => Individual.fromJson(
-    _json(
-      await _request(
-        id == null ? 'POST' : 'PUT',
-        id == null ? '/individuals' : _path(id),
-        body: {
-          ...input.toJson(),
-          if (photo != null) 'photo_base64': base64Encode(photo),
-        },
-      ),
-    ),
-  );
+  }) => _mutation(() async {
+    try {
+      return Individual.fromJson(
+        _json(
+          await _request(
+            id == null ? 'POST' : 'PUT',
+            id == null ? '/individuals' : _path(id),
+            body: {
+              ...input.toJson(),
+              if (photo != null) 'photo_base64': base64Encode(photo),
+            },
+          ),
+        ),
+      );
+    } finally {
+      if (id != null) _photos.remove(id);
+    }
+  });
   @override
-  Future<void> deleteIndividual(String id) async {
-    await _request('DELETE', _path(id));
-  }
+  Future<void> deleteIndividual(String id) => _mutation(() async {
+    try {
+      await _request('DELETE', _path(id));
+    } finally {
+      _photos.remove(id);
+    }
+  });
 
   @override
   Future<RetentionOptions> retentionOptions(String id) async =>
@@ -201,65 +284,97 @@ class GuardianApi implements GuardianRepository {
       );
 
   @override
-  Future<Uint8List> photo(String id) async =>
-      (await _request('GET', '${_path(id)}/photo')).bodyBytes;
+  Future<Uint8List> photo(String id) {
+    _bindAccount();
+    final cached = _photos.remove(id);
+    if (cached != null) {
+      _photos[id] = cached;
+      return cached;
+    }
+    final future = _request(
+      'GET',
+      '${_path(id)}/photo',
+    ).then((response) => response.bodyBytes);
+    _photos[id] = future;
+    while (_photos.length > photoCacheLimit) {
+      _photos.remove(_photos.keys.first);
+    }
+    unawaited(
+      future.then<void>(
+        (_) {},
+        onError: (Object _) {
+          if (identical(_photos[id], future)) _photos.remove(id);
+        },
+      ),
+    );
+    return future;
+  }
 
   @override
-  Future<List<MissingCase>> cases() async =>
-      _list(await _request('GET', '/cases'))
-          .map((e) => MissingCase.fromJson(e as Map<String, dynamic>))
-          .toList();
+  Future<List<MissingCase>> cases() => _shared(
+    'cases',
+    () async => _list(await _request('GET', '/cases'))
+        .map((e) => MissingCase.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
   @override
   Future<MissingCase> missingCase(String id) async => MissingCase.fromJson(
     _json(await _request('GET', '/cases/${Uri.encodeComponent(id)}')),
   );
   @override
-  Future<MissingCase> reportMissing(String individualId) async =>
-      MissingCase.fromJson(
-        _json(
-          await _request(
-            'POST',
-            '/cases',
-            body: {'individual_id': individualId},
-          ),
+  Future<MissingCase> reportMissing(String individualId) => _mutation(
+    () async => MissingCase.fromJson(
+      _json(
+        await _request(
+          'POST',
+          '/cases',
+          body: {'individual_id': individualId},
         ),
-      );
-  @override
-  Future<MissingCase> saveGuidedReport(
-    String id,
-    Map<String, dynamic> report,
-  ) async => MissingCase.fromJson(
-    _json(
-      await _request(
-        'PUT',
-        '/cases/${Uri.encodeComponent(id)}/guided-report',
-        body: report,
       ),
     ),
   );
   @override
-  Future<List<GuardianNotification>> notifications() async =>
-      _list(await _request('GET', '/notifications'))
-          .map((e) => GuardianNotification.fromJson(e as Map<String, dynamic>))
-          .toList();
+  Future<MissingCase> saveGuidedReport(
+    String id,
+    Map<String, dynamic> report,
+  ) => _mutation(
+    () async => MissingCase.fromJson(
+      _json(
+        await _request(
+          'PUT',
+          '/cases/${Uri.encodeComponent(id)}/guided-report',
+          body: report,
+        ),
+      ),
+    ),
+  );
   @override
-  Future<void> readNotification(String id) async {
+  Future<List<GuardianNotification>> notifications() => _shared(
+    'notifications',
+    () async => _list(await _request('GET', '/notifications'))
+        .map((e) => GuardianNotification.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
+  @override
+  Future<void> readNotification(String id) => _mutation(() async {
     await _request('PUT', '/notifications/${Uri.encodeComponent(id)}/read');
-  }
+  });
 
   @override
-  Future<void> readAllNotifications() async {
+  Future<void> readAllNotifications() => _mutation(() async {
     await _request('PUT', '/notifications/read-all');
-  }
+  });
 
   @override
-  Future<List<GuardianFoundReport>> activeFoundReports() async =>
-      _list(await _request('GET', '/guardian/found-reports'))
-          .map(
-            (value) =>
-                GuardianFoundReport.fromJson(value as Map<String, dynamic>),
-          )
-          .toList();
+  Future<List<GuardianFoundReport>> activeFoundReports() => _shared(
+    'found-reports',
+    () async => _list(await _request('GET', '/guardian/found-reports'))
+        .map(
+          (value) =>
+              GuardianFoundReport.fromJson(value as Map<String, dynamic>),
+        )
+        .toList(),
+  );
 
   @override
   Future<GuardianVerification> accountVerification() async =>

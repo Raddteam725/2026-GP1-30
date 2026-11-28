@@ -7,6 +7,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../firebase_options.dart';
+import 'guardian_api.dart';
 import 'guardian_repository.dart';
 
 
@@ -284,12 +285,16 @@ class GuardianPushService {
 
   static Future<void> handleLogout(GuardianRepository guardian) async {
     ++_generation;
+    if (guardian is GuardianApi) guardian.clearSessionCache();
     GuardianPushRefresh.instance.reset();
     GuardianPushRouter.consumePendingFoundReportId();
     GuardianPushRouter.consumePendingCaseId();
     if (_observing) {
       WidgetsBinding.instance.removeObserver(GuardianPushRefresh.instance);
       _observing = false;
+      PaintingBinding.instance.imageCache
+        ..clear()
+        ..clearLiveImages();
     }
     final token = _pendingToken ?? _lastKnownToken;
     await _cancelSubscriptions();

@@ -15,8 +15,9 @@ import 'guardian_components.dart';
 import 'individual_widgets.dart';
 
 class CasesScreen extends StatefulWidget {
-  const CasesScreen({super.key, this.embedded = false});
+  const CasesScreen({super.key, this.embedded = false, this.active = true});
   final bool embedded;
+  final bool active;
   @override
   State<CasesScreen> createState() => _CasesScreenState();
 }
@@ -39,54 +40,80 @@ class _CasesScreenState extends State<CasesScreen> {
   Future<void> _recover() => _eventRefresh.run(_recoverOnce);
   Future<void> _recoverOnce() async {
     if (!mounted) return;
-    final generation = ++_eventGeneration;
-    try {
-      final data = await AppServices.of(context).guardian.cases();
-      if (!mounted || generation != _eventGeneration) return;
-      setState(() {
-        _data = Future.value(data);
-      });
-      assert(() {
-        debugPrint(
-          'Radd Guardian authoritative refresh T8/T9 ${DateTime.now().toUtc().toIso8601String()}',
-        );
-        return true;
-      }());
-    } catch (error) {
-      assert(() {
-        debugPrint(
-          'Radd Guardian background refresh failed (${error.runtimeType})',
-        );
-        return true;
-      }());
-    }
+    final loaded = await _fetch(silent: true);
+    assert(() {
+      debugPrint(
+        loaded
+            ? 'Radd Guardian authoritative refresh T8/T9 ${DateTime.now().toUtc().toIso8601String()}'
+            : 'Radd Guardian background refresh failed',
+      );
+      return true;
+    }());
   }
 
-  Future<List<MissingCase>>? _data;
+  List<MissingCase>? _cases;
+  Object? _error;
+  DateTime? _loadedAt;
+  bool _started = false;
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _data ??= AppServices.of(context).guardian.cases();
+    if (_started) return;
+    _started = true;
+    _fetch();
   }
 
-  void _reload() => setState(() {
-    ++_eventGeneration;
-    _data = AppServices.of(context).guardian.cases();
-  });
+  @override
+  void didUpdateWidget(CasesScreen old) {
+    super.didUpdateWidget(old);
+    final stale =
+        _loadedAt == null ||
+        DateTime.now().difference(_loadedAt!) >= guardianRevisitFreshness;
+    if (!old.active && widget.active && stale) _recover();
+  }
+
+  Future<bool> _fetch({bool silent = false}) async {
+    final generation = ++_eventGeneration;
+    try {
+      final data = await AppServices.of(context).guardian.cases();
+      if (!mounted || generation != _eventGeneration) return false;
+      setState(() {
+        _cases = data;
+        _error = null;
+        _loadedAt = DateTime.now();
+      });
+      return true;
+    } catch (error) {
+      if (!mounted || generation != _eventGeneration) return false;
+      final accessLost = guardianAccessLost(error);
+      if (accessLost || !silent || _cases == null) {
+        setState(() {
+          _error = error;
+          if (accessLost) _cases = null;
+        });
+      }
+      return false;
+    }
+  }
+
+  void _reload() {
+    setState(() => _error = null);
+    _fetch();
+  }
 
   Future<void> _openStatus(MissingCase value) async {
     await Navigator.of(context)
         .pushNamed(AppRoutes.caseStatus, arguments: value.id);
-    if (mounted) _reload();
+    if (mounted) _fetch();
   }
 
   @override
   Widget build(BuildContext context) {
     final s = AppLocalizations.of(context)!;
-    return FutureBuilder<List<MissingCase>>(
-      future: _data,
-      builder: (context, state) {
-        final cases = state.data ?? const <MissingCase>[];
+    return Builder(
+      builder: (context) {
+        final loaded = _cases;
+        final cases = loaded ?? const <MissingCase>[];
         final active = cases.where((c) => c.active).toList();
         final closed = cases.where((c) => !c.active).toList();
         return FeaturePage(
@@ -110,14 +137,17 @@ class _CasesScreenState extends State<CasesScreen> {
               style: const TextStyle(color: mutedText, fontSize: 14),
             ),
             const SizedBox(height: 20),
-            if (state.hasError)
+            if (_error != null) ...[
               ErrorNotice(
-                message: failureMessage(state.error!, s),
+                message: failureMessage(_error!, s),
                 onRetry: _reload,
-              )
-            else if (!state.hasData)
-              const Center(child: CircularProgressIndicator())
-            else if (cases.isEmpty)
+              ),
+              if (loaded != null) const SizedBox(height: 16),
+            ],
+            if (loaded == null) ...[
+              if (_error == null)
+                const Center(child: CircularProgressIndicator()),
+            ] else if (cases.isEmpty)
               GuardianPanel(
                 child: Column(
                   children: [

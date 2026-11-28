@@ -50,6 +50,7 @@ Future<AppStartupData> initializeApp() async {
     auth: FirebaseAuthService(auth),
     guardian: GuardianApi(
       token: () => auth.currentUser?.getIdToken() ?? Future.value(null),
+      account: () => auth.currentUser?.uid,
     ),
     locale: Locale(
       (preferences.getString('language') ??
